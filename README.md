@@ -59,10 +59,11 @@ Deliverables:
 ## 📦 Modules
 
 ### Transparent Taskbar (Sprint 1)
-- Win32-based taskbar detection
-- Overlay window (click-through)
-- Adjustable transparency
-- Real-time updates
+- Win32-based taskbar detection (`FindWindow` / `Shell_TrayWnd`)
+- Blur/transparency via `SetWindowCompositionAttribute` (Aero Glass, Acrylic, Mica Alt)
+- Safe P/Invoke cu try/finally pe memorie nemanaged
+- INotifyPropertyChanged pentru reactive UI binding
+- Settings persistente în `%AppData%/Win7Revival/`
 
 ### Classic Start Menu (Sprint 2)
 - Custom WinUI 3 menu
@@ -102,56 +103,41 @@ For coordination, architecture decisions, or module integration questions, pleas
 
 ---
 
-## 📁 Structura Completă Recomandată pentru Repository
-
-Aceasta este structura finală, optimizată pentru dezvoltare modulară, CI/CD viitor și documentație clară:
+## 📁 Structura Repository
 
 ```
 Win7Revival/
+├── Win7Revival.Core/
+│   ├── Interfaces/
+│   │   └── IModule.cs
+│   ├── Models/
+│   │   └── ModuleSettings.cs
+│   ├── Services/
+│   │   ├── CoreService.cs
+│   │   └── SettingsService.cs
+│   └── Win7Revival.Core.csproj
 │
-├── src/
-│   ├── Win7Revival.Core/
-│   │   ├── Interfaces/
-│   │   ├── Services/
-│   │   ├── Models/
-│   │   └── Win7Revival.Core.csproj
-│   │
-│   ├── Win7Revival.Modules.Taskbar/
-│   │   ├── Engine/
-│   │   ├── Monitor/
-│   │   ├── Settings/
-│   │   ├── Views/
-│   │   └── Win7Revival.Modules.Taskbar.csproj
-│   │
-│   ├── Win7Revival.Modules.StartMenu/
-│   │   ├── Engine/
-│   │   ├── Input/
-│   │   ├── Settings/
-│   │   ├── Views/
-│   │   └── Win7Revival.Modules.StartMenu.csproj
-│   │
-│   └── Win7Revival.App/
-│       ├── Views/
-│       ├── ViewModels/
-│       ├── TrayIcon/
-│       ├── Assets/
-│       └── Win7Revival.App.csproj
+├── Win7Revival.Modules.Taskbar/
+│   ├── Interop/
+│   │   └── Win32Interop.cs
+│   ├── TaskbarModule.cs
+│   └── Win7Revival.Modules.Taskbar.csproj
 │
-├── docs/
-│   ├── architecture.md
-│   ├── module-standard.md
-│   ├── dpi-scaling-risks.md
-│   ├── roadmap.md
-│   └── sprint-notes/
+├── Win7Revival.Modules.StartMenu/
+│   └── Win7Revival.Modules.StartMenu.csproj  (Sprint 2)
 │
-├── tests/
-│   ├── Win7Revival.Core.Tests/
-│   ├── Win7Revival.Modules.Taskbar.Tests/
-│   └── Win7Revival.Modules.StartMenu.Tests/
+├── Win7Revival.App/
+│   ├── App.xaml / App.xaml.cs
+│   ├── MainWindow.xaml / MainWindow.xaml.cs
+│   └── Win7Revival.App.csproj
+│
+├── Win7Revival.Core.Tests/
+│   └── (xUnit unit tests)
 │
 ├── .gitignore
 ├── LICENSE
-└── README.md
+├── README.md
+└── Win7Revival.sln
 ```
 
 ---

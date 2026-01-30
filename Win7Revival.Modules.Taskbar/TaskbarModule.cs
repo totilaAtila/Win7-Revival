@@ -1,6 +1,7 @@
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 using Win7Revival.Core.Interfaces;
 using Win7Revival.Core.Models;
 using Win7Revival.Core.Services;
@@ -10,17 +11,22 @@ namespace Win7Revival.Modules.Taskbar
 {
     /// <summary>
     /// Modulul care implementează efectul de transparență pe Taskbar.
+    /// Implementează IDisposable pentru cleanup corect al resurselor Win32.
     /// </summary>
-    public class TaskbarModule : IModule
+    public class TaskbarModule : IModule, IDisposable
     {
         private const string ModuleName = "Taskbar Transparent";
         private readonly SettingsService _settingsService;
-        private ModuleSettings _settings;
+        private ModuleSettings _settings = new();
         private IntPtr _taskbarHandle = IntPtr.Zero;
+        private bool _disposed;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
 
         public string Name => ModuleName;
         public string Description => "Aplică efect de transparență/blur pe Taskbar-ul Windows 11.";
-        public bool IsEnabled => _settings?.IsEnabled ?? false;
+
+        public bool IsEnabled => _settings.IsEnabled;
 
         public TaskbarModule(SettingsService settingsService)
         {
@@ -30,11 +36,11 @@ namespace Win7Revival.Modules.Taskbar
         public async Task InitializeAsync()
         {
             _settings = await _settingsService.LoadSettingsAsync<ModuleSettings>(Name);
-            // Caută handle-ul Taskbar-ului o singură dată la inițializare
+            _settings.Name = Name;
             _taskbarHandle = Win32Interop.FindWindow(Win32Interop.TaskbarClassName, null);
             if (_taskbarHandle == IntPtr.Zero)
             {
-                Console.WriteLine("Avertisment: Taskbar-ul nu a fost găsit.");
+                Debug.WriteLine("[TaskbarModule] Avertisment: Taskbar-ul nu a fost găsit.");
             }
         }
 
@@ -42,7 +48,6 @@ namespace Win7Revival.Modules.Taskbar
         {
             if (_taskbarHandle == IntPtr.Zero)
             {
-                // Încearcă din nou să găsească Taskbar-ul
                 _taskbarHandle = Win32Interop.FindWindow(Win32Interop.TaskbarClassName, null);
                 if (_taskbarHandle == IntPtr.Zero)
                 {
@@ -50,10 +55,10 @@ namespace Win7Revival.Modules.Taskbar
                 }
             }
 
-            // Aplică efectul de blur (similar cu Aero Glass/Mica)
             SetTaskbarAccent(Win32Interop.ACCENT_STATE.ACCENT_ENABLE_BLURBEHIND);
-            
+
             _settings.IsEnabled = true;
+            OnPropertyChanged(nameof(IsEnabled));
             await SaveSettingsAsync();
         }
 
@@ -61,11 +66,11 @@ namespace Win7Revival.Modules.Taskbar
         {
             if (_taskbarHandle != IntPtr.Zero)
             {
-                // Dezactivează efectul de accent
                 SetTaskbarAccent(Win32Interop.ACCENT_STATE.ACCENT_DISABLED);
             }
 
             _settings.IsEnabled = false;
+            OnPropertyChanged(nameof(IsEnabled));
             await SaveSettingsAsync();
         }
 
@@ -74,34 +79,58 @@ namespace Win7Revival.Modules.Taskbar
             return _settingsService.SaveSettingsAsync(Name, _settings);
         }
 
-        /// <summary>
-        /// Funcție helper pentru a seta politica de accent a ferestrei.
-        /// </summary>
-        /// <param name="state">Starea de accent dorită.</param>
         private void SetTaskbarAccent(Win32Interop.ACCENT_STATE state)
         {
             var accent = new Win32Interop.ACCENT_POLICY
             {
                 AccentState = state,
-                AccentFlags = 2, // Flag-uri suplimentare (poate varia)
+                AccentFlags = 2,
                 GradientColor = 0,
                 AnimationId = 0
             };
 
             int accentStructSize = Marshal.SizeOf(accent);
             IntPtr accentPtr = Marshal.AllocHGlobal(accentStructSize);
-            Marshal.StructureToPtr(accent, accentPtr, false);
-
-            var data = new Win32Interop.WINDOWCOMPOSITIONATTRIB_DATA
+            try
             {
-                Attrib = Win32Interop.WINDOWCOMPOSITIONATTRIB.WCA_ACCENT_POLICY,
-                SizeOfData = accentStructSize,
-                Data = accentPtr
-            };
+                Marshal.StructureToPtr(accent, accentPtr, false);
 
-            Win32Interop.SetWindowCompositionAttribute(_taskbarHandle, ref data);
+                var data = new Win32Interop.WINDOWCOMPOSITIONATTRIB_DATA
+                {
+                    Attrib = Win32Interop.WINDOWCOMPOSITIONATTRIB.WCA_ACCENT_POLICY,
+                    Data = accentPtr,
+                    SizeOfData = accentStructSize
+                };
 
-            Marshal.FreeHGlobal(accentPtr);
+                Win32Interop.SetWindowCompositionAttribute(_taskbarHandle, ref data);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(accentPtr);
+            }
+        }
+
+        private void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            if (_taskbarHandle != IntPtr.Zero && _settings.IsEnabled)
+            {
+                try
+                {
+                    SetTaskbarAccent(Win32Interop.ACCENT_STATE.ACCENT_DISABLED);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[TaskbarModule] Eroare la cleanup: {ex.Message}");
+                }
+            }
         }
     }
 }
