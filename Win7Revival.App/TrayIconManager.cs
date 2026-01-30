@@ -1,14 +1,15 @@
 using System;
 using System.Diagnostics;
+using H.NotifyIcon;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Win7Revival.Core.Services;
 
 namespace Win7Revival.App
 {
     /// <summary>
-    /// Manager pentru system tray icon.
-    /// Permite controlul aplicației din notification area (tray).
-    /// Folosește H.NotifyIcon.WinUI pentru integrare cu WinUI 3.
+    /// Manager for system tray icon using H.NotifyIcon.WinUI.
+    /// Provides notification area icon with context menu for controlling the app.
     /// </summary>
     public class TrayIconManager : IDisposable
     {
@@ -16,14 +17,15 @@ namespace Win7Revival.App
         private readonly Window _mainWindow;
         private bool _disposed;
         private bool _isInitialized;
+        private TaskbarIcon? _taskbarIcon;
 
         /// <summary>
-        /// Event declanșat când utilizatorul cere deschiderea ferestrei principale.
+        /// Event raised when user requests showing the main window.
         /// </summary>
         public event EventHandler? ShowWindowRequested;
 
         /// <summary>
-        /// Event declanșat când utilizatorul cere închiderea aplicației din tray.
+        /// Event raised when user requests app exit from tray.
         /// </summary>
         public event EventHandler? ExitRequested;
 
@@ -34,7 +36,7 @@ namespace Win7Revival.App
         }
 
         /// <summary>
-        /// Inițializează tray icon-ul cu meniu context.
+        /// Initializes the tray icon with context menu.
         /// </summary>
         public void Initialize()
         {
@@ -42,26 +44,43 @@ namespace Win7Revival.App
 
             try
             {
-                // TODO: Implementare H.NotifyIcon.WinUI
-                // Pași necesari:
-                // 1. Creează TaskbarIcon din H.NotifyIcon.WinUI
-                // 2. Setează icon (Assets/tray.ico)
-                // 3. Setează tooltip "Win7 Revival"
-                // 4. Adaugă context menu:
-                //    - "Show Settings" → ShowWindowRequested
-                //    - "Toggle Taskbar Transparency" → Enable/Disable module
-                //    - Separator
-                //    - "Exit" → ExitRequested
-                // 5. Double-click → ShowWindowRequested
-                //
-                // Exemplu cu H.NotifyIcon.WinUI:
-                // _taskbarIcon = new TaskbarIcon();
-                // _taskbarIcon.IconSource = new BitmapIconSource { UriSource = new Uri("ms-appx:///Assets/tray.ico") };
-                // _taskbarIcon.ToolTipText = "Win7 Revival";
+                _taskbarIcon = new TaskbarIcon
+                {
+                    ToolTipText = "Win7 Revival"
+                };
 
-                // NOTE: _isInitialized remains false until a real tray icon is created.
-                // This prevents MinimizeToTray from hiding the window with no way to restore it.
-                Debug.WriteLine("[TrayIconManager] Initialize called but no tray icon created yet (H.NotifyIcon integration pending).");
+                _taskbarIcon.IconSource = new GeneratedIconSource
+                {
+                    Text = "W7",
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                        Microsoft.UI.Colors.White),
+                    FontSize = 24,
+                    FontWeight = Microsoft.UI.Text.FontWeights.Bold
+                };
+
+                // Context menu
+                var menuFlyout = new MenuFlyout();
+
+                var showItem = new MenuFlyoutItem { Text = "Show Settings" };
+                showItem.Click += (_, _) => ShowWindowRequested?.Invoke(this, EventArgs.Empty);
+                menuFlyout.Items.Add(showItem);
+
+                menuFlyout.Items.Add(new MenuFlyoutSeparator());
+
+                var exitItem = new MenuFlyoutItem { Text = "Exit" };
+                exitItem.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
+                menuFlyout.Items.Add(exitItem);
+
+                _taskbarIcon.ContextFlyout = menuFlyout;
+
+                // Double-click to restore
+                _taskbarIcon.TrayIconLeftMouseDoubleClick += (_, _) =>
+                    ShowWindowRequested?.Invoke(this, EventArgs.Empty);
+
+                _taskbarIcon.ForceCreate();
+
+                _isInitialized = true;
+                Debug.WriteLine("[TrayIconManager] Initialized with H.NotifyIcon.WinUI.");
             }
             catch (Exception ex)
             {
@@ -70,18 +89,18 @@ namespace Win7Revival.App
         }
 
         /// <summary>
-        /// Afișează un balloon notification în tray.
+        /// Shows a balloon notification in the tray.
         /// </summary>
         public void ShowNotification(string title, string message)
         {
-            if (!_isInitialized) return;
+            if (!_isInitialized || _taskbarIcon == null) return;
 
-            // TODO: _taskbarIcon.ShowNotification(title, message);
+            _taskbarIcon.ShowNotification(title, message);
             Debug.WriteLine($"[TrayIconManager] Notification: {title} — {message}");
         }
 
         /// <summary>
-        /// Ascunde fereastra principală și continuă rularea din tray.
+        /// Hides the main window and continues running from the tray.
         /// </summary>
         public void MinimizeToTray()
         {
@@ -115,7 +134,7 @@ namespace Win7Revival.App
         }
 
         /// <summary>
-        /// Restaurează fereastra principală din tray.
+        /// Restores the main window from the tray.
         /// </summary>
         public void RestoreFromTray()
         {
@@ -143,7 +162,8 @@ namespace Win7Revival.App
             if (_disposed) return;
             _disposed = true;
 
-            // TODO: _taskbarIcon?.Dispose();
+            _taskbarIcon?.Dispose();
+            _taskbarIcon = null;
             Debug.WriteLine("[TrayIconManager] Disposed.");
         }
     }
