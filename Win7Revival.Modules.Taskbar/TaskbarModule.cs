@@ -1,10 +1,12 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 using Win7Revival.Core.Interfaces;
 using Win7Revival.Core.Models;
 using Win7Revival.Core.Services;
+using Win7Revival.Modules.Taskbar.Interop;
 
 namespace Win7Revival.Modules.Taskbar
 {
@@ -12,6 +14,7 @@ namespace Win7Revival.Modules.Taskbar
     /// Modulul principal pentru transparența taskbar-ului.
     /// Orchestrează TaskbarDetector (discovery) și OverlayWindow (efecte).
     /// Suportă opacity configurabilă, multiple tipuri de efecte, multi-monitor.
+    /// Resilient la Explorer.exe restart via TaskbarCreated message.
     /// </summary>
     public class TaskbarModule : IModule, IDisposable
     {
@@ -21,6 +24,12 @@ namespace Win7Revival.Modules.Taskbar
         private TaskbarDetector? _detector;
         private OverlayWindow? _overlay;
         private bool _disposed;
+
+        // Explorer restart monitoring
+        private Thread? _messageThread;
+        private IntPtr _messageWindowHandle;
+        private uint _taskbarCreatedMessageId;
+        private Win32Interop.WndProc? _wndProcDelegate; // prevent GC collection
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -93,6 +102,8 @@ namespace Win7Revival.Modules.Taskbar
             _overlay = new OverlayWindow(_detector, _settings);
             _overlay.Apply();
 
+            StartExplorerMonitor();
+
             _settings.IsEnabled = true;
             OnPropertyChanged(nameof(IsEnabled));
             return Task.CompletedTask;
@@ -100,6 +111,8 @@ namespace Win7Revival.Modules.Taskbar
 
         public Task DisableAsync(CancellationToken cancellationToken = default)
         {
+            StopExplorerMonitor();
+
             _overlay?.Remove();
             _overlay?.Dispose();
             _overlay = null;
@@ -109,21 +122,148 @@ namespace Win7Revival.Modules.Taskbar
             return Task.CompletedTask;
         }
 
+        // ================================================================
+        // Explorer Restart Resilience
+        // ================================================================
+
+        private void StartExplorerMonitor()
+        {
+            if (_messageThread != null) return;
+
+            _taskbarCreatedMessageId = Win32Interop.RegisterWindowMessage("TaskbarCreated");
+            if (_taskbarCreatedMessageId == 0)
+            {
+                Debug.WriteLine("[TaskbarModule] Failed to register TaskbarCreated message.");
+                return;
+            }
+
+            _messageThread = new Thread(ExplorerMonitorLoop)
+            {
+                Name = "Win7Revival.ExplorerMonitor",
+                IsBackground = true
+            };
+            _messageThread.SetApartmentState(ApartmentState.STA);
+            _messageThread.Start();
+        }
+
+        private void StopExplorerMonitor()
+        {
+            if (_messageThread == null) return;
+
+            if (_messageWindowHandle != IntPtr.Zero)
+            {
+                Win32Interop.PostMessage(_messageWindowHandle, Win32Interop.WM_QUIT, IntPtr.Zero, IntPtr.Zero);
+            }
+
+            _messageThread.Join(2000);
+            _messageThread = null;
+            _messageWindowHandle = IntPtr.Zero;
+        }
+
+        private void ExplorerMonitorLoop()
+        {
+            const string className = "Win7Revival_ExplorerMonitor";
+
+            _wndProcDelegate = (IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam) =>
+            {
+                if (msg == _taskbarCreatedMessageId)
+                {
+                    Debug.WriteLine("[TaskbarModule] TaskbarCreated received — Explorer restarted.");
+                    OnExplorerRestarted();
+                    return IntPtr.Zero;
+                }
+                return Win32Interop.DefWindowProc(hwnd, msg, wParam, lParam);
+            };
+
+            var wndClass = new Win32Interop.WNDCLASS
+            {
+                lpfnWndProc = _wndProcDelegate,
+                hInstance = Win32Interop.GetModuleHandle(null),
+                lpszClassName = className
+            };
+
+            var atom = Win32Interop.RegisterClass(ref wndClass);
+            if (atom == 0)
+            {
+                Debug.WriteLine("[TaskbarModule] Failed to register window class for Explorer monitor.");
+                return;
+            }
+
+            _messageWindowHandle = Win32Interop.CreateWindowEx(
+                0, className, "Win7Revival Explorer Monitor",
+                0, 0, 0, 0, 0,
+                Win32Interop.HWND_MESSAGE, IntPtr.Zero,
+                wndClass.hInstance, IntPtr.Zero);
+
+            if (_messageWindowHandle == IntPtr.Zero)
+            {
+                Debug.WriteLine("[TaskbarModule] Failed to create message-only window.");
+                return;
+            }
+
+            Debug.WriteLine($"[TaskbarModule] Explorer monitor started, HWND=0x{_messageWindowHandle:X}");
+
+            while (Win32Interop.GetMessage(out var msg, IntPtr.Zero, 0, 0))
+            {
+                Win32Interop.TranslateMessage(ref msg);
+                Win32Interop.DispatchMessage(ref msg);
+            }
+
+            Win32Interop.DestroyWindow(_messageWindowHandle);
+            Debug.WriteLine("[TaskbarModule] Explorer monitor stopped.");
+        }
+
+        private void OnExplorerRestarted()
+        {
+            try
+            {
+                // Give Explorer a moment to fully recreate the taskbar
+                Thread.Sleep(1000);
+
+                _detector?.Refresh();
+
+                if (_detector?.PrimaryHandle == IntPtr.Zero)
+                {
+                    Debug.WriteLine("[TaskbarModule] Taskbar not found after Explorer restart, retrying...");
+                    Thread.Sleep(2000);
+                    _detector?.Refresh();
+                }
+
+                if (_detector?.PrimaryHandle != IntPtr.Zero)
+                {
+                    _overlay?.Dispose();
+                    _overlay = new OverlayWindow(_detector!, _settings);
+                    _overlay.Apply();
+                    Debug.WriteLine("[TaskbarModule] Effects reapplied after Explorer restart.");
+                }
+                else
+                {
+                    Debug.WriteLine("[TaskbarModule] Could not find taskbar after Explorer restart.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[TaskbarModule] Error handling Explorer restart: {ex.Message}");
+            }
+        }
+
         /// <summary>
-        /// Actualizează setările (opacity, effect) live, fără disable/enable.
-        /// Apelat din UI la schimbarea slider-ului sau combobox-ului.
+        /// Updates settings (opacity, effect, tint color) live without disable/enable.
+        /// Called from UI when slider, combobox, or color controls change.
         /// </summary>
-        public void UpdateSettings(int opacity, EffectType effect)
+        public void UpdateSettings(int opacity, EffectType effect, byte tintR = 0, byte tintG = 0, byte tintB = 0)
         {
             _settings.Opacity = Math.Clamp(opacity, 0, 100);
             _settings.Effect = effect;
+            _settings.TintR = tintR;
+            _settings.TintG = tintG;
+            _settings.TintB = tintB;
 
             OnPropertyChanged(nameof(CurrentSettings));
 
-            // Re-aplică efectele dacă modulul e activ
             _overlay?.UpdateSettings(_settings);
 
-            Debug.WriteLine($"[TaskbarModule] Settings updated: Opacity={opacity}%, Effect={effect}");
+            Debug.WriteLine($"[TaskbarModule] Settings updated: Opacity={opacity}%, Effect={effect}, Tint=({tintR},{tintG},{tintB})");
         }
 
         public Task SaveSettingsAsync()
@@ -143,6 +283,7 @@ namespace Win7Revival.Modules.Taskbar
 
             try
             {
+                StopExplorerMonitor();
                 _overlay?.Dispose();
                 _overlay = null;
             }

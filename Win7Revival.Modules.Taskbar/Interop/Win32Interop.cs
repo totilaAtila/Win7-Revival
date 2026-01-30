@@ -210,5 +210,77 @@ namespace Win7Revival.Modules.Taskbar.Interop
         // ================================================================
         [DllImport("shell32.dll")]
         public static extern IntPtr SHAppBarMessage(int dwMessage, ref APPBARDATA pData);
+
+        // ================================================================
+        // P/Invoke — Window Messages (Explorer restart detection)
+        // ================================================================
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        public static extern uint RegisterWindowMessage(string lpString);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern IntPtr CreateWindowEx(
+            int dwExStyle, string lpClassName, string lpWindowName,
+            int dwStyle, int x, int y, int nWidth, int nHeight,
+            IntPtr hWndParent, IntPtr hMenu, IntPtr hInstance, IntPtr lpParam);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr DefWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool DestroyWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetMessage(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr DispatchMessage(ref MSG lpmsg);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool TranslateMessage(ref MSG lpMsg);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        public static extern ushort RegisterClass(ref WNDCLASS lpWndClass);
+
+        [DllImport("kernel32.dll")]
+        public static extern IntPtr GetModuleHandle(string? lpModuleName);
+
+        public delegate IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MSG
+        {
+            public IntPtr hwnd;
+            public uint message;
+            public IntPtr wParam;
+            public IntPtr lParam;
+            public uint time;
+            public int pt_x;
+            public int pt_y;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        public struct WNDCLASS
+        {
+            public uint style;
+            public WndProc lpfnWndProc;
+            public int cbClsExtra;
+            public int cbWndExtra;
+            public IntPtr hInstance;
+            public IntPtr hIcon;
+            public IntPtr hCursor;
+            public IntPtr hbrBackground;
+            public string? lpszMenuName;
+            public string lpszClassName;
+        }
+
+        public static readonly IntPtr HWND_MESSAGE = new IntPtr(-3);
+        public const uint WM_QUIT = 0x0012;
     }
 }

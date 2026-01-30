@@ -34,7 +34,7 @@ namespace Win7Revival.Modules.Taskbar
             if (_disposed) throw new ObjectDisposedException(nameof(OverlayWindow));
 
             var accentState = MapEffectToAccentState(_settings.Effect);
-            int gradientColor = CalculateGradientColor(_settings.Opacity);
+            int gradientColor = CalculateGradientColor(_settings.Opacity, _settings.TintR, _settings.TintG, _settings.TintB);
 
             foreach (var handle in _detector.AllHandles)
             {
@@ -94,16 +94,14 @@ namespace Win7Revival.Modules.Taskbar
         }
 
         /// <summary>
-        /// Convertește opacity (0-100) în GradientColor ARGB (alpha in high byte).
-        /// Folosit de ACCENT_ENABLE_ACRYLICBLURBEHIND.
-        /// Pentru alte moduri de accent, AccentFlags controlează comportamentul.
+        /// Builds GradientColor in ABGR format from opacity + RGB tint.
+        /// ACCENT_POLICY.GradientColor uses ABGR byte order: 0xAABBGGRR.
         /// </summary>
-        private static int CalculateGradientColor(int opacityPercent)
+        private static int CalculateGradientColor(int opacityPercent, byte r, byte g, byte b)
         {
             int alpha = (int)(opacityPercent / 100.0 * 255);
             alpha = Math.Clamp(alpha, 0, 255);
-            // ARGB: alpha in high byte, rest 0 (black tint)
-            return alpha << 24;
+            return (alpha << 24) | (b << 16) | (g << 8) | r;
         }
 
         /// <summary>
