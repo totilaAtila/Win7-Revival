@@ -7,8 +7,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Win7Revival.Core", "Win7Rev
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Win7Revival.Modules.Taskbar", "Win7Revival.Modules.Taskbar\Win7Revival.Modules.Taskbar.csproj", "{B3BE571D-3A5E-4DE9-88E7-1F455E5A9AB5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Win7Revival.Modules.StartMenu", "Win7Revival.Modules.StartMenu\Win7Revival.Modules.StartMenu.csproj", "{39D0083F-E094-4571-B342-F2A7E7986776}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Win7Revival.App", "Win7Revival.App\Win7Revival.App.csproj", "{24560884-4992-4500-BE51-EE74FDAABA22}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Win7Revival.Core.Tests", "Win7Revival.Core.Tests\Win7Revival.Core.Tests.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
@@ -30,10 +28,6 @@ Global
 		{B3BE571D-3A5E-4DE9-88E7-1F455E5A9AB5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B3BE571D-3A5E-4DE9-88E7-1F455E5A9AB5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B3BE571D-3A5E-4DE9-88E7-1F455E5A9AB5}.Release|Any CPU.Build.0 = Release|Any CPU
-		{39D0083F-E094-4571-B342-F2A7E7986776}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{39D0083F-E094-4571-B342-F2A7E7986776}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{39D0083F-E094-4571-B342-F2A7E7986776}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{39D0083F-E094-4571-B342-F2A7E7986776}.Release|Any CPU.Build.0 = Release|Any CPU
 		{24560884-4992-4500-BE51-EE74FDAABA22}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{24560884-4992-4500-BE51-EE74FDAABA22}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{24560884-4992-4500-BE51-EE74FDAABA22}.Release|Any CPU.ActiveCfg = Release|Any CPU
