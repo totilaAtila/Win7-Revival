@@ -18,6 +18,15 @@ namespace Win7Revival.Core.Models
 
         [JsonPropertyName("effect")]
         public EffectType Effect { get; set; } = EffectType.None;
+
+        [JsonPropertyName("tintR")]
+        public byte TintR { get; set; } = 0;
+
+        [JsonPropertyName("tintG")]
+        public byte TintG { get; set; } = 0;
+
+        [JsonPropertyName("tintB")]
+        public byte TintB { get; set; } = 0;
     }
 
     /// <summary>

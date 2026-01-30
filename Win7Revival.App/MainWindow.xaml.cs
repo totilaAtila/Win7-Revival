@@ -91,6 +91,15 @@ namespace Win7Revival.App
                 _ => 0
             };
 
+            // Color tint
+            TintRSlider.Value = settings.TintR;
+            TintGSlider.Value = settings.TintG;
+            TintBSlider.Value = settings.TintB;
+            TintRValue.Text = settings.TintR.ToString();
+            TintGValue.Text = settings.TintG.ToString();
+            TintBValue.Text = settings.TintB.ToString();
+            UpdateColorPreview();
+
             // Diagnostics
             UpdateDiagnostics();
         }
@@ -166,41 +175,49 @@ namespace Win7Revival.App
             }
         }
 
-        private void EffectComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private EffectType GetSelectedEffect() => EffectComboBox.SelectedIndex switch
+        {
+            0 => EffectType.Blur,
+            1 => EffectType.Acrylic,
+            2 => EffectType.Mica,
+            _ => EffectType.Blur
+        };
+
+        private void ApplyCurrentSettings()
         {
             if (_isInitializing || _taskbarModule == null) return;
+            _taskbarModule.UpdateSettings(
+                (int)OpacitySlider.Value, GetSelectedEffect(),
+                (byte)TintRSlider.Value, (byte)TintGSlider.Value, (byte)TintBSlider.Value);
+        }
 
-            var effect = EffectComboBox.SelectedIndex switch
-            {
-                0 => EffectType.Blur,
-                1 => EffectType.Acrylic,
-                2 => EffectType.Mica,
-                _ => EffectType.Blur
-            };
+        private void UpdateColorPreview()
+        {
+            if (ColorPreviewBrush == null) return;
+            ColorPreviewBrush.Color = Windows.UI.Color.FromArgb(255,
+                (byte)TintRSlider.Value, (byte)TintGSlider.Value, (byte)TintBSlider.Value);
+        }
 
-            _taskbarModule.UpdateSettings((int)OpacitySlider.Value, effect);
+        private void EffectComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            ApplyCurrentSettings();
         }
 
         private void OpacitySlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
         {
-            // OpacityValueText poate fi null dacă slider-ul se activează
-            // înainte ca TextBlock-ul să fie instanțiat (XAML load order).
             if (OpacityValueText == null) return;
+            OpacityValueText.Text = $"{(int)e.NewValue}%";
+            ApplyCurrentSettings();
+        }
 
-            int opacity = (int)e.NewValue;
-            OpacityValueText.Text = $"{opacity}%";
-
-            if (_isInitializing || _taskbarModule == null) return;
-
-            var effect = EffectComboBox.SelectedIndex switch
-            {
-                0 => EffectType.Blur,
-                1 => EffectType.Acrylic,
-                2 => EffectType.Mica,
-                _ => EffectType.Blur
-            };
-
-            _taskbarModule.UpdateSettings(opacity, effect);
+        private void TintSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (TintRValue == null) return;
+            TintRValue.Text = ((int)TintRSlider.Value).ToString();
+            TintGValue.Text = ((int)TintGSlider.Value).ToString();
+            TintBValue.Text = ((int)TintBSlider.Value).ToString();
+            UpdateColorPreview();
+            ApplyCurrentSettings();
         }
 
         private async void ApplyButton_Click(object sender, RoutedEventArgs e)
@@ -228,9 +245,16 @@ namespace Win7Revival.App
             OpacitySlider.Value = 80;
             OpacityValueText.Text = "80%";
             EffectComboBox.SelectedIndex = 0;
+            TintRSlider.Value = 0;
+            TintGSlider.Value = 0;
+            TintBSlider.Value = 0;
+            TintRValue.Text = "0";
+            TintGValue.Text = "0";
+            TintBValue.Text = "0";
+            UpdateColorPreview();
             _isInitializing = false;
 
-            _taskbarModule.UpdateSettings(80, EffectType.Blur);
+            _taskbarModule.UpdateSettings(80, EffectType.Blur, 0, 0, 0);
         }
 
         private async void AutoStartToggle_Toggled(object sender, RoutedEventArgs e)

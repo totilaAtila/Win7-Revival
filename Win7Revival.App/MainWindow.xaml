@@ -105,6 +105,61 @@
                                     ValueChanged="OpacitySlider_ValueChanged"/>
                         </StackPanel>
 
+                        <!-- Color Tint -->
+                        <StackPanel Spacing="6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Color Tint" FontWeight="SemiBold" Grid.Column="0"/>
+                                <Border x:Name="ColorPreview" Grid.Column="1"
+                                        Width="32" Height="20" CornerRadius="4"
+                                        BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                        BorderThickness="1">
+                                    <Border.Background>
+                                        <SolidColorBrush x:Name="ColorPreviewBrush" Color="#FF000000"/>
+                                    </Border.Background>
+                                </Border>
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="28"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="36"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Text="R" Grid.Row="0" Grid.Column="0"
+                                           VerticalAlignment="Center" Foreground="#FFE06060" FontWeight="SemiBold"/>
+                                <Slider x:Name="TintRSlider" Grid.Row="0" Grid.Column="1"
+                                        Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                        ValueChanged="TintSlider_ValueChanged"/>
+                                <TextBlock x:Name="TintRValue" Grid.Row="0" Grid.Column="2"
+                                           Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+
+                                <TextBlock Text="G" Grid.Row="1" Grid.Column="0"
+                                           VerticalAlignment="Center" Foreground="#FF60C060" FontWeight="SemiBold"/>
+                                <Slider x:Name="TintGSlider" Grid.Row="1" Grid.Column="1"
+                                        Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                        ValueChanged="TintSlider_ValueChanged"/>
+                                <TextBlock x:Name="TintGValue" Grid.Row="1" Grid.Column="2"
+                                           Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+
+                                <TextBlock Text="B" Grid.Row="2" Grid.Column="0"
+                                           VerticalAlignment="Center" Foreground="#FF6080E0" FontWeight="SemiBold"/>
+                                <Slider x:Name="TintBSlider" Grid.Row="2" Grid.Column="1"
+                                        Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                        ValueChanged="TintSlider_ValueChanged"/>
+                                <TextBlock x:Name="TintBValue" Grid.Row="2" Grid.Column="2"
+                                           Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+                            </Grid>
+                        </StackPanel>
+
                         <!-- Diagnostics -->
                         <StackPanel Spacing="4" Opacity="0.5">
                             <TextBlock x:Name="DiagnosticsText" Text="Taskbar: detecting..."
