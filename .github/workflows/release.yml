@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore Win7Revival.sln
+
+      - name: Run tests
+        run: dotnet test Win7Revival.Core.Tests/Win7Revival.Core.Tests.csproj --configuration Release --no-restore
+
+      - name: Publish App (self-contained)
+        run: |
+          dotnet publish Win7Revival.App/Win7Revival.App.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output ./publish/win-x64 `
+            -p:PublishSingleFile=false `
+            -p:EnableWindowsTargeting=true
+
+      - name: Publish App (framework-dependent)
+        run: |
+          dotnet publish Win7Revival.App/Win7Revival.App.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained false `
+            --output ./publish/win-x64-fd `
+            -p:PublishSingleFile=false `
+            -p:EnableWindowsTargeting=true
+
+      - name: Package artifacts
+        run: |
+          Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./Win7Revival-${{ github.ref_name }}-win-x64.zip
+          Compress-Archive -Path ./publish/win-x64-fd/* -DestinationPath ./Win7Revival-${{ github.ref_name }}-win-x64-frameworkdependent.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            Win7Revival-${{ github.ref_name }}-win-x64.zip
+            Win7Revival-${{ github.ref_name }}-win-x64-frameworkdependent.zip

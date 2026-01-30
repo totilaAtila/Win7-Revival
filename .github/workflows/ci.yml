@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore Win7Revival.sln
+
+      - name: Build Core (net8.0)
+        run: dotnet build Win7Revival.Core/Win7Revival.Core.csproj --configuration Release --no-restore
+
+      - name: Build Modules.Taskbar (net8.0)
+        run: dotnet build Win7Revival.Modules.Taskbar/Win7Revival.Modules.Taskbar.csproj --configuration Release --no-restore
+
+      - name: Build App (net8.0-windows)
+        run: dotnet build Win7Revival.App/Win7Revival.App.csproj --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test Win7Revival.Core.Tests/Win7Revival.Core.Tests.csproj --configuration Release --no-restore --logger "trx;LogFileName=test-results.trx" --results-directory ./TestResults
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Test Results
+          path: TestResults/*.trx
+          reporter: dotnet-trx
+
+  lint:
+    name: Lint (format check)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Check formatting (Core + Modules.Taskbar + Tests)
+        run: |
+          dotnet format Win7Revival.Core/Win7Revival.Core.csproj --verify-no-changes --verbosity diagnostic
+          dotnet format Win7Revival.Modules.Taskbar/Win7Revival.Modules.Taskbar.csproj --verify-no-changes --verbosity diagnostic
+          dotnet format Win7Revival.Core.Tests/Win7Revival.Core.Tests.csproj --verify-no-changes --verbosity diagnostic
+
+      - name: Check formatting (App — Windows target)
+        run: dotnet format Win7Revival.App/Win7Revival.App.csproj --verify-no-changes --verbosity diagnostic
+        continue-on-error: true
