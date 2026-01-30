@@ -17,6 +17,9 @@ namespace Win7Revival.Core.Interfaces
         /// <summary> Statusul curent al modulului (activ/inactiv). </summary>
         bool IsEnabled { get; }
 
+        /// <summary> Versiunea modulului (SemVer). </summary>
+        string Version { get; }
+
         /// <summary> Setup inițial, apelat o singură dată la startup. </summary>
         Task InitializeAsync();
         

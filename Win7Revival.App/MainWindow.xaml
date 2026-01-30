@@ -5,39 +5,185 @@
     xmlns:local="using:Win7Revival.App"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
+    mc:Ignorable="d"
+    Title="Win7 Revival">
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <StackPanel Margin="20">
-            <TextBlock Text="Win7Revival - Setări" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,20"/>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-            <TextBlock x:Name="AdminWarning"
-                       Text="Aplicația NU rulează ca Administrator. Funcționalitatea poate fi limitată."
-                       Style="{StaticResource CaptionTextBlockStyle}"
-                       Foreground="OrangeRed"
-                       Visibility="Collapsed"
-                       Margin="0,0,0,15"/>
+        <!-- HEADER -->
+        <Grid Grid.Row="0" Padding="24,20" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
 
-            <ItemsControl x:Name="ModulesList">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Horizontal" Margin="0,8">
-                            <ToggleSwitch Header="{Binding Name}"
-                                          IsOn="{Binding IsEnabled, Mode=OneWay}"
-                                          Toggled="ToggleSwitch_Toggled"/>
-                            <TextBlock Text="{Binding Description}"
-                                       VerticalAlignment="Center"
-                                       Margin="10,0,0,0"
-                                       Opacity="0.6"/>
+            <StackPanel Grid.Column="0">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="&#xE771;" FontSize="28"/>
+                    <TextBlock Text="Win7 Revival" FontSize="24" FontWeight="Bold" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Text="Windows 11 Customization Toolkit"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Opacity="0.6" Margin="38,4,0,0"/>
+            </StackPanel>
+
+            <InfoBar x:Name="AdminWarning"
+                     Grid.Column="1"
+                     IsOpen="False"
+                     IsClosable="False"
+                     Severity="Warning"
+                     Title="Non-Admin"
+                     Message="Funcționalitate limitată fără drepturi de administrator."
+                     VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- CONTENT -->
+        <ScrollViewer Grid.Row="1" Padding="24,16">
+            <StackPanel Spacing="20">
+
+                <!-- Taskbar Transparent Module -->
+                <Expander x:Name="TaskbarExpander" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                          IsExpanded="True">
+                    <Expander.Header>
+                        <Grid Padding="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE7C5;" FontSize="16"/>
+                                    <TextBlock Text="Taskbar Transparent" FontSize="16" FontWeight="SemiBold"/>
+                                    <Border Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                            CornerRadius="4" Padding="6,2">
+                                        <TextBlock x:Name="TaskbarVersionBadge" Text="v1.1.0"
+                                                   FontSize="10" Opacity="0.8"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="Efecte de transparență, blur, acrylic sau mica pe Taskbar."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Opacity="0.6" Margin="24,2,0,0"/>
+                            </StackPanel>
+
+                            <ToggleSwitch x:Name="TaskbarToggle" Grid.Column="1"
+                                          Toggled="TaskbarToggle_Toggled"
+                                          VerticalAlignment="Center"/>
+                        </Grid>
+                    </Expander.Header>
+
+                    <StackPanel Spacing="16" Padding="8,8,8,16">
+                        <!-- Effect Type -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Effect Type" FontWeight="SemiBold"/>
+                            <ComboBox x:Name="EffectComboBox" HorizontalAlignment="Stretch"
+                                      SelectionChanged="EffectComboBox_SelectionChanged">
+                                <ComboBoxItem Content="Blur (Aero Glass)" Tag="Blur"/>
+                                <ComboBoxItem Content="Acrylic" Tag="Acrylic"/>
+                                <ComboBoxItem Content="Mica (Host Backdrop)" Tag="Mica"/>
+                            </ComboBox>
                         </StackPanel>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
 
-            <TextBlock Text="Notă: Pentru funcționalitate completă, rulați ca Administrator."
+                        <!-- Opacity Slider -->
+                        <StackPanel Spacing="6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Opacity" FontWeight="SemiBold" Grid.Column="0"/>
+                                <TextBlock x:Name="OpacityValueText" Text="80%" Grid.Column="1"
+                                           Opacity="0.7" FontFamily="Consolas"/>
+                            </Grid>
+                            <Slider x:Name="OpacitySlider" Minimum="0" Maximum="100" Value="80"
+                                    StepFrequency="5"
+                                    ValueChanged="OpacitySlider_ValueChanged"/>
+                        </StackPanel>
+
+                        <!-- Diagnostics -->
+                        <StackPanel Spacing="4" Opacity="0.5">
+                            <TextBlock x:Name="DiagnosticsText" Text="Taskbar: detecting..."
+                                       Style="{StaticResource CaptionTextBlockStyle}" FontFamily="Consolas"/>
+                            <TextBlock x:Name="MonitorInfoText" Text="Monitors: detecting..."
+                                       Style="{StaticResource CaptionTextBlockStyle}" FontFamily="Consolas"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
+
+                <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+
+                <!-- Start Menu (Coming Soon) -->
+                <Grid Padding="12,8" Opacity="0.5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE700;" FontSize="16"/>
+                            <TextBlock Text="Classic Start Menu" FontSize="16" FontWeight="SemiBold"/>
+                            <Border Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                    CornerRadius="4" Padding="6,2">
+                                <TextBlock Text="Sprint 2" FontSize="10"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="Meniu Start personalizat în stil Windows 7."
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Opacity="0.6" Margin="24,2,0,0"/>
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsEnabled="False" VerticalAlignment="Center"/>
+                </Grid>
+
+                <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+
+                <!-- Theme Engine (Coming Soon) -->
+                <Grid Padding="12,8" Opacity="0.5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE790;" FontSize="16"/>
+                            <TextBlock Text="Theme Engine" FontSize="16" FontWeight="SemiBold"/>
+                            <Border Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                    CornerRadius="4" Padding="6,2">
+                                <TextBlock Text="Planned" FontSize="10"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="Personalizare culori, fonturi, icon packs și sound schemes."
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Opacity="0.6" Margin="24,2,0,0"/>
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsEnabled="False" VerticalAlignment="Center"/>
+                </Grid>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- FOOTER -->
+        <Grid Grid.Row="2" Padding="24,12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Text="Win7 Revival v1.1.0"
                        Style="{StaticResource CaptionTextBlockStyle}"
-                       Foreground="{ThemeResource SystemFillColorCautionBrush}"
-                       Margin="0,20,0,0"/>
-        </StackPanel>
+                       Opacity="0.5" VerticalAlignment="Center"/>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Content="Apply &amp; Save" Click="ApplyButton_Click"
+                        Style="{StaticResource AccentButtonStyle}"/>
+                <Button Content="Reset" Click="ResetButton_Click"/>
+                <Button Content="Minimize to Tray" Click="MinimizeToTrayButton_Click"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>
