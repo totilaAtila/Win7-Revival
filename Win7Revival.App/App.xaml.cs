@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
 using Microsoft.UI.Xaml;
 using Win7Revival.Core.Services;
 using Win7Revival.Modules.Taskbar;

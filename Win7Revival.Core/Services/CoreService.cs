@@ -15,10 +15,11 @@ namespace Win7Revival.Core.Services
         private readonly object _lock = new();
         private readonly List<IModule> _modules = new();
         private readonly SettingsService _settingsService;
+        private IReadOnlyList<IModule>? _modulesSnapshot;
 
         public IReadOnlyList<IModule> Modules
         {
-            get { lock (_lock) { return _modules.ToList().AsReadOnly(); } }
+            get { lock (_lock) { return _modulesSnapshot ??= _modules.ToList().AsReadOnly(); } }
         }
 
         public CoreService(SettingsService settingsService)
@@ -33,6 +34,7 @@ namespace Win7Revival.Core.Services
                 if (!_modules.Any(m => m.Name == module.Name))
                 {
                     _modules.Add(module);
+                    _modulesSnapshot = null;
                 }
             }
         }
@@ -78,6 +80,7 @@ namespace Win7Revival.Core.Services
                     {
                         Debug.WriteLine($"[CoreService] Eroare la cleanup după activare eșuată: {cleanupEx.Message}");
                     }
+                    throw;
                 }
             }
         }

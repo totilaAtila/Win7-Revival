@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Threading;
 using Win7Revival.Core.Interfaces;
 using Win7Revival.Core.Services;
 
@@ -87,7 +88,8 @@ public class CoreServiceTests : IDisposable
         var module = new FakeModule("Test") { ShouldThrowOnEnable = true };
         _coreService.RegisterModule(module);
 
-        await _coreService.EnableModuleAsync("Test");
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _coreService.EnableModuleAsync("Test"));
 
         Assert.False(module.IsEnabled);
         Assert.Equal(1, module.DisableCallCount);
@@ -121,13 +123,13 @@ public class CoreServiceTests : IDisposable
 
         public FakeModule(string name) => Name = name;
 
-        public Task InitializeAsync()
+        public Task InitializeAsync(CancellationToken cancellationToken = default)
         {
             Initialized = true;
             return Task.CompletedTask;
         }
 
-        public Task EnableAsync()
+        public Task EnableAsync(CancellationToken cancellationToken = default)
         {
             EnableCallCount++;
             if (ShouldThrowOnEnable)
@@ -137,7 +139,7 @@ public class CoreServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
-        public Task DisableAsync()
+        public Task DisableAsync(CancellationToken cancellationToken = default)
         {
             DisableCallCount++;
             IsEnabled = false;

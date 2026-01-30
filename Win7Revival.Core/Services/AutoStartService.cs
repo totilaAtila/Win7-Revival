@@ -86,12 +86,12 @@ namespace Win7Revival.Core.Services
         {
             if (IsEnabled())
             {
-                Disable();
+                if (!Disable()) return true; // failed to disable, still enabled
                 return false;
             }
             else
             {
-                Enable();
+                if (!Enable()) return false; // failed to enable, still disabled
                 return true;
             }
         }
