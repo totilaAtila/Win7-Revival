@@ -8,7 +8,7 @@ namespace Win7Revival.Core.Models
     public class ModuleSettings
     {
         [JsonPropertyName("name")]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [JsonPropertyName("isEnabled")]
         public bool IsEnabled { get; set; } = false;

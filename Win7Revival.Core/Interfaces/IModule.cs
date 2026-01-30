@@ -1,11 +1,12 @@
-using System.Threading.Tasks;
+using System.ComponentModel;
 
 namespace Win7Revival.Core.Interfaces
 {
     /// <summary>
     /// Interfața comună pentru toate modulele de personalizare.
+    /// Implementează INotifyPropertyChanged pentru data binding reactiv în UI.
     /// </summary>
-    public interface IModule
+    public interface IModule : INotifyPropertyChanged
     {
         /// <summary> Numele modulului (Ex: "Taskbar Transparent"). </summary>
         string Name { get; }

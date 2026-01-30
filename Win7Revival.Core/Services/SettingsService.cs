@@ -1,34 +1,51 @@
 using System.IO;
 using System.Text.Json;
-using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 
 namespace Win7Revival.Core.Services
 {
     /// <summary>
     /// Serviciu pentru persistența setărilor modulelor folosind JSON.
+    /// Stochează fișierele în %AppData%/Win7Revival/ conform standardului Windows.
     /// </summary>
     public class SettingsService
     {
-        private readonly string _basePath = "Win7RevivalSettings"; // Placeholder for a base directory on Windows
+        private readonly string _basePath;
 
         public SettingsService()
         {
-            // In a real Windows app, this would use Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
-            // For now, we ensure the directory exists relative to the execution path (for testing purposes).
+            _basePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Win7Revival");
+            Directory.CreateDirectory(_basePath);
+        }
+
+        /// <summary>
+        /// Constructor pentru teste — permite specificarea explicită a directorului.
+        /// </summary>
+        public SettingsService(string basePath)
+        {
+            _basePath = basePath;
             Directory.CreateDirectory(_basePath);
         }
 
         private string GetFilePath(string moduleName)
         {
-            return Path.Combine(_basePath, $"{moduleName}.json");
+            if (string.IsNullOrWhiteSpace(moduleName))
+                throw new ArgumentException("Numele modulului nu poate fi null sau gol.", nameof(moduleName));
+
+            string sanitized = Regex.Replace(moduleName, @"[^\w\s\-]", "_");
+            sanitized = sanitized.Trim();
+
+            if (string.IsNullOrEmpty(sanitized))
+                throw new ArgumentException("Numele modulului conține doar caractere invalide.", nameof(moduleName));
+
+            return Path.Combine(_basePath, $"{sanitized}.json");
         }
 
         /// <summary>
         /// Încarcă setările pentru un modul.
         /// </summary>
-        /// <typeparam name="T">Tipul modelului de setări.</typeparam>
-        /// <param name="moduleName">Numele modulului.</param>
-        /// <returns>Setările încărcate sau o instanță nouă dacă fișierul nu există.</returns>
         public async Task<T> LoadSettingsAsync<T>(string moduleName) where T : new()
         {
             string filePath = GetFilePath(moduleName);
@@ -44,7 +61,10 @@ namespace Win7Revival.Core.Services
             }
             catch (JsonException)
             {
-                // Log error: Corrupt settings file
+                return new T();
+            }
+            catch (IOException)
+            {
                 return new T();
             }
         }
@@ -52,9 +72,6 @@ namespace Win7Revival.Core.Services
         /// <summary>
         /// Salvează setările pentru un modul.
         /// </summary>
-        /// <typeparam name="T">Tipul modelului de setări.</typeparam>
-        /// <param name="moduleName">Numele modulului.</param>
-        /// <param name="settings">Obiectul de setări de salvat.</param>
         public async Task SaveSettingsAsync<T>(string moduleName, T settings)
         {
             string filePath = GetFilePath(moduleName);

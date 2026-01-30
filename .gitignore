@@ -1,0 +1,66 @@
+## .NET / Visual Studio
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+bld/
+
+## NuGet
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Visual Studio
+.vs/
+*.rsuser
+*.cache
+*.ncb
+*.opendb
+*.opensdf
+*.sdf
+*.psess
+*.vsp
+*.vspx
+*.sap
+*.e2e
+
+## Rider / JetBrains
+.idea/
+*.sln.iml
+
+## MSIX
+AppPackages/
+BundleArtifacts/
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+*.appxupload
+
+## OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## Settings (runtime generated)
+Win7RevivalSettings/
+
+## Secrets
+*.env
+credentials.json
+appsettings.*.json
+!appsettings.json

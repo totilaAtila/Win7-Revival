@@ -1,107 +1,122 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Threading.Tasks;
 using Win7Revival.Core.Interfaces;
 
 namespace Win7Revival.Core.Services
 {
     /// <summary>
     /// Serviciu central care gestionează încărcarea și ciclul de viață al modulelor.
+    /// Thread-safe prin lock pe operațiile de colecție.
     /// </summary>
-    public class CoreService
+    public class CoreService : IDisposable
     {
-        private readonly List<IModule> _modules = new List<IModule>();
+        private readonly object _lock = new();
+        private readonly List<IModule> _modules = new();
         private readonly SettingsService _settingsService;
 
-        public IReadOnlyList<IModule> Modules => _modules.AsReadOnly();
+        public IReadOnlyList<IModule> Modules
+        {
+            get { lock (_lock) { return _modules.ToList().AsReadOnly(); } }
+        }
 
         public CoreService(SettingsService settingsService)
         {
             _settingsService = settingsService;
         }
 
-        /// <summary>
-        /// Înregistrează un modul în sistem.
-        /// </summary>
         public void RegisterModule(IModule module)
         {
-            if (!_modules.Any(m => m.Name == module.Name))
+            lock (_lock)
             {
-                _modules.Add(module);
+                if (!_modules.Any(m => m.Name == module.Name))
+                {
+                    _modules.Add(module);
+                }
             }
         }
 
-        /// <summary>
-        /// Inițializează toate modulele înregistrate.
-        /// </summary>
         public async Task InitializeModulesAsync()
         {
-            foreach (var module in _modules)
+            List<IModule> snapshot;
+            lock (_lock) { snapshot = _modules.ToList(); }
+
+            foreach (var module in snapshot)
             {
                 try
                 {
                     await module.InitializeAsync();
-                    // Load initial state from settings and enable if needed
-                    var settings = await _settingsService.LoadSettingsAsync<Models.ModuleSettings>(module.Name);
-                    if (settings.IsEnabled)
+                    if (module.IsEnabled)
                     {
-                        // Note: A proper implementation would need to pass the loaded settings to the module
-                        // and call EnableAsync only if the module's internal state (which should be updated by settings) 
-                        // indicates it's not already enabled. For this basic structure, we assume the module handles its state.
-                        await EnableModuleAsync(module.Name);
+                        // Modulul și-a încărcat deja starea din settings în InitializeAsync.
+                        // Activăm doar dacă settings zice enabled dar modulul nu e încă efectiv activ.
+                        await module.EnableAsync();
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Log error: Failed to initialize module
-                    Console.WriteLine($"Eroare la inițializarea modulului {module.Name}: {ex.Message}");
+                    Debug.WriteLine($"[CoreService] Eroare la inițializarea modulului {module.Name}: {ex.Message}");
                 }
             }
         }
 
-        /// <summary>
-        /// Activează un modul.
-        /// </summary>
         public async Task EnableModuleAsync(string moduleName)
         {
-            var module = _modules.FirstOrDefault(m => m.Name == moduleName);
+            var module = FindModule(moduleName);
             if (module != null && !module.IsEnabled)
             {
                 try
                 {
                     await module.EnableAsync();
-                    // Save state
-                    await module.SaveSettingsAsync();
                 }
                 catch (Exception ex)
                 {
-                    // Log error: Failed to enable module
-                    Console.WriteLine($"Eroare la activarea modulului {module.Name}: {ex.Message}");
-                    // Attempt to disable to clean up
-                    await DisableModuleAsync(moduleName);
+                    Debug.WriteLine($"[CoreService] Eroare la activarea modulului {module.Name}: {ex.Message}");
+                    try { await module.DisableAsync(); }
+                    catch (Exception cleanupEx)
+                    {
+                        Debug.WriteLine($"[CoreService] Eroare la cleanup după activare eșuată: {cleanupEx.Message}");
+                    }
                 }
             }
         }
 
-        /// <summary>
-        /// Dezactivează un modul.
-        /// </summary>
         public async Task DisableModuleAsync(string moduleName)
         {
-            var module = _modules.FirstOrDefault(m => m.Name == moduleName);
+            var module = FindModule(moduleName);
             if (module != null && module.IsEnabled)
             {
                 try
                 {
                     await module.DisableAsync();
-                    // Save state
-                    await module.SaveSettingsAsync();
                 }
                 catch (Exception ex)
                 {
-                    // Log error: Failed to disable module
-                    Console.WriteLine($"Eroare la dezactivarea modulului {module.Name}: {ex.Message}");
+                    Debug.WriteLine($"[CoreService] Eroare la dezactivarea modulului {module.Name}: {ex.Message}");
+                }
+            }
+        }
+
+        private IModule? FindModule(string moduleName)
+        {
+            lock (_lock) { return _modules.FirstOrDefault(m => m.Name == moduleName); }
+        }
+
+        public void Dispose()
+        {
+            List<IModule> snapshot;
+            lock (_lock) { snapshot = _modules.ToList(); }
+
+            foreach (var module in snapshot)
+            {
+                if (module is IDisposable disposable)
+                {
+                    try { disposable.Dispose(); }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[CoreService] Eroare la dispose pentru {module.Name}: {ex.Message}");
+                    }
                 }
             }
         }

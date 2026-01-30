@@ -7,25 +7,36 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid>
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <StackPanel Margin="20">
             <TextBlock Text="Win7Revival - Setări" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,20"/>
-            
-            <!-- Module List will be populated here -->
+
+            <TextBlock x:Name="AdminWarning"
+                       Text="Aplicația NU rulează ca Administrator. Funcționalitatea poate fi limitată."
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Foreground="OrangeRed"
+                       Visibility="Collapsed"
+                       Margin="0,0,0,15"/>
+
             <ItemsControl x:Name="ModulesList">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <StackPanel Orientation="Horizontal" Margin="0,5">
-                            <ToggleSwitch Header="{Binding Name}" IsOn="{Binding IsEnabled, Mode=TwoWay}" Toggled="ToggleSwitch_Toggled"/>
-                            <TextBlock Text="{Binding Description}" VerticalAlignment="Center" Margin="10,0,0,0" Opacity="0.6"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8">
+                            <ToggleSwitch Header="{Binding Name}"
+                                          IsOn="{Binding IsEnabled, Mode=OneWay}"
+                                          Toggled="ToggleSwitch_Toggled"/>
+                            <TextBlock Text="{Binding Description}"
+                                       VerticalAlignment="Center"
+                                       Margin="10,0,0,0"
+                                       Opacity="0.6"/>
                         </StackPanel>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-            
-            <TextBlock Text="Notă: Aplicația trebuie rulată ca Administrator pentru a modifica Taskbar-ul." 
-                       Style="{StaticResource CaptionTextBlockStyle}" 
-                       Foreground="Red" 
+
+            <TextBlock Text="Notă: Pentru funcționalitate completă, rulați ca Administrator."
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Foreground="{ThemeResource SystemFillColorCautionBrush}"
                        Margin="0,20,0,0"/>
         </StackPanel>
     </Grid>
