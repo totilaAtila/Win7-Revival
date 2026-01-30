@@ -163,6 +163,28 @@
                     <ToggleSwitch Grid.Column="1" IsEnabled="False" VerticalAlignment="Center"/>
                 </Grid>
 
+                <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+
+                <!-- General Settings -->
+                <StackPanel Spacing="12" Padding="12,8">
+                    <TextBlock Text="General" FontSize="16" FontWeight="SemiBold"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="Start with Windows"/>
+                            <TextBlock Text="Pornește automat aplicația la boot (minimizat în tray)."
+                                       Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="AutoStartToggle" Grid.Column="1"
+                                      Toggled="AutoStartToggle_Toggled"
+                                      VerticalAlignment="Center"/>
+                    </Grid>
+                </StackPanel>
+
             </StackPanel>
         </ScrollViewer>
 

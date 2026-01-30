@@ -60,7 +60,17 @@ namespace Win7Revival.App
             _mainWindow.SetTrayIconManager(_trayIconManager);
 
             // 6. Activare fereastră
+            // Dacă a fost lansat cu --minimized (auto-start la boot), pornește în tray
+            bool startMinimized = Environment.GetCommandLineArgs()
+                .Any(arg => arg.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
+
             _mainWindow.Activate();
+
+            if (startMinimized)
+            {
+                _trayIconManager.MinimizeToTray();
+                Debug.WriteLine("[App] Started minimized to tray (auto-start).");
+            }
         }
 
         private void OnMainWindowClosed(object sender, WindowEventArgs args)
