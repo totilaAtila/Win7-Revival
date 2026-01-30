@@ -82,15 +82,15 @@ public class SettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public void GetFilePath_Throws_WhenModuleNameIsEmpty()
+    public async Task GetFilePath_Throws_WhenModuleNameIsEmpty()
     {
-        Assert.ThrowsAsync<ArgumentException>(() => _service.LoadSettingsAsync<ModuleSettings>(""));
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.LoadSettingsAsync<ModuleSettings>(""));
     }
 
     [Fact]
-    public void GetFilePath_Throws_WhenModuleNameIsNull()
+    public async Task GetFilePath_Throws_WhenModuleNameIsNull()
     {
-        Assert.ThrowsAsync<ArgumentException>(() => _service.LoadSettingsAsync<ModuleSettings>(null!));
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.LoadSettingsAsync<ModuleSettings>(null!));
     }
 
     [Fact]

@@ -88,6 +88,7 @@ namespace Win7Revival.Modules.Taskbar
                 EffectType.Blur => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_BLURBEHIND,
                 EffectType.Acrylic => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_ACRYLICBLURBEHIND,
                 EffectType.Mica => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_HOSTBACKDROP,
+                EffectType.None => Win32Interop.ACCENT_STATE.ACCENT_DISABLED,
                 _ => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_BLURBEHIND
             };
         }
