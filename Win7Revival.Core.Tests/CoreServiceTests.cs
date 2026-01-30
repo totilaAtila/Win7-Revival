@@ -113,6 +113,7 @@ public class CoreServiceTests : IDisposable
         public string Name { get; }
         public string Description => "Fake module for testing";
         public bool IsEnabled { get; private set; }
+        public string Version => "1.0.0-test";
         public bool Initialized { get; private set; }
         public int EnableCallCount { get; private set; }
         public int DisableCallCount { get; private set; }

@@ -35,11 +35,12 @@ Win7Revival/
 ### Core Principles
 
 - .NET 8 + WinUI 3 (Windows App SDK)
-- Strict module interface (`IModule`)
+- Strict module interface (`IModule` + `INotifyPropertyChanged`)
 - JSON-based settings stored in `%AppData%/Win7Revival/`
 - No Explorer.exe hooking or injection
 - Fail-safe module behavior (auto-disable on error)
-- DPI-aware and multi-monitor ready (future sprints)
+- DPI-aware and multi-monitor ready via `TaskbarDetector` + `DpiHelper`
+- Thread-safe `CoreService` with `IDisposable` cascade cleanup
 
 ---
 
@@ -59,11 +60,16 @@ Deliverables:
 ## 📦 Modules
 
 ### Transparent Taskbar (Sprint 1)
-- Win32-based taskbar detection (`FindWindow` / `Shell_TrayWnd`)
-- Blur/transparency via `SetWindowCompositionAttribute` (Aero Glass, Acrylic, Mica Alt)
-- Safe P/Invoke cu try/finally pe memorie nemanaged
-- INotifyPropertyChanged pentru reactive UI binding
-- Settings persistente în `%AppData%/Win7Revival/`
+- `TaskbarDetector`: multi-monitor detection (primary + secondary taskbars), position, auto-hide query
+- `OverlayWindow`: applies blur/acrylic/mica via `SetWindowCompositionAttribute` on all taskbars
+- `DpiHelper`: per-monitor DPI scaling for correct overlay positioning
+- Configurable opacity (0-100%) and effect type (Blur, Acrylic, Mica)
+- Live update: slider/combobox changes apply instantly without disable/enable
+- Safe P/Invoke: `try/finally` on all `Marshal.AllocHGlobal` calls
+- `INotifyPropertyChanged` for reactive UI binding
+- `IDisposable` cascade: module cleanup restores original taskbar state
+- Rich WinUI 3 Settings UI: Expander, Slider, ComboBox, diagnostics panel
+- System tray icon skeleton (`TrayIconManager`) with minimize-to-tray support
 
 ### Classic Start Menu (Sprint 2)
 - Custom WinUI 3 menu
@@ -109,30 +115,36 @@ For coordination, architecture decisions, or module integration questions, pleas
 Win7Revival/
 ├── Win7Revival.Core/
 │   ├── Interfaces/
-│   │   └── IModule.cs
+│   │   └── IModule.cs              # IModule + INotifyPropertyChanged + Version
 │   ├── Models/
-│   │   └── ModuleSettings.cs
+│   │   └── ModuleSettings.cs       # Name, IsEnabled, Opacity, EffectType
 │   ├── Services/
-│   │   ├── CoreService.cs
-│   │   └── SettingsService.cs
+│   │   ├── CoreService.cs          # Thread-safe module lifecycle + IDisposable
+│   │   └── SettingsService.cs      # %AppData% JSON persistence + sanitization
 │   └── Win7Revival.Core.csproj
 │
 ├── Win7Revival.Modules.Taskbar/
 │   ├── Interop/
-│   │   └── Win32Interop.cs
-│   ├── TaskbarModule.cs
+│   │   └── Win32Interop.cs         # P/Invoke: composition, window, monitor, DPI, appbar
+│   ├── TaskbarDetector.cs           # Multi-monitor taskbar discovery + position/auto-hide
+│   ├── DpiHelper.cs                 # Per-monitor DPI scaling utilities
+│   ├── OverlayWindow.cs            # Accent policy application (blur/acrylic/mica)
+│   ├── TaskbarModule.cs            # Orchestrator: Detector + Overlay + Settings
 │   └── Win7Revival.Modules.Taskbar.csproj
 │
 ├── Win7Revival.Modules.StartMenu/
 │   └── Win7Revival.Modules.StartMenu.csproj  (Sprint 2)
 │
 ├── Win7Revival.App/
-│   ├── App.xaml / App.xaml.cs
-│   ├── MainWindow.xaml / MainWindow.xaml.cs
+│   ├── App.xaml / App.xaml.cs       # Entry point, lifecycle, tray integration
+│   ├── MainWindow.xaml / .xaml.cs   # Rich settings UI (Expander, Slider, ComboBox)
+│   ├── TrayIconManager.cs          # System tray icon + minimize/restore
 │   └── Win7Revival.App.csproj
 │
 ├── Win7Revival.Core.Tests/
-│   └── (xUnit unit tests)
+│   ├── CoreServiceTests.cs          # 7 tests: register, enable, disable, failure cleanup
+│   ├── SettingsServiceTests.cs      # 8 tests: round-trip, corrupt, sanitize, opacity/effect
+│   └── Win7Revival.Core.Tests.csproj
 │
 ├── .gitignore
 ├── LICENSE

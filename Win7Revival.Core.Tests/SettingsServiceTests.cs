@@ -43,6 +43,33 @@ public class SettingsServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveAndLoad_RoundTrips_OpacityAndEffect()
+    {
+        var settings = new ModuleSettings
+        {
+            Name = "TaskbarTest",
+            IsEnabled = true,
+            Opacity = 65,
+            Effect = EffectType.Acrylic
+        };
+
+        await _service.SaveSettingsAsync("TaskbarTest", settings);
+        var loaded = await _service.LoadSettingsAsync<ModuleSettings>("TaskbarTest");
+
+        Assert.Equal(65, loaded.Opacity);
+        Assert.Equal(EffectType.Acrylic, loaded.Effect);
+    }
+
+    [Fact]
+    public async Task LoadSettingsAsync_ReturnsDefaultOpacityAndEffect_WhenNew()
+    {
+        var result = await _service.LoadSettingsAsync<ModuleSettings>("BrandNew");
+
+        Assert.Equal(80, result.Opacity);
+        Assert.Equal(EffectType.None, result.Effect);
+    }
+
+    [Fact]
     public async Task LoadSettingsAsync_ReturnsDefault_WhenFileIsCorrupted()
     {
         string filePath = Path.Combine(_testDir, "Corrupt.json");

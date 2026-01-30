@@ -1,0 +1,157 @@
+using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using Win7Revival.Core.Models;
+using Win7Revival.Modules.Taskbar.Interop;
+
+namespace Win7Revival.Modules.Taskbar
+{
+    /// <summary>
+    /// Gestionează aplicarea efectelor de transparență/blur direct pe taskbar-ul Windows.
+    /// Folosește SetWindowCompositionAttribute pentru a modifica accent policy-ul taskbar-ului.
+    /// Suportă: opacity configurabilă, mai multe tipuri de efecte, și multi-monitor.
+    /// </summary>
+    public class OverlayWindow : IDisposable
+    {
+        private readonly TaskbarDetector _detector;
+        private ModuleSettings _settings;
+        private bool _isActive;
+        private bool _disposed;
+
+        public bool IsActive => _isActive;
+
+        public OverlayWindow(TaskbarDetector detector, ModuleSettings settings)
+        {
+            _detector = detector;
+            _settings = settings;
+        }
+
+        /// <summary>
+        /// Aplică efectul de transparență pe toate taskbar-urile detectate.
+        /// </summary>
+        public void Apply()
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(OverlayWindow));
+
+            var accentState = MapEffectToAccentState(_settings.Effect);
+            int gradientColor = CalculateGradientColor(_settings.Opacity);
+
+            foreach (var handle in _detector.AllHandles)
+            {
+                if (!_detector.IsHandleValid(handle))
+                {
+                    Debug.WriteLine($"[OverlayWindow] Handle invalid: 0x{handle:X}, skipping.");
+                    continue;
+                }
+
+                ApplyAccentPolicy(handle, accentState, gradientColor);
+            }
+
+            _isActive = true;
+            Debug.WriteLine($"[OverlayWindow] Effect applied: {_settings.Effect}, Opacity: {_settings.Opacity}%");
+        }
+
+        /// <summary>
+        /// Restaurează taskbar-ul la starea originală (fără efecte).
+        /// </summary>
+        public void Remove()
+        {
+            foreach (var handle in _detector.AllHandles)
+            {
+                if (!_detector.IsHandleValid(handle)) continue;
+                ApplyAccentPolicy(handle, Win32Interop.ACCENT_STATE.ACCENT_DISABLED, 0);
+            }
+
+            _isActive = false;
+            Debug.WriteLine("[OverlayWindow] Effects removed, taskbar restored.");
+        }
+
+        /// <summary>
+        /// Actualizează setările și re-aplică efectele.
+        /// </summary>
+        public void UpdateSettings(ModuleSettings newSettings)
+        {
+            _settings = newSettings;
+            if (_isActive)
+            {
+                Apply();
+            }
+        }
+
+        /// <summary>
+        /// Mapează EffectType (din Core) pe Win32 ACCENT_STATE.
+        /// </summary>
+        private static Win32Interop.ACCENT_STATE MapEffectToAccentState(EffectType effect)
+        {
+            return effect switch
+            {
+                EffectType.Blur => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_BLURBEHIND,
+                EffectType.Acrylic => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_ACRYLICBLURBEHIND,
+                EffectType.Mica => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_HOSTBACKDROP,
+                _ => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_BLURBEHIND
+            };
+        }
+
+        /// <summary>
+        /// Convertește opacity (0-100) în GradientColor ARGB (alpha in high byte).
+        /// Folosit de ACCENT_ENABLE_ACRYLICBLURBEHIND.
+        /// Pentru alte moduri de accent, AccentFlags controlează comportamentul.
+        /// </summary>
+        private static int CalculateGradientColor(int opacityPercent)
+        {
+            int alpha = (int)(opacityPercent / 100.0 * 255);
+            alpha = Math.Clamp(alpha, 0, 255);
+            // ARGB: alpha in high byte, rest 0 (black tint)
+            return alpha << 24;
+        }
+
+        /// <summary>
+        /// Aplică ACCENT_POLICY pe un handle specific, cu try/finally pe memoria nemanaged.
+        /// </summary>
+        private static void ApplyAccentPolicy(IntPtr hwnd, Win32Interop.ACCENT_STATE state, int gradientColor)
+        {
+            var accent = new Win32Interop.ACCENT_POLICY
+            {
+                AccentState = state,
+                AccentFlags = 2,
+                GradientColor = gradientColor,
+                AnimationId = 0
+            };
+
+            int accentSize = Marshal.SizeOf(accent);
+            IntPtr accentPtr = Marshal.AllocHGlobal(accentSize);
+            try
+            {
+                Marshal.StructureToPtr(accent, accentPtr, false);
+
+                var data = new Win32Interop.WINDOWCOMPOSITIONATTRIB_DATA
+                {
+                    Attrib = Win32Interop.WINDOWCOMPOSITIONATTRIB.WCA_ACCENT_POLICY,
+                    Data = accentPtr,
+                    SizeOfData = accentSize
+                };
+
+                Win32Interop.SetWindowCompositionAttribute(hwnd, ref data);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(accentPtr);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            if (_isActive)
+            {
+                try { Remove(); }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[OverlayWindow] Dispose cleanup error: {ex.Message}");
+                }
+            }
+        }
+    }
+}
