@@ -40,12 +40,30 @@ Win7Revival/
 
 ---
 
+## 🚀 Current Status
+
+**Sprint 1 – Complete**
+
+Deliverables:
+- Core architecture (module lifecycle, settings persistence, thread-safe CoreService)
+- Module system (IModule interface with CancellationToken support)
+- Transparent Taskbar module (blur/acrylic/mica, multi-monitor, live updates)
+- Custom RGB color tint (user-configurable R/G/B sliders with live preview)
+- Explorer restart resilience (TaskbarCreated message listener, auto-reapply)
+- WinUI 3 Settings UI (Expander, Slider, ComboBox, color tint, diagnostics)
+- System tray icon (H.NotifyIcon.WinUI with context menu and restore)
+- Auto-start at boot with `--minimized` tray support
+- 15 unit tests (CoreService + SettingsService)
+
+---
+
 ## Modules
 
-### Transparent Taskbar (Active)
+### Transparent Taskbar (Sprint 1 — Complete)
 - **TaskbarDetector**: Multi-monitor discovery (primary `Shell_TrayWnd` + secondary `Shell_SecondaryTrayWnd`), position query, auto-hide detection, monitor enumeration via `EnumDisplayMonitors`
-- **OverlayWindow**: Applies accent policy (Blur/Acrylic/Mica/None) via `SetWindowCompositionAttribute` on all taskbar handles with configurable opacity (0-100%)
+- **OverlayWindow**: Applies accent policy (Blur/Acrylic/Mica/None) via `SetWindowCompositionAttribute` on all taskbar handles with configurable opacity (0-100%) and custom RGB color tint
 - **TaskbarModule**: Orchestrator — coordinates Detector + Overlay + Settings with live `UpdateSettings()` support
+- **Explorer restart resilience**: Background STA thread listens for `TaskbarCreated` window message, auto-refreshes handles and reapplies effects when Explorer.exe restarts
 - Safe handle snapshots prevent iterator invalidation during Explorer restarts
 - `IDisposable` cleanup restores original taskbar state (`ACCENT_DISABLED`)
 
@@ -61,12 +79,13 @@ Win7Revival/
 
 ## Features
 
-- **Rich WinUI 3 UI**: Expander, Slider, ComboBox, diagnostics panel, admin warning
-- **System tray**: Graceful degradation (minimizes to taskbar when tray icon not yet integrated)
+- **Rich WinUI 3 UI**: Expander, Slider, ComboBox, RGB color tint, diagnostics panel, admin warning
+- **System tray**: H.NotifyIcon.WinUI with context menu, double-click restore, balloon notifications
+- **Explorer resilience**: Taskbar effects auto-reapply after Explorer.exe crash/restart
 - **Auto-start**: Registry-based start with Windows, launches minimized to tray
 - **Settings persistence**: JSON in `%AppData%`, survives corrupt files
 - **Multi-monitor**: Detects and applies effects to all taskbars
-- **Live preview**: Opacity slider and effect type changes apply instantly
+- **Live preview**: Opacity slider, effect type, and color tint changes apply instantly
 
 ---
 
@@ -74,7 +93,8 @@ Win7Revival/
 
 - **Language:** C# (.NET 8)
 - **UI:** WinUI 3 (Windows App SDK 1.5)
-- **Interop:** Win32 API (18+ P/Invoke declarations)
+- **Interop:** Win32 API (25+ P/Invoke declarations)
+- **Tray Icon:** H.NotifyIcon.WinUI
 - **Testing:** xUnit (15 tests — CoreService + SettingsService)
 - **Settings:** System.Text.Json
 - **Version Control:** GitHub
@@ -89,7 +109,7 @@ Win7Revival/
 │   ├── Interfaces/
 │   │   └── IModule.cs              # IModule + INotifyPropertyChanged + CancellationToken
 │   ├── Models/
-│   │   └── ModuleSettings.cs       # Name, IsEnabled, Opacity, EffectType enum
+│   │   └── ModuleSettings.cs       # Name, IsEnabled, Opacity, EffectType, TintR/G/B
 │   ├── Services/
 │   │   ├── CoreService.cs          # Thread-safe module lifecycle + IDisposable
 │   │   ├── SettingsService.cs      # %AppData% JSON persistence + sanitization
@@ -98,16 +118,16 @@ Win7Revival/
 │
 ├── Win7Revival.Modules.Taskbar/
 │   ├── Interop/
-│   │   └── Win32Interop.cs         # P/Invoke: composition, window, monitor, DPI, appbar
+│   │   └── Win32Interop.cs         # P/Invoke: composition, window, monitor, DPI, appbar, messages
 │   ├── TaskbarDetector.cs          # Multi-monitor taskbar discovery + position/auto-hide
-│   ├── OverlayWindow.cs            # Accent policy application (blur/acrylic/mica/none)
-│   ├── TaskbarModule.cs            # Orchestrator: Detector + Overlay + Settings
+│   ├── OverlayWindow.cs            # Accent policy application (blur/acrylic/mica) + RGB tint
+│   ├── TaskbarModule.cs            # Orchestrator: Detector + Overlay + Settings + Explorer monitor
 │   └── Win7Revival.Modules.Taskbar.csproj
 │
 ├── Win7Revival.App/
 │   ├── App.xaml / App.xaml.cs       # Entry point, lifecycle, --minimized support
-│   ├── MainWindow.xaml / .xaml.cs   # Rich settings UI (Expander, Slider, ComboBox)
-│   ├── TrayIconManager.cs          # System tray skeleton + minimize/restore
+│   ├── MainWindow.xaml / .xaml.cs   # Rich settings UI (Expander, Slider, ComboBox, RGB tint)
+│   ├── TrayIconManager.cs          # H.NotifyIcon.WinUI tray icon + context menu
 │   └── Win7Revival.App.csproj
 │
 ├── Win7Revival.Core.Tests/
