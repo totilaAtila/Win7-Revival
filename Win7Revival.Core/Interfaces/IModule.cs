@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Threading;
 
 namespace Win7Revival.Core.Interfaces
 {
@@ -21,13 +22,13 @@ namespace Win7Revival.Core.Interfaces
         string Version { get; }
 
         /// <summary> Setup inițial, apelat o singură dată la startup. </summary>
-        Task InitializeAsync();
-        
+        Task InitializeAsync(CancellationToken cancellationToken = default);
+
         /// <summary> Pornește funcționalitatea modulului. Trebuie să fie idempotent. </summary>
-        Task EnableAsync();
-        
+        Task EnableAsync(CancellationToken cancellationToken = default);
+
         /// <summary> Oprește funcționalitatea și curăță TOATE resursele. </summary>
-        Task DisableAsync();
+        Task DisableAsync(CancellationToken cancellationToken = default);
         
         /// <summary> Persistează starea și setările modulului. </summary>
         Task SaveSettingsAsync();

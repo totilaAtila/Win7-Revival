@@ -59,8 +59,9 @@ namespace Win7Revival.App
                 // _taskbarIcon.IconSource = new BitmapIconSource { UriSource = new Uri("ms-appx:///Assets/tray.ico") };
                 // _taskbarIcon.ToolTipText = "Win7 Revival";
 
-                _isInitialized = true;
-                Debug.WriteLine("[TrayIconManager] Initialized (skeleton — H.NotifyIcon integration pending).");
+                // NOTE: _isInitialized remains false until a real tray icon is created.
+                // This prevents MinimizeToTray from hiding the window with no way to restore it.
+                Debug.WriteLine("[TrayIconManager] Initialize called but no tray icon created yet (H.NotifyIcon integration pending).");
             }
             catch (Exception ex)
             {
@@ -84,12 +85,26 @@ namespace Win7Revival.App
         /// </summary>
         public void MinimizeToTray()
         {
-            // WinUI 3 nu are Window.Hide() nativ.
-            // Workaround: setăm dimensiunea la 0 sau folosim AppWindow.
+            if (!_isInitialized)
+            {
+                // Tray icon not available — minimize to taskbar instead of hiding the window
+                // with no way to restore it.
+                Debug.WriteLine("[TrayIconManager] Tray icon not initialized, minimizing to taskbar instead.");
+                try
+                {
+                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_mainWindow);
+                    ShowWindow(hwnd, 6); // SW_MINIMIZE = 6
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[TrayIconManager] Minimize failed: {ex.Message}");
+                }
+                return;
+            }
+
             try
             {
                 var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_mainWindow);
-                // ShowWindow(hwnd, SW_HIDE) — minimizare reală
                 ShowWindow(hwnd, 0); // SW_HIDE = 0
                 Debug.WriteLine("[TrayIconManager] Window minimized to tray.");
             }

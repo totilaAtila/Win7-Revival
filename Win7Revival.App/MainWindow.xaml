@@ -38,7 +38,7 @@
                      IsClosable="False"
                      Severity="Warning"
                      Title="Non-Admin"
-                     Message="Funcționalitate limitată fără drepturi de administrator."
+                     Message="Limited functionality without administrator rights."
                      VerticalAlignment="Center"/>
         </Grid>
 
@@ -66,7 +66,7 @@
                                                    FontSize="10" Opacity="0.8"/>
                                     </Border>
                                 </StackPanel>
-                                <TextBlock Text="Efecte de transparență, blur, acrylic sau mica pe Taskbar."
+                                <TextBlock Text="Transparency, blur, acrylic or mica effects on the Taskbar."
                                            Style="{StaticResource CaptionTextBlockStyle}"
                                            Opacity="0.6" Margin="24,2,0,0"/>
                             </StackPanel>
@@ -132,7 +132,7 @@
                                 <TextBlock Text="Sprint 2" FontSize="10"/>
                             </Border>
                         </StackPanel>
-                        <TextBlock Text="Meniu Start personalizat în stil Windows 7."
+                        <TextBlock Text="Custom Start Menu in Windows 7 style."
                                    Style="{StaticResource CaptionTextBlockStyle}"
                                    Opacity="0.6" Margin="24,2,0,0"/>
                     </StackPanel>
@@ -156,7 +156,7 @@
                                 <TextBlock Text="Planned" FontSize="10"/>
                             </Border>
                         </StackPanel>
-                        <TextBlock Text="Personalizare culori, fonturi, icon packs și sound schemes."
+                        <TextBlock Text="Customize colors, fonts, icon packs and sound schemes."
                                    Style="{StaticResource CaptionTextBlockStyle}"
                                    Opacity="0.6" Margin="24,2,0,0"/>
                     </StackPanel>
@@ -176,7 +176,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                             <TextBlock Text="Start with Windows"/>
-                            <TextBlock Text="Pornește automat aplicația la boot (minimizat în tray)."
+                            <TextBlock Text="Automatically start the application at boot (minimized to tray)."
                                        Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
                         </StackPanel>
                         <ToggleSwitch x:Name="AutoStartToggle" Grid.Column="1"

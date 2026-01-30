@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Threading;
 using Win7Revival.Core.Interfaces;
 using Win7Revival.Core.Models;
 using Win7Revival.Core.Services;
@@ -45,7 +46,7 @@ namespace Win7Revival.Modules.Taskbar
             _settingsService = settingsService;
         }
 
-        public async Task InitializeAsync()
+        public async Task InitializeAsync(CancellationToken cancellationToken = default)
         {
             _settings = await _settingsService.LoadSettingsAsync<ModuleSettings>(Name);
             _settings.Name = Name;
@@ -72,7 +73,7 @@ namespace Win7Revival.Modules.Taskbar
             }
         }
 
-        public async Task EnableAsync()
+        public Task EnableAsync(CancellationToken cancellationToken = default)
         {
             if (_detector == null)
                 throw new InvalidOperationException("Modulul nu a fost inițializat. Apelați InitializeAsync() mai întâi.");
@@ -94,10 +95,10 @@ namespace Win7Revival.Modules.Taskbar
 
             _settings.IsEnabled = true;
             OnPropertyChanged(nameof(IsEnabled));
-            await SaveSettingsAsync();
+            return Task.CompletedTask;
         }
 
-        public async Task DisableAsync()
+        public Task DisableAsync(CancellationToken cancellationToken = default)
         {
             _overlay?.Remove();
             _overlay?.Dispose();
@@ -105,7 +106,7 @@ namespace Win7Revival.Modules.Taskbar
 
             _settings.IsEnabled = false;
             OnPropertyChanged(nameof(IsEnabled));
-            await SaveSettingsAsync();
+            return Task.CompletedTask;
         }
 
         /// <summary>

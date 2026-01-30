@@ -26,7 +26,7 @@ namespace Win7Revival.App
             LoadTaskbarModule();
             LoadAutoStartState();
 
-            this.Content.Loaded += (_, _) => _isInitializing = false;
+            _isInitializing = false;
         }
 
         /// <summary>
@@ -147,10 +147,12 @@ namespace Win7Revival.App
                 if (TaskbarToggle.IsOn && !_taskbarModule.IsEnabled)
                 {
                     await _coreService.EnableModuleAsync(_taskbarModule.Name);
+                    await _taskbarModule.SaveSettingsAsync();
                 }
                 else if (!TaskbarToggle.IsOn && _taskbarModule.IsEnabled)
                 {
                     await _coreService.DisableModuleAsync(_taskbarModule.Name);
+                    await _taskbarModule.SaveSettingsAsync();
                 }
                 UpdateDiagnostics();
             }
@@ -211,7 +213,7 @@ namespace Win7Revival.App
             var dialog = new ContentDialog
             {
                 Title = "Settings Saved",
-                Content = "Setările au fost salvate cu succes.",
+                Content = "Settings have been saved successfully.",
                 CloseButtonText = "OK",
                 XamlRoot = this.Content.XamlRoot
             };
@@ -247,7 +249,7 @@ namespace Win7Revival.App
 
             if (!success)
             {
-                await ShowErrorDialog("Nu s-a putut modifica setarea de pornire automată. Verificați permisiunile.");
+                await ShowErrorDialog("Failed to change auto-start setting. Check your permissions.");
                 _isInitializing = true;
                 AutoStartToggle.IsOn = AutoStartService.IsEnabled();
                 _isInitializing = false;

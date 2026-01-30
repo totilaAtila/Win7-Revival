@@ -29,14 +29,15 @@ namespace Win7Revival.Modules.Taskbar
         /// <summary>
         /// Toate handle-urile (primary + secondary).
         /// </summary>
-        public IEnumerable<IntPtr> AllHandles
+        public IReadOnlyList<IntPtr> AllHandles
         {
             get
             {
+                var list = new List<IntPtr>();
                 if (_primaryHandle != IntPtr.Zero)
-                    yield return _primaryHandle;
-                foreach (var h in _secondaryHandles)
-                    yield return h;
+                    list.Add(_primaryHandle);
+                list.AddRange(_secondaryHandles);
+                return list;
             }
         }
 
