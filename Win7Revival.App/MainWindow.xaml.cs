@@ -24,6 +24,7 @@ namespace Win7Revival.App
 
             CheckAdminStatus();
             LoadTaskbarModule();
+            LoadAutoStartState();
 
             this.Content.Loaded += (_, _) => _isInitializing = false;
         }
@@ -128,6 +129,11 @@ namespace Win7Revival.App
             }
         }
 
+        private void LoadAutoStartState()
+        {
+            AutoStartToggle.IsOn = AutoStartService.IsEnabled();
+        }
+
         // ================================================================
         // Event Handlers
         // ================================================================
@@ -223,6 +229,29 @@ namespace Win7Revival.App
             _isInitializing = false;
 
             _taskbarModule.UpdateSettings(80, EffectType.Blur);
+        }
+
+        private async void AutoStartToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing) return;
+
+            bool success;
+            if (AutoStartToggle.IsOn)
+            {
+                success = AutoStartService.Enable();
+            }
+            else
+            {
+                success = AutoStartService.Disable();
+            }
+
+            if (!success)
+            {
+                await ShowErrorDialog("Nu s-a putut modifica setarea de pornire automată. Verificați permisiunile.");
+                _isInitializing = true;
+                AutoStartToggle.IsOn = AutoStartService.IsEnabled();
+                _isInitializing = false;
+            }
         }
 
         private void MinimizeToTrayButton_Click(object sender, RoutedEventArgs e)
