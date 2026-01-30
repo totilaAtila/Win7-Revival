@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "EQ5YDzpbvPOzsOWJ76oWX2qa6Jj8TMMDPR+N24ZWvlsTIXufAHlWz7xgJDuC6hF3sCcbn3R0O1urThmq9No6dw==",
+  "success": true,
+  "projectFilePath": "/home/ubuntu/Win7-Revival/Win7Revival.Core/Win7Revival.Core.csproj",
+  "expectedPackageFiles": [
+    "/home/ubuntu/.nuget/packages/system.io.pipelines/10.0.2/system.io.pipelines.10.0.2.nupkg.sha512",
+    "/home/ubuntu/.nuget/packages/system.text.encodings.web/10.0.2/system.text.encodings.web.10.0.2.nupkg.sha512",
+    "/home/ubuntu/.nuget/packages/system.text.json/10.0.2/system.text.json.10.0.2.nupkg.sha512"
+  ],
+  "logs": []
+}
