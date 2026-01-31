@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Win7Revival.Core\Win7Revival.Core.csproj" />
     <ProjectReference Include="..\Win7Revival.Modules.Taskbar\Win7Revival.Modules.Taskbar.csproj" />
+    <ProjectReference Include="..\Win7Revival.Modules.StartMenu\Win7Revival.Modules.StartMenu.csproj" />
   </ItemGroup>
 
   <ItemGroup>

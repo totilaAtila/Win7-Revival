@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.UI.Xaml;
 using Win7Revival.Core.Services;
 using Win7Revival.Modules.Taskbar;
+using Win7Revival.Modules.StartMenu;
 
 namespace Win7Revival.App
 {
@@ -16,6 +17,8 @@ namespace Win7Revival.App
         private MainWindow? _mainWindow;
         private CoreService _coreService = null!;
         private TrayIconManager? _trayIconManager;
+        private StartMenuWindow? _startMenuWindow;
+        private StartMenuModule? _startMenuModule;
 
         public App()
         {
@@ -31,7 +34,8 @@ namespace Win7Revival.App
 
             // 2. Înregistrare module (Sprint 1)
             _coreService.RegisterModule(new TaskbarModule(settingsService));
-            // TODO Sprint 2: _coreService.RegisterModule(new StartMenuModule(settingsService));
+            _startMenuModule = new StartMenuModule(settingsService);
+            _coreService.RegisterModule(_startMenuModule);
 
             // 3. Inițializare module (încarcă settings, detectează taskbar)
             try
@@ -65,7 +69,21 @@ namespace Win7Revival.App
             };
             _mainWindow.SetTrayIconManager(_trayIconManager);
 
-            // 6. Activare fereastră
+            // 6. Creare StartMenuWindow și conectare la modul
+            if (_startMenuModule != null)
+            {
+                _startMenuWindow = new StartMenuWindow(_startMenuModule);
+                _startMenuModule.ToggleMenuRequested += (_, _) =>
+                {
+                    // ToggleMenuRequested fires from the hook thread — must dispatch to UI thread
+                    _mainWindow!.DispatcherQueue.TryEnqueue(() =>
+                    {
+                        _startMenuWindow.Toggle();
+                    });
+                };
+            }
+
+            // 7. Activare fereastră
             // Dacă a fost lansat cu --minimized (auto-start la boot), pornește în tray
             bool startMinimized = Environment.GetCommandLineArgs()
                 .Any(arg => arg.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
@@ -81,6 +99,7 @@ namespace Win7Revival.App
 
         private void OnMainWindowClosed(object sender, WindowEventArgs args)
         {
+            _startMenuWindow?.Close();
             _trayIconManager?.Dispose();
             _coreService.Dispose();
         }
