@@ -1,19 +1,12 @@
 # Win7 Revival
 
-**A modular Windows 11 customization toolkit designed to bring back the visual style and usability of Windows 7 — clean, stable, and non-intrusive.**
+Modular Windows 11 customization to bring back the Windows 7 look-and-feel without hacks, patching, or instability.
 
 ---
 
 ## Overview
 
-Win7 Revival is a modular desktop enhancement application for Windows 11.
-Its goal is to restore classic Windows 7 elements while maintaining full system stability and compatibility with modern Windows builds.
-
-The project is built around a strict modular architecture:
-- Each feature is a standalone module implementing `IModule`
-- Modules can be enabled/disabled independently with live settings updates
-- No system patching, no DLL injection, no Explorer.exe modification
-- Thread-safe lifecycle management with `IDisposable` cascade cleanup
+Win7 Revival is a WinUI 3 desktop app built around a strict module system. Each feature is an `IModule` that can be enabled, disabled, or updated live without touching Explorer.exe or injecting DLLs. Settings are JSON-backed, thread-safe, and resilient to corruption.
 
 ---
 
@@ -21,83 +14,82 @@ The project is built around a strict modular architecture:
 
 ```
 Win7Revival/
-├── Win7Revival.Core/              # Core services, module lifecycle, settings
-├── Win7Revival.Modules.Taskbar/   # Transparent Taskbar module
-├── Win7Revival.App/               # WinUI 3 desktop app + tray icon
-└── Win7Revival.Core.Tests/        # xUnit tests (15 tests)
+|-- Win7Revival.Core/            Core services, module lifecycle, settings
+|-- Win7Revival.Modules.Taskbar/ Transparent Taskbar module
+|-- Win7Revival.App/             WinUI 3 desktop app + tray icon
+|-- Win7Revival.Core.Tests/      xUnit tests (CoreService, SettingsService)
 ```
 
-### Core Principles
-
+Core principles:
 - .NET 8 + WinUI 3 (Windows App SDK 1.5)
-- Strict module interface (`IModule` + `INotifyPropertyChanged` + `CancellationToken`)
-- JSON-based settings stored in `%AppData%/Win7Revival/` with path traversal sanitization
-- Thread-safe `CoreService` with lock-based synchronization and snapshot iteration
-- `IDisposable` cascade: App → CoreService → TaskbarModule → OverlayWindow
-- Memory safety: `try/finally` on all `Marshal.AllocHGlobal` calls
-- Exception propagation: `EnableModuleAsync` re-throws after cleanup for UI error handling
-- Auto-start at Windows boot via HKCU registry (no admin required)
+- Modules implement `IModule`, `INotifyPropertyChanged`, and accept `CancellationToken`
+- JSON settings stored in `%AppData%/Win7Revival/` with path sanitization
+- Thread-safe `CoreService` with lock-based lifecycle + `IDisposable` cascade
+- No system patching, no Explorer.exe modification, no DLL injection
+- Auto-start via HKCU Run key (no admin)
 
 ---
 
-## 🚀 Current Status
+## Current Status
 
-**Sprint 1 – Complete**
-
-Deliverables:
-- Core architecture (module lifecycle, settings persistence, thread-safe CoreService)
-- Module system (IModule interface with CancellationToken support)
-- Transparent Taskbar module (blur/acrylic/mica, multi-monitor, live updates)
-- Custom RGB color tint (user-configurable R/G/B sliders with live preview)
-- Explorer restart resilience (TaskbarCreated message listener, auto-reapply)
-- WinUI 3 Settings UI (Expander, Slider, ComboBox, color tint, diagnostics)
-- System tray icon (H.NotifyIcon.WinUI with context menu and restore)
-- Auto-start at boot with `--minimized` tray support
-- 15 unit tests (CoreService + SettingsService)
+Sprint 1 shipped (transparent taskbar, settings UI, tray, auto-start, 15 tests).  
+January 31, 2026 stabilization patch:
+- Taskbar overlay now re-applies its accent policy on a 100 ms timer to resist Windows resetting the effect (e.g., opening Start menu).
+- Tray icon uses `PopupMenu`/`ICommand` for better Windows 11 compatibility; left-click restores the window.
+- Windows App SDK bumped to 1.5.240627; WinUI app publishes self-contained `win-x64` (no MSIX).
+- Solution adds x64 configs; VS Code tasks added for build/test/publish.
 
 ---
 
 ## Modules
 
-### Transparent Taskbar (Sprint 1 — Complete)
-- **TaskbarDetector**: Multi-monitor discovery (primary `Shell_TrayWnd` + secondary `Shell_SecondaryTrayWnd`), position query, auto-hide detection, monitor enumeration via `EnumDisplayMonitors`
-- **OverlayWindow**: Applies accent policy (Blur/Acrylic/Mica/None) via `SetWindowCompositionAttribute` on all taskbar handles with configurable opacity (0-100%) and custom RGB color tint
-- **TaskbarModule**: Orchestrator — coordinates Detector + Overlay + Settings with live `UpdateSettings()` support
-- **Explorer restart resilience**: Background STA thread listens for `TaskbarCreated` window message, auto-refreshes handles and reapplies effects when Explorer.exe restarts
-- Safe handle snapshots prevent iterator invalidation during Explorer restarts
-- `IDisposable` cleanup restores original taskbar state (`ACCENT_DISABLED`)
+### Transparent Taskbar (Sprint 1)
+- `TaskbarDetector`: finds all taskbar handles (primary + secondary), positions, auto-hide state.
+- `OverlayWindow`: applies blur/acrylic/mica/none with opacity (0–100%) and custom RGB tint; now auto re-applies the effect periodically to stay active.
+- `TaskbarModule`: orchestrates detector + overlay + settings; resilient to Explorer.exe restarts via `TaskbarCreated` listener; marked with `[SupportedOSPlatform("windows")]`.
 
-### Classic Start Menu (Planned — Sprint 2)
-- Custom WinUI 3 menu with Windows 7-style layout
-- Win key interception (optional)
-- App indexing + search
+### Classic Start Menu (Planned – Sprint 2)
+- WinUI 3 menu in Windows 7 layout, optional Win key interception, search/indexing.
 
-### Theme Engine (Planned — Sprint 3)
-- Color schemes, accent color override, icon packs, sound schemes
+### Theme Engine (Planned – Sprint 3)
+- Color schemes, icon packs, sound schemes, accent overrides.
 
 ---
 
 ## Features
 
-- **Rich WinUI 3 UI**: Expander, Slider, ComboBox, RGB color tint, diagnostics panel, admin warning
-- **System tray**: H.NotifyIcon.WinUI with context menu, double-click restore, balloon notifications
-- **Explorer resilience**: Taskbar effects auto-reapply after Explorer.exe crash/restart
-- **Auto-start**: Registry-based start with Windows, launches minimized to tray
-- **Settings persistence**: JSON in `%AppData%`, survives corrupt files
-- **Multi-monitor**: Detects and applies effects to all taskbars
-- **Live preview**: Opacity slider, effect type, and color tint changes apply instantly
+- WinUI 3 settings UI: Expander, sliders, effect picker, RGB tint, diagnostics.
+- System tray: H.NotifyIcon.WinUI popup menu (Show Settings / Exit), left-click restore.
+- Explorer resilience: re-detects taskbars and re-applies effects after Explorer restarts.
+- Auto-start: HKCU Run with `--minimized` support.
+- Settings persistence: JSON in `%AppData%`, survives corrupt files.
+- Multi-monitor: applies effects to all taskbars with safe handle snapshots.
+- Live preview: opacity/effect/tint changes apply instantly.
 
 ---
 
-## Tech Stack
+## Build and Run
 
-- **Language:** C# (.NET 8)
-- **UI:** WinUI 3 (Windows App SDK 1.5)
-- **Interop:** Win32 API (25+ P/Invoke declarations)
-- **Tray Icon:** H.NotifyIcon.WinUI
-- **Testing:** xUnit (15 tests — CoreService + SettingsService)
-- **Settings:** System.Text.Json
-- **Version Control:** GitHub
+Prerequisites: .NET 8 SDK, Windows 11 (tested on 23H2+).
+
+- Restore: `dotnet restore Win7Revival.sln`
+- Build (Debug): `dotnet build Win7Revival.sln -c Debug -p:Platform=x64`
+- Run (Debug): `dotnet run --project Win7Revival.App -- -?`
+- Tests: `dotnet test Win7Revival.Core.Tests`
+
+VS Code tasks mirror these (`.vscode/tasks.json`): `build`, `test`, `publish`, `clean`, `restore`.
+
+---
+
+## Publish (self-contained)
+
+Produces a standalone `Win7Revival.App.exe` (no MSIX, no external runtime):
+
+```
+dotnet publish Win7Revival.App -c Release -r win-x64 -p:Platform=x64 --output publish
+```
+
+Result is in `publish/` with all WinAppSDK dependencies for offline install.
 
 ---
 
@@ -105,56 +97,29 @@ Deliverables:
 
 ```
 Win7Revival/
-├── Win7Revival.Core/
-│   ├── Interfaces/
-│   │   └── IModule.cs              # IModule + INotifyPropertyChanged + CancellationToken
-│   ├── Models/
-│   │   └── ModuleSettings.cs       # Name, IsEnabled, Opacity, EffectType, TintR/G/B
-│   ├── Services/
-│   │   ├── CoreService.cs          # Thread-safe module lifecycle + IDisposable
-│   │   ├── SettingsService.cs      # %AppData% JSON persistence + sanitization
-│   │   └── AutoStartService.cs     # HKCU registry auto-start + --minimized
-│   └── Win7Revival.Core.csproj
-│
-├── Win7Revival.Modules.Taskbar/
-│   ├── Interop/
-│   │   └── Win32Interop.cs         # P/Invoke: composition, window, monitor, DPI, appbar, messages
-│   ├── TaskbarDetector.cs          # Multi-monitor taskbar discovery + position/auto-hide
-│   ├── OverlayWindow.cs            # Accent policy application (blur/acrylic/mica) + RGB tint
-│   ├── TaskbarModule.cs            # Orchestrator: Detector + Overlay + Settings + Explorer monitor
-│   └── Win7Revival.Modules.Taskbar.csproj
-│
-├── Win7Revival.App/
-│   ├── App.xaml / App.xaml.cs       # Entry point, lifecycle, --minimized support
-│   ├── MainWindow.xaml / .xaml.cs   # Rich settings UI (Expander, Slider, ComboBox, RGB tint)
-│   ├── TrayIconManager.cs          # H.NotifyIcon.WinUI tray icon + context menu
-│   └── Win7Revival.App.csproj
-│
-├── Win7Revival.Core.Tests/
-│   ├── CoreServiceTests.cs          # 7 tests: register, enable, disable, failure cleanup
-│   ├── SettingsServiceTests.cs      # 8 tests: round-trip, corrupt, sanitize, validation
-│   └── Win7Revival.Core.Tests.csproj
-│
-├── .gitignore
-├── CLAUDE.md
-├── README.md
-└── Win7Revival.sln
+|-- Win7Revival.Core/
+|   |-- Interfaces/IModule.cs
+|   |-- Models/ModuleSettings.cs
+|   |-- Services/CoreService.cs, SettingsService.cs, AutoStartService.cs
+|-- Win7Revival.Modules.Taskbar/
+|   |-- Interop/Win32Interop.cs
+|   |-- TaskbarDetector.cs, OverlayWindow.cs, TaskbarModule.cs
+|-- Win7Revival.App/
+|   |-- App.xaml(.cs), MainWindow.xaml(.cs), TrayIconManager.cs
+|-- Win7Revival.Core.Tests/
+|   |-- CoreServiceTests.cs, SettingsServiceTests.cs
+|-- .vscode/ (build/test/publish tasks + debug launch)
+|-- publish/ (self-contained output when you run the publish task)
 ```
 
 ---
 
-## License
+## License and Contributing
 
-This project is licensed under the MIT License.
-
----
-
-## Contributing
-
-This repository is currently under active development.
-Contributions are limited to the internal development team.
+MIT License.  
+Contributions are currently limited to the internal team.
 
 ---
 
-**Last Updated:** January 2026
-**Project Status:** Active Development
+Last updated: January 31, 2026  
+Project status: Active development
