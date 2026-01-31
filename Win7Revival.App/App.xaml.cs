@@ -47,6 +47,11 @@ namespace Win7Revival.App
             _mainWindow = new MainWindow(_coreService, settingsService);
             _mainWindow.Closed += OnMainWindowClosed;
 
+            // Set window icon
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_mainWindow);
+            var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
+            Win7Revival.App.WindowIconHelper.SetWindowIcon(hwnd, iconPath);
+
             // 5. Creare și injectare TrayIconManager
             _trayIconManager = new TrayIconManager(_coreService, _mainWindow);
             _trayIconManager.Initialize();

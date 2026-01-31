@@ -36,9 +36,13 @@
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <TextBlock x:Name="HeaderLanguageLabel" Text="Language" VerticalAlignment="Center" Opacity="0.7"/>
-                <ComboBox x:Name="LanguageComboBox" Width="140" SelectionChanged="LanguageComboBox_SelectionChanged">
-                    <ComboBoxItem Content="English" Tag="English"/>
-                    <ComboBoxItem Content="Română" Tag="Română"/>
+                <ComboBox x:Name="LanguageComboBox" Width="80" MinHeight="40" SelectionChanged="LanguageComboBox_SelectionChanged">
+                    <ComboBoxItem Tag="English" MinHeight="36">
+                        <Image Source="Assets/Flags/en.png" Width="40" Height="40" Stretch="Uniform"/>
+                    </ComboBoxItem>
+                    <ComboBoxItem Tag="Română" MinHeight="36">
+                        <Image Source="Assets/Flags/ro.png" Width="40" Height="40" Stretch="Uniform"/>
+                    </ComboBoxItem>
                 </ComboBox>
             </StackPanel>
 
@@ -54,11 +58,11 @@
 
         <!-- CONTENT -->
         <Grid Grid.Row="1" Padding="24,16">
-            <muxc:TabView x:Name="SettingsTabView" TabWidthMode="Equal">
+            <muxc:TabView x:Name="SettingsTabView" TabWidthMode="Equal" IsAddTabButtonVisible="False">
                 <muxc:TabView.TabItems>
                     <!-- Taskbar -->
-                    <muxc:TabViewItem x:Name="TaskbarTab" Header="Taskbar">
-                        <ScrollViewer Padding="0,8">
+                    <muxc:TabViewItem x:Name="TaskbarTab" Header="Taskbar" IsClosable="False">
+                        <ScrollViewer Padding="0,8,16,8">
                             <StackPanel Spacing="16">
                                 <Grid Padding="0,8">
                                     <Grid.ColumnDefinitions>
@@ -181,7 +185,7 @@
                     </muxc:TabViewItem>
 
                     <!-- Classic Start Menu -->
-                    <muxc:TabViewItem x:Name="StartMenuTab" Header="Start Menu">
+                    <muxc:TabViewItem x:Name="StartMenuTab" Header="Start Menu" IsClosable="False">
                         <Grid Padding="12" Opacity="0.7">
                             <StackPanel Spacing="8">
                                 <TextBlock x:Name="StartMenuTitle" Text="Classic Start Menu (Planned)" FontSize="16" FontWeight="SemiBold"/>
@@ -192,7 +196,7 @@
                     </muxc:TabViewItem>
 
                     <!-- Theme Engine -->
-                    <muxc:TabViewItem x:Name="ThemeEngineTab" Header="Theme Engine">
+                    <muxc:TabViewItem x:Name="ThemeEngineTab" Header="Theme Engine" IsClosable="False">
                         <Grid Padding="12" Opacity="0.7">
                             <StackPanel Spacing="8">
                                 <TextBlock x:Name="ThemeEngineTitle" Text="Theme Engine (Planned)" FontSize="16" FontWeight="SemiBold"/>
@@ -203,7 +207,7 @@
                     </muxc:TabViewItem>
 
                     <!-- General -->
-                    <muxc:TabViewItem x:Name="GeneralTab" Header="General">
+                    <muxc:TabViewItem x:Name="GeneralTab" Header="General" IsClosable="False">
                         <StackPanel Padding="12" Spacing="12">
                             <TextBlock x:Name="GeneralLabel" Text="General" FontSize="16" FontWeight="SemiBold"/>
 
@@ -225,7 +229,7 @@
                     </muxc:TabViewItem>
 
                     <!-- Help / About -->
-                    <muxc:TabViewItem x:Name="HelpTab" Header="Help / About">
+                    <muxc:TabViewItem x:Name="HelpTab" Header="Help / About" IsClosable="False">
                         <StackPanel Padding="12" Spacing="10">
                             <TextBlock x:Name="HelpTitle" Text="Win7 Revival" FontSize="18" FontWeight="SemiBold"/>
                             <TextBlock x:Name="HelpAbout" Text="A modular toolkit to bring back the Windows 7 look &amp; usability on Windows 11."

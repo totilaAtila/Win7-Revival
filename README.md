@@ -32,12 +32,20 @@ Core principles:
 
 ## Current Status
 
-Sprint 1 shipped (transparent taskbar, settings UI, tray, auto-start, 15 tests).  
+Sprint 1 shipped (transparent taskbar, settings UI, tray, auto-start, 15 tests).
 January 31, 2026 stabilization patch:
 - Taskbar overlay now re-applies its accent policy on a 100 ms timer to resist Windows resetting the effect (e.g., opening Start menu).
 - Tray icon uses `PopupMenu`/`ICommand` for better Windows 11 compatibility; left-click restores the window.
 - Windows App SDK bumped to 1.5.240627; WinUI app publishes self-contained `win-x64` (no MSIX).
 - Solution adds x64 configs; VS Code tasks added for build/test/publish.
+
+Sprint 1.1 — Icons, UI polish & bug fixes:
+- Custom app icon (`app.ico`) for taskbar/title bar, custom tray icon (`tray.ico`).
+- Language selector uses flag icons (EN/RO) instead of text labels.
+- Tabs are non-closable (navigation only, no X buttons or add button).
+- App manifest (`asInvoker`) — no longer requires Run as Administrator.
+- Fix: Reset button now properly disables the module, resets the toggle, and persists settings.
+- Fix: ScrollViewer padding prevents scrollbar overlapping content.
 
 ---
 
@@ -58,8 +66,9 @@ January 31, 2026 stabilization patch:
 
 ## Features
 
-- WinUI 3 settings UI: Expander, sliders, effect picker, RGB tint, diagnostics.
-- System tray: H.NotifyIcon.WinUI popup menu (Show Settings / Exit), left-click restore.
+- WinUI 3 tabbed settings UI: sliders, effect picker, RGB tint, diagnostics, flag-based language selector.
+- Custom app and tray icons with multi-size ICO support for all DPI scales.
+- System tray: H.NotifyIcon.WinUI with custom icon, popup menu (Show Settings / Exit), left-click restore.
 - Explorer resilience: re-detects taskbars and re-applies effects after Explorer restarts.
 - Auto-start: HKCU Run with `--minimized` support.
 - Settings persistence: JSON in `%AppData%`, survives corrupt files.
@@ -105,7 +114,9 @@ Win7Revival/
 |   |-- Interop/Win32Interop.cs
 |   |-- TaskbarDetector.cs, OverlayWindow.cs, TaskbarModule.cs
 |-- Win7Revival.App/
-|   |-- App.xaml(.cs), MainWindow.xaml(.cs), TrayIconManager.cs
+|   |-- App.xaml(.cs), MainWindow.xaml(.cs), TrayIconManager.cs, WindowIconHelper.cs
+|   |-- Assets/ (app.ico, tray.ico, Flags/en.png, Flags/ro.png)
+|   |-- app.manifest
 |-- Win7Revival.Core.Tests/
 |   |-- CoreServiceTests.cs, SettingsServiceTests.cs
 |-- .vscode/ (build/test/publish tasks + debug launch)
