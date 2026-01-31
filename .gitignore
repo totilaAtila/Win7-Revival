@@ -64,3 +64,8 @@ Win7RevivalSettings/
 credentials.json
 appsettings.*.json
 !appsettings.json
+
+## Local tooling/output
+publish/
+.claude/
+nul

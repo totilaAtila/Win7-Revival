@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Threading;
 using Win7Revival.Core.Interfaces;
 using Win7Revival.Core.Services;
+using Xunit;
 
 namespace Win7Revival.Core.Tests;
 

@@ -1,5 +1,6 @@
 using Win7Revival.Core.Models;
 using Win7Revival.Core.Services;
+using Xunit;
 
 namespace Win7Revival.Core.Tests;
 

@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Windows.Input;
 using H.NotifyIcon;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -58,24 +59,31 @@ namespace Win7Revival.App
                     FontWeight = Microsoft.UI.Text.FontWeights.Bold
                 };
 
-                // Context menu
+                // Context menu — use Command instead of Click for PopupMenu compatibility
                 var menuFlyout = new MenuFlyout();
 
-                var showItem = new MenuFlyoutItem { Text = "Show Settings" };
-                showItem.Click += (_, _) => ShowWindowRequested?.Invoke(this, EventArgs.Empty);
+                var showItem = new MenuFlyoutItem
+                {
+                    Text = "Show Settings",
+                    Command = new RelayCommand(() => ShowWindowRequested?.Invoke(this, EventArgs.Empty))
+                };
                 menuFlyout.Items.Add(showItem);
 
                 menuFlyout.Items.Add(new MenuFlyoutSeparator());
 
-                var exitItem = new MenuFlyoutItem { Text = "Exit" };
-                exitItem.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
+                var exitItem = new MenuFlyoutItem
+                {
+                    Text = "Exit",
+                    Command = new RelayCommand(() => ExitRequested?.Invoke(this, EventArgs.Empty))
+                };
                 menuFlyout.Items.Add(exitItem);
 
+                _taskbarIcon.ContextMenuMode = H.NotifyIcon.ContextMenuMode.PopupMenu;
                 _taskbarIcon.ContextFlyout = menuFlyout;
 
-                // Double-click to restore
-                _taskbarIcon.TrayIconLeftMouseDoubleClick += (_, _) =>
-                    ShowWindowRequested?.Invoke(this, EventArgs.Empty);
+                // Double-click to restore window
+                _taskbarIcon.LeftClickCommand = new RelayCommand(() =>
+                    ShowWindowRequested?.Invoke(this, EventArgs.Empty));
 
                 _taskbarIcon.ForceCreate();
 
@@ -165,6 +173,20 @@ namespace Win7Revival.App
             _taskbarIcon?.Dispose();
             _taskbarIcon = null;
             Debug.WriteLine("[TrayIconManager] Disposed.");
+        }
+
+        /// <summary>
+        /// Simple ICommand implementation for tray menu actions.
+        /// </summary>
+        private class RelayCommand : ICommand
+        {
+            private readonly Action _execute;
+#pragma warning disable CS0067 // Required by ICommand interface
+            public event EventHandler? CanExecuteChanged;
+#pragma warning restore CS0067
+            public RelayCommand(Action execute) => _execute = execute;
+            public bool CanExecute(object? parameter) => true;
+            public void Execute(object? parameter) => _execute();
         }
     }
 }
