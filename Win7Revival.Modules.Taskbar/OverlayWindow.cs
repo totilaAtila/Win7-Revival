@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Win7Revival.Core.Models;
 using Win7Revival.Modules.Taskbar.Interop;
 
@@ -14,6 +15,7 @@ namespace Win7Revival.Modules.Taskbar
     public class OverlayWindow : IDisposable
     {
         private readonly TaskbarDetector _detector;
+        private readonly object _timerLock = new();
         private ModuleSettings _settings;
         private bool _isActive;
         private bool _disposed;
@@ -52,7 +54,10 @@ namespace Win7Revival.Modules.Taskbar
 
             // Start periodic re-apply timer to counteract Windows resetting
             // the accent policy (e.g. when opening Start Menu)
-            _reapplyTimer ??= new Timer(_ => ReapplyEffect(), null, 100, 100);
+            lock (_timerLock)
+            {
+                _reapplyTimer ??= new Timer(_ => ReapplyEffect(), null, 100, 100);
+            }
 
             Debug.WriteLine($"[OverlayWindow] Effect applied: {_settings.Effect}, Opacity: {_settings.Opacity}%");
         }
@@ -63,7 +68,10 @@ namespace Win7Revival.Modules.Taskbar
         /// </summary>
         private void ReapplyEffect()
         {
-            if (!_isActive || _disposed) return;
+            lock (_timerLock)
+            {
+                if (!_isActive || _disposed || _reapplyTimer == null) return;
+            }
 
             try
             {
@@ -89,8 +97,24 @@ namespace Win7Revival.Modules.Taskbar
         /// </summary>
         public void Remove()
         {
-            _reapplyTimer?.Dispose();
-            _reapplyTimer = null;
+            if (_disposed) return;
+
+            // Stop timer callbacks before altering accent state to avoid late reapply
+            _isActive = false;
+            Timer? timerToDispose;
+            lock (_timerLock)
+            {
+                timerToDispose = _reapplyTimer;
+                _reapplyTimer = null;
+            }
+            if (timerToDispose != null)
+            {
+                using var mre = new ManualResetEvent(false);
+                if (timerToDispose.Dispose(mre))
+                {
+                    mre.WaitOne();
+                }
+            }
 
             foreach (var handle in _detector.AllHandles)
             {
@@ -98,7 +122,6 @@ namespace Win7Revival.Modules.Taskbar
                 ApplyAccentPolicy(handle, Win32Interop.ACCENT_STATE.ACCENT_DISABLED, 0);
             }
 
-            _isActive = false;
             Debug.WriteLine("[OverlayWindow] Effects removed, taskbar restored.");
         }
 
@@ -179,16 +202,10 @@ namespace Win7Revival.Modules.Taskbar
             if (_disposed) return;
             _disposed = true;
 
-            _reapplyTimer?.Dispose();
-            _reapplyTimer = null;
-
-            if (_isActive)
+            try { Remove(); }
+            catch (Exception ex)
             {
-                try { Remove(); }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[OverlayWindow] Dispose cleanup error: {ex.Message}");
-                }
+                Debug.WriteLine($"[OverlayWindow] Dispose cleanup error: {ex.Message}");
             }
         }
     }
