@@ -4,6 +4,7 @@ using System.Windows.Input;
 using H.NotifyIcon;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Win7Revival.App.Localization;
 using Win7Revival.Core.Services;
 
 namespace Win7Revival.App
@@ -19,6 +20,8 @@ namespace Win7Revival.App
         private bool _disposed;
         private bool _isInitialized;
         private TaskbarIcon? _taskbarIcon;
+        private MenuFlyoutItem? _showItem;
+        private MenuFlyoutItem? _exitItem;
 
         /// <summary>
         /// Event raised when user requests showing the main window.
@@ -47,7 +50,7 @@ namespace Win7Revival.App
             {
                 _taskbarIcon = new TaskbarIcon
                 {
-                    ToolTipText = "Win7 Revival"
+                    ToolTipText = Strings.Get("TrayTooltip")
                 };
 
                 _taskbarIcon.IconSource = new GeneratedIconSource
@@ -62,21 +65,21 @@ namespace Win7Revival.App
                 // Context menu — use Command instead of Click for PopupMenu compatibility
                 var menuFlyout = new MenuFlyout();
 
-                var showItem = new MenuFlyoutItem
+                _showItem = new MenuFlyoutItem
                 {
-                    Text = "Show Settings",
+                    Text = Strings.Get("TrayShowSettings"),
                     Command = new RelayCommand(() => ShowWindowRequested?.Invoke(this, EventArgs.Empty))
                 };
-                menuFlyout.Items.Add(showItem);
+                menuFlyout.Items.Add(_showItem);
 
                 menuFlyout.Items.Add(new MenuFlyoutSeparator());
 
-                var exitItem = new MenuFlyoutItem
+                _exitItem = new MenuFlyoutItem
                 {
-                    Text = "Exit",
+                    Text = Strings.Get("TrayExit"),
                     Command = new RelayCommand(() => ExitRequested?.Invoke(this, EventArgs.Empty))
                 };
-                menuFlyout.Items.Add(exitItem);
+                menuFlyout.Items.Add(_exitItem);
 
                 _taskbarIcon.ContextMenuMode = H.NotifyIcon.ContextMenuMode.PopupMenu;
                 _taskbarIcon.ContextFlyout = menuFlyout;
@@ -94,6 +97,18 @@ namespace Win7Revival.App
             {
                 Debug.WriteLine($"[TrayIconManager] Failed to initialize: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Updates tray menu strings to the current language.
+        /// </summary>
+        public void ApplyLanguage()
+        {
+            if (!_isInitialized || _taskbarIcon == null) return;
+
+            _taskbarIcon.ToolTipText = Strings.Get("TrayTooltip");
+            if (_showItem != null) _showItem.Text = Strings.Get("TrayShowSettings");
+            if (_exitItem != null) _exitItem.Text = Strings.Get("TrayExit");
         }
 
         /// <summary>

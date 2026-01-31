@@ -4,6 +4,7 @@ using System.Security.Principal;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Win7Revival.App.Localization;
 using Win7Revival.Core.Models;
 using Win7Revival.Core.Services;
 using Win7Revival.Modules.Taskbar;
@@ -13,21 +14,90 @@ namespace Win7Revival.App
     public sealed partial class MainWindow : Window
     {
         private readonly CoreService _coreService;
+        private readonly SettingsService _settingsService;
         private TrayIconManager? _trayIconManager;
         private TaskbarModule? _taskbarModule;
         private bool _isInitializing = true;
 
-        public MainWindow(CoreService coreService)
+        public MainWindow(CoreService coreService, SettingsService settingsService)
         {
             this.InitializeComponent();
             _coreService = coreService;
+            _settingsService = settingsService;
 
             LanguageComboBox.SelectedIndex = 0;
             CheckAdminStatus();
+            LoadLanguageAsync();
             LoadTaskbarModule();
             LoadAutoStartState();
 
             _isInitializing = false;
+        }
+
+        private async void LoadLanguageAsync()
+        {
+            var appSettings = await _settingsService.LoadSettingsAsync<AppSettings>("App");
+            var lang = appSettings.Language == "Română" ? AppLanguage.Română : AppLanguage.English;
+            Strings.SetLanguage(lang);
+
+            LanguageComboBox.SelectedIndex = lang == AppLanguage.Română ? 1 : 0;
+            ApplyLanguage();
+        }
+
+        /// <summary>
+        /// Aplică toate string-urile localizate pe elementele UI.
+        /// </summary>
+        private void ApplyLanguage()
+        {
+            // Header
+            HeaderTitle.Text = Strings.Get("AppTitle");
+            HeaderSubtitle.Text = Strings.Get("AppSubtitle");
+            HeaderLanguageLabel.Text = Strings.Get("Language");
+            AdminWarning.Title = Strings.Get("AdminWarningTitle");
+            AdminWarning.Message = Strings.Get("AdminWarningMessage");
+
+            // Tab headers
+            TaskbarTab.Header = Strings.Get("TabTaskbar");
+            StartMenuTab.Header = Strings.Get("TabStartMenu");
+            ThemeEngineTab.Header = Strings.Get("TabThemeEngine");
+            GeneralTab.Header = Strings.Get("TabGeneral");
+            HelpTab.Header = Strings.Get("TabHelp");
+
+            // Taskbar module
+            TaskbarTitle.Text = Strings.Get("TaskbarTitle");
+            TaskbarDescription.Text = Strings.Get("TaskbarDescription");
+            EffectTypeLabel.Text = Strings.Get("EffectType");
+            EffectBlurItem.Content = Strings.Get("EffectBlur");
+            EffectAcrylicItem.Content = Strings.Get("EffectAcrylic");
+            EffectMicaItem.Content = Strings.Get("EffectMica");
+            EffectGlassItem.Content = Strings.Get("EffectGlass");
+            OpacityLabel.Text = Strings.Get("Opacity");
+            ColorTintLabel.Text = Strings.Get("ColorTint");
+
+            // Coming soon tabs
+            StartMenuTitle.Text = Strings.Get("StartMenuTitle");
+            StartMenuDescription.Text = Strings.Get("StartMenuDescription");
+            ThemeEngineTitle.Text = Strings.Get("ThemeEngineTitle");
+            ThemeEngineDescription.Text = Strings.Get("ThemeEngineDescription");
+
+            // General
+            GeneralLabel.Text = Strings.Get("General");
+            AutoStartLabel.Text = Strings.Get("AutoStart");
+            AutoStartDescription.Text = Strings.Get("AutoStartDescription");
+
+            // Help tab
+            HelpTitle.Text = Strings.Get("AppTitle");
+            HelpAbout.Text = Strings.Get("HelpAbout");
+            HelpModules.Text = Strings.Get("HelpModules");
+            HelpSupport.Text = Strings.Get("HelpSupport");
+
+            // Footer buttons
+            ApplyButton.Content = Strings.Get("ApplyAndSave");
+            ResetButton.Content = Strings.Get("Reset");
+            MinimizeToTrayButton.Content = Strings.Get("MinimizeToTray");
+
+            // Tray icon
+            _trayIconManager?.ApplyLanguage();
         }
 
         /// <summary>
@@ -110,8 +180,8 @@ namespace Win7Revival.App
         {
             if (_taskbarModule?.Detector == null)
             {
-                DiagnosticsText.Text = "Taskbar: not detected";
-                MonitorInfoText.Text = "Monitors: unknown";
+                DiagnosticsText.Text = Strings.Get("DiagTaskbarNotDetected");
+                MonitorInfoText.Text = Strings.Get("DiagMonitorsUnknown");
                 return;
             }
 
@@ -136,7 +206,7 @@ namespace Win7Revival.App
             }
             else
             {
-                MonitorInfoText.Text = "Monitors: none detected";
+                MonitorInfoText.Text = Strings.Get("DiagMonitorsNone");
             }
         }
 
@@ -169,7 +239,7 @@ namespace Win7Revival.App
             }
             catch (Exception ex)
             {
-                await ShowErrorDialog($"Failed to toggle Taskbar Transparent: {ex.Message}");
+                await ShowErrorDialog($"{Strings.Get("ErrorToggleTaskbar")}: {ex.Message}");
                 // Revert toggle fără re-trigger
                 _isInitializing = true;
                 TaskbarToggle.IsOn = _taskbarModule.IsEnabled;
@@ -232,9 +302,9 @@ namespace Win7Revival.App
 
             var dialog = new ContentDialog
             {
-                Title = "Settings Saved",
-                Content = "Settings have been saved successfully.",
-                CloseButtonText = "OK",
+                Title = Strings.Get("SettingsSavedTitle"),
+                Content = Strings.Get("SettingsSavedMessage"),
+                CloseButtonText = Strings.Get("OK"),
                 XamlRoot = this.Content.XamlRoot
             };
             await dialog.ShowAsync();
@@ -260,6 +330,19 @@ namespace Win7Revival.App
             _taskbarModule.UpdateSettings(80, EffectType.Blur, 0, 0, 0);
         }
 
+        private async void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isInitializing) return;
+
+            var lang = LanguageComboBox.SelectedIndex == 1 ? AppLanguage.Română : AppLanguage.English;
+            Strings.SetLanguage(lang);
+            ApplyLanguage();
+
+            // Persist language choice
+            var appSettings = new AppSettings { Language = lang == AppLanguage.Română ? "Română" : "English" };
+            await _settingsService.SaveSettingsAsync("App", appSettings);
+        }
+
         private async void AutoStartToggle_Toggled(object sender, RoutedEventArgs e)
         {
             if (_isInitializing) return;
@@ -276,7 +359,7 @@ namespace Win7Revival.App
 
             if (!success)
             {
-                await ShowErrorDialog("Failed to change auto-start setting. Check your permissions.");
+                await ShowErrorDialog(Strings.Get("ErrorAutoStart"));
                 _isInitializing = true;
                 AutoStartToggle.IsOn = AutoStartService.IsEnabled();
                 _isInitializing = false;
@@ -288,25 +371,15 @@ namespace Win7Revival.App
             _trayIconManager?.MinimizeToTray();
         }
 
-        private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (_isInitializing) return;
-            if (LanguageComboBox.SelectedItem is ComboBoxItem item && item.Tag is string tag)
-            {
-                Debug.WriteLine($"[MainWindow] Language selected: {tag}");
-                // TODO: hook into localization pipeline once available.
-            }
-        }
-
         private async Task ShowErrorDialog(string message)
         {
             try
             {
                 var dialog = new ContentDialog
                 {
-                    Title = "Error",
+                    Title = Strings.Get("ErrorTitle"),
                     Content = message,
-                    CloseButtonText = "OK",
+                    CloseButtonText = Strings.Get("OK"),
                     XamlRoot = this.Content.XamlRoot
                 };
                 await dialog.ShowAsync();

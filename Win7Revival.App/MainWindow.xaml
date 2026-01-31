@@ -27,18 +27,18 @@
             <StackPanel Grid.Column="0">
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <FontIcon Glyph="&#xE771;" FontSize="28"/>
-                    <TextBlock Text="Win7 Revival" FontSize="24" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="HeaderTitle" Text="Win7 Revival" FontSize="24" FontWeight="Bold" VerticalAlignment="Center"/>
                 </StackPanel>
-                <TextBlock Text="Windows 11 Customization Toolkit"
+                <TextBlock x:Name="HeaderSubtitle" Text="Windows 11 Customization Toolkit"
                            Style="{StaticResource CaptionTextBlockStyle}"
                            Opacity="0.6" Margin="38,4,0,0"/>
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <TextBlock Text="Language" VerticalAlignment="Center" Opacity="0.7"/>
+                <TextBlock x:Name="HeaderLanguageLabel" Text="Language" VerticalAlignment="Center" Opacity="0.7"/>
                 <ComboBox x:Name="LanguageComboBox" Width="140" SelectionChanged="LanguageComboBox_SelectionChanged">
-                    <ComboBoxItem Content="English (en-US)" Tag="en-US"/>
-                    <ComboBoxItem Content="Română (ro-RO)" Tag="ro-RO"/>
+                    <ComboBoxItem Content="English" Tag="English"/>
+                    <ComboBoxItem Content="Română" Tag="Română"/>
                 </ComboBox>
             </StackPanel>
 
@@ -57,7 +57,7 @@
             <muxc:TabView x:Name="SettingsTabView" TabWidthMode="Equal">
                 <muxc:TabView.TabItems>
                     <!-- Taskbar -->
-                    <muxc:TabViewItem Header="Taskbar">
+                    <muxc:TabViewItem x:Name="TaskbarTab" Header="Taskbar">
                         <ScrollViewer Padding="0,8">
                             <StackPanel Spacing="16">
                                 <Grid Padding="0,8">
@@ -69,14 +69,14 @@
                                     <StackPanel Grid.Column="0">
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <FontIcon Glyph="&#xE7C5;" FontSize="16"/>
-                                            <TextBlock Text="Taskbar Transparent" FontSize="16" FontWeight="SemiBold"/>
+                                            <TextBlock x:Name="TaskbarTitle" Text="Taskbar Transparent" FontSize="16" FontWeight="SemiBold"/>
                                             <Border Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
                                                     CornerRadius="4" Padding="6,2">
                                                 <TextBlock x:Name="TaskbarVersionBadge" Text="v1.1.0"
                                                            FontSize="10" Opacity="0.8"/>
                                             </Border>
                                         </StackPanel>
-                                        <TextBlock Text="Transparency, blur, acrylic, mica or glass effects on the Taskbar."
+                                        <TextBlock x:Name="TaskbarDescription" Text="Transparency, blur, acrylic, mica or glass effects on the Taskbar."
                                                    Style="{StaticResource CaptionTextBlockStyle}"
                                                    Opacity="0.6" Margin="24,2,0,0"/>
                                     </StackPanel>
@@ -88,13 +88,13 @@
 
                                 <!-- Effect Type -->
                                 <StackPanel Spacing="6">
-                                    <TextBlock Text="Effect Type" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="EffectTypeLabel" Text="Effect Type" FontWeight="SemiBold"/>
                                     <ComboBox x:Name="EffectComboBox" HorizontalAlignment="Stretch"
                                               SelectionChanged="EffectComboBox_SelectionChanged">
-                                        <ComboBoxItem Content="Blur (Aero Glass)" Tag="Blur"/>
-                                        <ComboBoxItem Content="Acrylic" Tag="Acrylic"/>
-                                        <ComboBoxItem Content="Mica (Host Backdrop)" Tag="Mica"/>
-                                        <ComboBoxItem Content="Glass (No Blur)" Tag="Glass"/>
+                                        <ComboBoxItem x:Name="EffectBlurItem" Content="Blur (Aero Glass)" Tag="Blur"/>
+                                        <ComboBoxItem x:Name="EffectAcrylicItem" Content="Acrylic" Tag="Acrylic"/>
+                                        <ComboBoxItem x:Name="EffectMicaItem" Content="Mica (Host Backdrop)" Tag="Mica"/>
+                                        <ComboBoxItem x:Name="EffectGlassItem" Content="Glass (No Blur)" Tag="Glass"/>
                                     </ComboBox>
                                 </StackPanel>
 
@@ -105,7 +105,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Opacity" FontWeight="SemiBold" Grid.Column="0"/>
+                                        <TextBlock x:Name="OpacityLabel" Text="Opacity" FontWeight="SemiBold" Grid.Column="0"/>
                                         <TextBlock x:Name="OpacityValueText" Text="80%" Grid.Column="1"
                                                    Opacity="0.7" FontFamily="Consolas"/>
                                     </Grid>
@@ -121,7 +121,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                    <TextBlock Text="Color Tint" FontWeight="SemiBold" Grid.Column="0"/>
+                                    <TextBlock x:Name="ColorTintLabel" Text="Color Tint" FontWeight="SemiBold" Grid.Column="0"/>
                                     <Border x:Name="ColorPreview" Grid.Column="1"
                                             Width="32" Height="20" CornerRadius="4"
                                             BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
@@ -181,33 +181,31 @@
                     </muxc:TabViewItem>
 
                     <!-- Classic Start Menu -->
-                    <muxc:TabViewItem Header="Start Menu">
+                    <muxc:TabViewItem x:Name="StartMenuTab" Header="Start Menu">
                         <Grid Padding="12" Opacity="0.7">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="Classic Start Menu (Planned)" FontSize="16" FontWeight="SemiBold"/>
-                                <TextBlock Text="Windows 7-style start menu with search and Win key interception will arrive in Sprint 2."
+                                <TextBlock x:Name="StartMenuTitle" Text="Classic Start Menu (Planned)" FontSize="16" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="StartMenuDescription" Text="Windows 7-style start menu with search and Win key interception will arrive in Sprint 2."
                                            Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
-                                <TextBlock Text="Stay tuned — settings will appear here once the feature lands."
-                                           Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.8"/>
                             </StackPanel>
                         </Grid>
                     </muxc:TabViewItem>
 
                     <!-- Theme Engine -->
-                    <muxc:TabViewItem Header="Theme Engine">
+                    <muxc:TabViewItem x:Name="ThemeEngineTab" Header="Theme Engine">
                         <Grid Padding="12" Opacity="0.7">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="Theme Engine (Planned)" FontSize="16" FontWeight="SemiBold"/>
-                                <TextBlock Text="Color schemes, icon packs, fonts, and sound schemes will be configurable here."
+                                <TextBlock x:Name="ThemeEngineTitle" Text="Theme Engine (Planned)" FontSize="16" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="ThemeEngineDescription" Text="Color schemes, icon packs, fonts, and sound schemes will be configurable here."
                                            Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Grid>
                     </muxc:TabViewItem>
 
                     <!-- General -->
-                    <muxc:TabViewItem Header="General">
+                    <muxc:TabViewItem x:Name="GeneralTab" Header="General">
                         <StackPanel Padding="12" Spacing="12">
-                            <TextBlock Text="General" FontSize="16" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="GeneralLabel" Text="General" FontSize="16" FontWeight="SemiBold"/>
 
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -215,8 +213,8 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                    <TextBlock Text="Start with Windows"/>
-                                    <TextBlock Text="Automatically start the application at boot (minimized to tray)."
+                                    <TextBlock x:Name="AutoStartLabel" Text="Start with Windows"/>
+                                    <TextBlock x:Name="AutoStartDescription" Text="Automatically start the application at boot (minimized to tray)."
                                                Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
                                 </StackPanel>
                                 <ToggleSwitch x:Name="AutoStartToggle" Grid.Column="1"
@@ -227,15 +225,15 @@
                     </muxc:TabViewItem>
 
                     <!-- Help / About -->
-                    <muxc:TabViewItem Header="Help / About">
+                    <muxc:TabViewItem x:Name="HelpTab" Header="Help / About">
                         <StackPanel Padding="12" Spacing="10">
-                            <TextBlock Text="Win7 Revival" FontSize="18" FontWeight="SemiBold"/>
-                            <TextBlock Text="A modular toolkit to bring back the Windows 7 look &amp; usability on Windows 11."
+                            <TextBlock x:Name="HelpTitle" Text="Win7 Revival" FontSize="18" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="HelpAbout" Text="A modular toolkit to bring back the Windows 7 look &amp; usability on Windows 11."
                                        TextWrapping="Wrap" Opacity="0.7"/>
-                            <TextBlock Text="Version: v1.1.0" Style="{StaticResource CaptionTextBlockStyle}"/>
-                            <TextBlock Text="Modules: Taskbar (live), Classic Start Menu (planned), Theme Engine (planned)."
+                            <TextBlock x:Name="HelpVersion" Text="Version: v1.1.0" Style="{StaticResource CaptionTextBlockStyle}"/>
+                            <TextBlock x:Name="HelpModules" Text="Modules: Taskbar (live), Classic Start Menu (planned), Theme Engine (planned)."
                                        Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
-                            <TextBlock Text="Support: Internal dev team. For issues, create a ticket on the repo."
+                            <TextBlock x:Name="HelpSupport" Text="Support: Internal dev team. For issues, create a ticket on the repo."
                                        Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
                         </StackPanel>
                     </muxc:TabViewItem>
@@ -257,10 +255,10 @@
                        Opacity="0.5" VerticalAlignment="Center"/>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                <Button Content="Apply &amp; Save" Click="ApplyButton_Click"
+                <Button x:Name="ApplyButton" Content="Apply &amp; Save" Click="ApplyButton_Click"
                         Style="{StaticResource AccentButtonStyle}"/>
-                <Button Content="Reset" Click="ResetButton_Click"/>
-                <Button Content="Minimize to Tray" Click="MinimizeToTrayButton_Click"/>
+                <Button x:Name="ResetButton" Content="Reset" Click="ResetButton_Click"/>
+                <Button x:Name="MinimizeToTrayButton" Content="Minimize to Tray" Click="MinimizeToTrayButton_Click"/>
             </StackPanel>
         </Grid>
     </Grid>
