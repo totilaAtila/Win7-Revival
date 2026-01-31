@@ -144,6 +144,7 @@ namespace Win7Revival.Modules.Taskbar
         {
             return effect switch
             {
+                EffectType.Glass => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_TRANSPARENTGRADIENT,
                 EffectType.Blur => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_BLURBEHIND,
                 EffectType.Acrylic => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_ACRYLICBLURBEHIND,
                 EffectType.Mica => Win32Interop.ACCENT_STATE.ACCENT_ENABLE_HOSTBACKDROP,
