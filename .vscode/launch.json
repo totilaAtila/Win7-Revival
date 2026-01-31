@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Win7Revival.App",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/Win7Revival.App/bin/x64/Debug/net8.0-windows10.0.19041.0/win-x64/Win7Revival.App.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}/Win7Revival.App",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}

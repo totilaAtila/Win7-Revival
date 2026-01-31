@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Threading;
 using Win7Revival.Core.Interfaces;
 using Win7Revival.Core.Models;
@@ -16,6 +17,7 @@ namespace Win7Revival.Modules.Taskbar
     /// Suportă opacity configurabilă, multiple tipuri de efecte, multi-monitor.
     /// Resilient la Explorer.exe restart via TaskbarCreated message.
     /// </summary>
+    [SupportedOSPlatform("windows")]
     public class TaskbarModule : IModule, IDisposable
     {
         private const string ModuleName = "Taskbar Transparent";

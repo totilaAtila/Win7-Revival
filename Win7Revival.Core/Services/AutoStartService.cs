@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using Microsoft.Win32;
 
 namespace Win7Revival.Core.Services
@@ -9,6 +10,7 @@ namespace Win7Revival.Core.Services
     /// Folosește HKCU\Software\Microsoft\Windows\CurrentVersion\Run
     /// (nu necesită drepturi de administrator).
     /// </summary>
+    [SupportedOSPlatform("windows")]
     public static class AutoStartService
     {
         private const string RegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";

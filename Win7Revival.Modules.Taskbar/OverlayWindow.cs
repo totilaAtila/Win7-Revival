@@ -17,6 +17,7 @@ namespace Win7Revival.Modules.Taskbar
         private ModuleSettings _settings;
         private bool _isActive;
         private bool _disposed;
+        private Timer? _reapplyTimer;
 
         public bool IsActive => _isActive;
 
@@ -48,7 +49,39 @@ namespace Win7Revival.Modules.Taskbar
             }
 
             _isActive = true;
+
+            // Start periodic re-apply timer to counteract Windows resetting
+            // the accent policy (e.g. when opening Start Menu)
+            _reapplyTimer ??= new Timer(_ => ReapplyEffect(), null, 100, 100);
+
             Debug.WriteLine($"[OverlayWindow] Effect applied: {_settings.Effect}, Opacity: {_settings.Opacity}%");
+        }
+
+        /// <summary>
+        /// Re-aplică efectul periodic. Apelat de timer pe un thread pool.
+        /// Lightweight — doar SetWindowCompositionAttribute P/Invoke.
+        /// </summary>
+        private void ReapplyEffect()
+        {
+            if (!_isActive || _disposed) return;
+
+            try
+            {
+                var accentState = MapEffectToAccentState(_settings.Effect);
+                int gradientColor = CalculateGradientColor(_settings.Opacity, _settings.TintR, _settings.TintG, _settings.TintB);
+
+                foreach (var handle in _detector.AllHandles)
+                {
+                    if (_detector.IsHandleValid(handle))
+                    {
+                        ApplyAccentPolicy(handle, accentState, gradientColor);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[OverlayWindow] ReapplyEffect error: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -56,6 +89,9 @@ namespace Win7Revival.Modules.Taskbar
         /// </summary>
         public void Remove()
         {
+            _reapplyTimer?.Dispose();
+            _reapplyTimer = null;
+
             foreach (var handle in _detector.AllHandles)
             {
                 if (!_detector.IsHandleValid(handle)) continue;
@@ -142,6 +178,9 @@ namespace Win7Revival.Modules.Taskbar
         {
             if (_disposed) return;
             _disposed = true;
+
+            _reapplyTimer?.Dispose();
+            _reapplyTimer = null;
 
             if (_isActive)
             {
