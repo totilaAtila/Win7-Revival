@@ -22,6 +22,7 @@ namespace Win7Revival.App
             this.InitializeComponent();
             _coreService = coreService;
 
+            LanguageComboBox.SelectedIndex = 0;
             CheckAdminStatus();
             LoadTaskbarModule();
             LoadAutoStartState();
@@ -285,6 +286,16 @@ namespace Win7Revival.App
         private void MinimizeToTrayButton_Click(object sender, RoutedEventArgs e)
         {
             _trayIconManager?.MinimizeToTray();
+        }
+
+        private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isInitializing) return;
+            if (LanguageComboBox.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+            {
+                Debug.WriteLine($"[MainWindow] Language selected: {tag}");
+                // TODO: hook into localization pipeline once available.
+            }
         }
 
         private async Task ShowErrorDialog(string message)
