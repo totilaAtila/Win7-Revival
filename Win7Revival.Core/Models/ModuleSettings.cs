@@ -39,6 +39,7 @@ namespace Win7Revival.Core.Models
         None = 0,
         Blur = 1,
         Acrylic = 2,
-        Mica = 3
+        Mica = 3,
+        Glass = 4
     }
 }

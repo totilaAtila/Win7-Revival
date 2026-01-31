@@ -86,6 +86,7 @@
                                 <ComboBoxItem Content="Blur (Aero Glass)" Tag="Blur"/>
                                 <ComboBoxItem Content="Acrylic" Tag="Acrylic"/>
                                 <ComboBoxItem Content="Mica (Host Backdrop)" Tag="Mica"/>
+                                <ComboBoxItem Content="Glass (No Blur)" Tag="Glass"/>
                             </ComboBox>
                         </StackPanel>
 

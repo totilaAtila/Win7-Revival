@@ -88,6 +88,7 @@ namespace Win7Revival.App
                 EffectType.Blur => 0,
                 EffectType.Acrylic => 1,
                 EffectType.Mica => 2,
+                EffectType.Glass => 3,
                 _ => 0
             };
 
@@ -180,6 +181,7 @@ namespace Win7Revival.App
             0 => EffectType.Blur,
             1 => EffectType.Acrylic,
             2 => EffectType.Mica,
+            3 => EffectType.Glass,
             _ => EffectType.Blur
         };
 
