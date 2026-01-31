@@ -44,7 +44,7 @@ namespace Win7Revival.App
             }
 
             // 4. Creare fereastră principală
-            _mainWindow = new MainWindow(_coreService);
+            _mainWindow = new MainWindow(_coreService, settingsService);
             _mainWindow.Closed += OnMainWindowClosed;
 
             // 5. Creare și injectare TrayIconManager
