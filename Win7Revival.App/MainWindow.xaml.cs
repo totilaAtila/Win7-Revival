@@ -339,8 +339,15 @@ namespace Win7Revival.App
             ApplyLanguage();
 
             // Persist language choice
-            var appSettings = new AppSettings { Language = lang == AppLanguage.Română ? "Română" : "English" };
-            await _settingsService.SaveSettingsAsync("App", appSettings);
+            try
+            {
+                var appSettings = new AppSettings { Language = lang == AppLanguage.Română ? "Română" : "English" };
+                await _settingsService.SaveSettingsAsync("App", appSettings);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[MainWindow] Failed to save language preference: {ex.Message}");
+            }
         }
 
         private async void AutoStartToggle_Toggled(object sender, RoutedEventArgs e)
