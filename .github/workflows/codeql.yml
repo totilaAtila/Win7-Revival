@@ -18,8 +18,16 @@ jobs:
       actions: read
 
     steps:
+      - name: Enable long paths
+        run: |
+          git config --system core.longpaths true
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Map short drive letter
+        run: subst W: ${{ github.workspace }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -33,6 +41,7 @@ jobs:
 
       - name: Build
         run: dotnet build Win7Revival.sln --configuration Release
+        working-directory: W:\
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
