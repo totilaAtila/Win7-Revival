@@ -22,7 +22,7 @@ The App project (`Win7Revival.App`) targets `net8.0-windows10.0.19041.0` and req
 ```
 Win7Revival.Core          → IModule interface, CoreService (lifecycle), SettingsService (JSON persistence), AutoStartService (registry)
 Win7Revival.Modules.Taskbar → TaskbarModule (orchestrator), TaskbarDetector (multi-monitor), OverlayWindow (accent policy), Win32Interop (P/Invoke)
-Win7Revival.App           → WinUI 3 UI (MainWindow), App lifecycle, TrayIconManager skeleton
+Win7Revival.App           → WinUI 3 UI (MainWindow), App lifecycle, TrayIconManager, WindowIconHelper, Assets (icons, flags)
 Win7Revival.Core.Tests    → xUnit tests for CoreService + SettingsService
 ```
 
@@ -42,7 +42,7 @@ Win7Revival.Core.Tests    → xUnit tests for CoreService + SettingsService
 The project uses `SetWindowCompositionAttribute` with `ACCENT_POLICY` to apply transparency effects directly to taskbar window handles (`Shell_TrayWnd` + `Shell_SecondaryTrayWnd`). No overlay windows are created — effects are applied in-place.
 
 Key P/Invoke surface:
-- `user32.dll`: FindWindow, FindWindowEx, SetWindowCompositionAttribute, EnumDisplayMonitors, GetMonitorInfo, IsWindow, GetWindowRect, ShowWindow, SetForegroundWindow
+- `user32.dll`: FindWindow, FindWindowEx, SetWindowCompositionAttribute, EnumDisplayMonitors, GetMonitorInfo, IsWindow, GetWindowRect, ShowWindow, SetForegroundWindow, SendMessage, LoadImage
 - `shell32.dll`: SHAppBarMessage (taskbar position, auto-hide)
 - `shcore.dll`: GetDpiForMonitor
 
@@ -59,15 +59,29 @@ Key P/Invoke surface:
 
 - **No Explorer.exe hooking or DLL injection** — only public Win32 APIs
 - **No admin required** for core functionality (auto-start uses HKCU, not HKLM)
-- **TrayIconManager** is a skeleton — `_isInitialized` stays false until H.NotifyIcon.WinUI is integrated. MinimizeToTray gracefully degrades to SW_MINIMIZE.
+- **TrayIconManager** uses H.NotifyIcon.WinUI with custom `tray.ico`. MinimizeToTray gracefully degrades to SW_MINIMIZE if initialization fails.
 - **EffectType.None** maps to `ACCENT_DISABLED` (no effect applied)
 - Settings files must survive corruption (LoadSettings returns defaults on invalid JSON)
 
+### Assets
+
+```
+Win7Revival.App/Assets/
+  app.ico         → Window icon (taskbar, title bar) — multi-size ICO (16, 24, 32, 48, 256)
+  tray.ico        → System tray icon — multi-size ICO (16, 20, 24, 32)
+  Flags/
+    en.png        → English flag for language selector
+    ro.png        → Romanian flag for language selector
+```
+
+- `WindowIconHelper` sets the window icon via `WM_SETICON` + `LoadImage` P/Invoke (WinUI 3 has no native API for this).
+- `app.manifest` with `requestedExecutionLevel="asInvoker"` prevents UAC elevation prompt.
+- Language selector uses flag images only (no text labels) in the ComboBox.
+- TabView uses `IsClosable="False"` and `IsAddTabButtonVisible="False"` — tabs are for navigation, not closable.
+
 ## Known Future Work
 
-- H.NotifyIcon.WinUI integration for real system tray icon
 - Explorer restart resilience (`RegisterWindowMessage("TaskbarCreated")`)
-- Taskbar color tint (custom RGB, not just black alpha)
 - TaskbarModule unit tests (needs `ITaskbarDetector` interface for mocking)
 - Classic Start Menu module (Sprint 2)
 - Theme Engine module (Sprint 3)

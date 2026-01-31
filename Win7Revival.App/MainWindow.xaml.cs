@@ -310,11 +310,18 @@ namespace Win7Revival.App
             await dialog.ShowAsync();
         }
 
-        private void ResetButton_Click(object sender, RoutedEventArgs e)
+        private async void ResetButton_Click(object sender, RoutedEventArgs e)
         {
             if (_taskbarModule == null) return;
 
+            // Disable the module first if it's running
+            if (_taskbarModule.IsEnabled)
+            {
+                await _coreService.DisableModuleAsync(_taskbarModule.Name);
+            }
+
             _isInitializing = true;
+            TaskbarToggle.IsOn = false;
             OpacitySlider.Value = 80;
             OpacityValueText.Text = "80%";
             EffectComboBox.SelectedIndex = 0;
@@ -328,6 +335,7 @@ namespace Win7Revival.App
             _isInitializing = false;
 
             _taskbarModule.UpdateSettings(80, EffectType.Blur, 0, 0, 0);
+            await _taskbarModule.SaveSettingsAsync();
         }
 
         private async void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
