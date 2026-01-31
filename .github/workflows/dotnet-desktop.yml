@@ -54,10 +54,18 @@ jobs:
       PUBLISH_DIR: publish
 
     steps:
+      - name: Enable long paths
+        run: |
+          git config --system core.longpaths true
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Map short drive letter
+        run: subst W: ${{ github.workspace }}
 
       - name: Setup .NET 8 SDK
         uses: actions/setup-dotnet@v4
@@ -66,18 +74,22 @@ jobs:
 
       - name: Restore
         run: dotnet restore $env:SOLUTION
+        working-directory: W:\
 
       - name: Build (Release, x64)
         run: dotnet build $env:SOLUTION -c Release -p:Platform=x64 --self-contained false
+        working-directory: W:\
 
       - name: Test
         run: dotnet test $env:TEST_PROJECT -c Release --no-build
+        working-directory: W:\
 
       - name: Publish (self-contained)
         run: dotnet publish Win7Revival.App -c Release -r win-x64 -p:Platform=x64 --self-contained true --output $env:PUBLISH_DIR
+        working-directory: W:\
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Win7Revival-win-x64
-          path: ${{ env.PUBLISH_DIR }}
+          path: W:\${{ env.PUBLISH_DIR }}
