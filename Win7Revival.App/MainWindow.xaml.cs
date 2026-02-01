@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -20,24 +22,95 @@ namespace Win7Revival.App
         private TaskbarModule? _taskbarModule;
         private StartMenuModule? _startMenuModule;
         private bool _isInitializing = true;
+        private bool _firstActivation = true;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+
+        // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+        private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new(-4);
 
         public MainWindow(CoreService coreService, SettingsService settingsService)
         {
-            this.InitializeComponent();
+            AppLogger.Log("MainWindow constructor started");
+
             _coreService = coreService;
             _settingsService = settingsService;
 
+            try
+            {
+                this.InitializeComponent();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogException(ex, "InitializeComponent");
+                throw;
+            }
+
+            // Best-effort DPI awareness
+            try
+            {
+                SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+                AppLogger.Log("SetProcessDpiAwarenessContext succeeded");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Log($"SetProcessDpiAwarenessContext not available: {ex.Message}");
+            }
+
             LanguageComboBox.SelectedIndex = 0;
             CheckAdminStatus();
-            LoadLanguageAsync();
-            LoadTaskbarModule();
-            LoadStartMenuModule();
-            LoadAutoStartState();
 
-            _isInitializing = false;
+            // Defer module loading to Loaded event
+            var rootElement = this.Content as FrameworkElement;
+            if (rootElement != null)
+            {
+                rootElement.Loaded += OnRootLoaded;
+            }
+
+            this.Activated += OnWindowActivated;
+
+            AppLogger.Log("MainWindow constructor completed");
         }
 
-        private async void LoadLanguageAsync()
+        private async void OnRootLoaded(object sender, RoutedEventArgs e)
+        {
+            AppLogger.Log("Window Loaded");
+
+            // Let the UI settle before loading modules
+            await Task.Delay(100);
+            await LoadContentAsync();
+
+            _isInitializing = false;
+            AppLogger.Log("Window content loaded, _isInitializing = false");
+        }
+
+        private async Task LoadContentAsync()
+        {
+            try
+            {
+                await LoadLanguageAsync_Internal();
+                LoadTaskbarModule();
+                LoadStartMenuModule();
+                LoadAutoStartState();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogException(ex, "LoadContentAsync");
+            }
+        }
+
+        private void OnWindowActivated(object sender, WindowActivatedEventArgs args)
+        {
+            if (_firstActivation)
+            {
+                _firstActivation = false;
+                AppLogger.Log("First window activation — refreshing diagnostics");
+                UpdateDiagnostics();
+            }
+        }
+
+        private async Task LoadLanguageAsync_Internal()
         {
             var appSettings = await _settingsService.LoadSettingsAsync<AppSettings>("App");
             var lang = appSettings.Language == "Română" ? AppLanguage.Română : AppLanguage.English;

@@ -28,26 +28,33 @@ namespace Win7Revival.App
 
         protected override async void OnLaunched(LaunchActivatedEventArgs args)
         {
+            AppLogger.Log("OnLaunched started");
+
             // 1. Inițializare servicii
             var settingsService = new SettingsService();
             _coreService = new CoreService(settingsService);
+            AppLogger.Log("Services initialized");
 
             // 2. Înregistrare module (Sprint 1)
             _coreService.RegisterModule(new TaskbarModule(settingsService));
             _startMenuModule = new StartMenuModule(settingsService);
             _coreService.RegisterModule(_startMenuModule);
+            AppLogger.Log("Modules registered");
 
             // 3. Inițializare module (încarcă settings, detectează taskbar)
             try
             {
                 await _coreService.InitializeModulesAsync();
+                AppLogger.Log("Modules initialized successfully");
             }
             catch (Exception ex)
             {
+                AppLogger.LogException(ex, "Module initialization");
                 Debug.WriteLine($"[App] Eroare la inițializarea modulelor: {ex.Message}");
             }
 
             // 4. Creare fereastră principală
+            AppLogger.Log("Creating MainWindow");
             _mainWindow = new MainWindow(_coreService, settingsService);
             _mainWindow.Closed += OnMainWindowClosed;
 
@@ -83,17 +90,20 @@ namespace Win7Revival.App
                 };
             }
 
+            AppLogger.Log("TrayIcon and StartMenuWindow configured");
+
             // 7. Activare fereastră
             // Dacă a fost lansat cu --minimized (auto-start la boot), pornește în tray
             bool startMinimized = Environment.GetCommandLineArgs()
                 .Any(arg => arg.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
 
             _mainWindow.Activate();
+            AppLogger.Log("MainWindow activated");
 
             if (startMinimized)
             {
                 _trayIconManager.MinimizeToTray();
-                Debug.WriteLine("[App] Started minimized to tray (auto-start).");
+                AppLogger.Log("Started minimized to tray (auto-start)");
             }
         }
 
@@ -106,6 +116,7 @@ namespace Win7Revival.App
 
         private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
         {
+            AppLogger.LogException(e.Exception, "Unhandled exception");
             Debug.WriteLine($"[App] Excepție neprinsă: {e.Exception}");
             e.Handled = true;
             _trayIconManager?.Dispose();
