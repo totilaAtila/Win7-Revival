@@ -16,6 +16,7 @@ namespace Win7Revival.Modules.StartMenu.Interop
         public const int WH_KEYBOARD_LL = 13;
         public const int WH_MOUSE_LL = 14;
         public const int WM_LBUTTONDOWN = 0x0201;
+        public const int WM_LBUTTONUP = 0x0202;
 
         public delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
 
@@ -145,6 +146,10 @@ namespace Win7Revival.Modules.StartMenu.Interop
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern IntPtr FindWindow(string lpClassName, string? lpWindowName);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter,
+            string? lpszClass, string? lpszWindow);
 
         [DllImport("user32.dll")]
         public static extern IntPtr GetParent(IntPtr hWnd);

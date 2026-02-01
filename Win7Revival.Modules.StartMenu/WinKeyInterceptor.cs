@@ -22,6 +22,7 @@ namespace Win7Revival.Modules.StartMenu
         private bool _disposed;
         private bool _winKeyDown;
         private bool _otherKeyPressed;
+        private bool _startButtonDown;
 
         // Prevent GC collection of the delegates
         private StartMenuInterop.LowLevelKeyboardProc? _kbHookProc;
@@ -176,16 +177,27 @@ namespace Win7Revival.Modules.StartMenu
 
         private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
-            if (nCode >= 0 && (int)wParam == StartMenuInterop.WM_LBUTTONDOWN)
+            if (nCode >= 0)
             {
-                var mouseStruct = Marshal.PtrToStructure<StartMenuInterop.MSLLHOOKSTRUCT>(lParam);
-                var hwndUnderCursor = StartMenuInterop.WindowFromPoint(mouseStruct.pt);
+                int msg = (int)wParam;
 
-                if (hwndUnderCursor != IntPtr.Zero && IsStartButtonWindow(hwndUnderCursor))
+                if (msg == StartMenuInterop.WM_LBUTTONDOWN)
                 {
-                    Debug.WriteLine("[WinKeyInterceptor] Start button clicked.");
-                    WinKeyPressed?.Invoke(this, EventArgs.Empty);
-                    return (IntPtr)1; // Suppress — block Win11 Start Menu
+                    var mouseStruct = Marshal.PtrToStructure<StartMenuInterop.MSLLHOOKSTRUCT>(lParam);
+
+                    if (IsClickOnStartButton(mouseStruct.pt))
+                    {
+                        Debug.WriteLine("[WinKeyInterceptor] Start button clicked (down).");
+                        _startButtonDown = true;
+                        WinKeyPressed?.Invoke(this, EventArgs.Empty);
+                        return (IntPtr)1; // Suppress down — block Win11 Start Menu
+                    }
+                }
+                else if (msg == StartMenuInterop.WM_LBUTTONUP && _startButtonDown)
+                {
+                    _startButtonDown = false;
+                    Debug.WriteLine("[WinKeyInterceptor] Start button click (up) suppressed.");
+                    return (IntPtr)1;
                 }
             }
 
@@ -193,54 +205,81 @@ namespace Win7Revival.Modules.StartMenu
         }
 
         /// <summary>
-        /// Checks if the window (or any ancestor up to the taskbar) is the Start button.
-        /// On Win11, clicks may land on XAML composition layers overlaying the actual Start window.
+        /// Detects if a click lands on the Start button area using RECT-based hit testing.
+        /// Works regardless of Start button position (left-aligned or centered on Win11).
+        /// Checks both primary taskbar (Shell_TrayWnd) and secondary taskbars.
         /// </summary>
-        private static bool IsStartButtonWindow(IntPtr hwnd)
+        private static bool IsClickOnStartButton(StartMenuInterop.POINT clickPt)
         {
-            // Walk up the window hierarchy (max 10 levels to avoid infinite loops)
-            var current = hwnd;
-            for (int i = 0; i < 10 && current != IntPtr.Zero; i++)
+            // Strategy 1: Find the "Start" window class directly and check its RECT
+            var startHwnd = StartMenuInterop.FindWindowEx(IntPtr.Zero, IntPtr.Zero, "Start", null);
+            while (startHwnd != IntPtr.Zero)
             {
-                var className = new System.Text.StringBuilder(256);
-                StartMenuInterop.GetClassName(current, className, 256);
-                var cls = className.ToString();
-
-                if (cls == "Start")
+                if (IsPointInWindowRect(startHwnd, clickPt, padding: 4))
                     return true;
 
-                // Stop walking if we've reached the taskbar
-                if (cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd")
-                    break;
-
-                current = StartMenuInterop.GetParent(current);
+                startHwnd = StartMenuInterop.FindWindowEx(IntPtr.Zero, startHwnd, "Start", null);
             }
 
-            // Also check if the root owner of the clicked window is the Start button
-            var root = StartMenuInterop.GetAncestor(hwnd, StartMenuInterop.GA_ROOT);
-            if (root != IntPtr.Zero)
+            // Strategy 2: Look inside Shell_TrayWnd for child windows in the Start button area
+            var trayWnd = StartMenuInterop.FindWindow("Shell_TrayWnd", null);
+            if (trayWnd != IntPtr.Zero && IsPointInTaskbarStartZone(trayWnd, clickPt))
+                return true;
+
+            // Strategy 3: Check secondary taskbars (multi-monitor)
+            var secondaryTray = StartMenuInterop.FindWindowEx(IntPtr.Zero, IntPtr.Zero, "Shell_SecondaryTrayWnd", null);
+            while (secondaryTray != IntPtr.Zero)
             {
-                var rootClass = new System.Text.StringBuilder(256);
-                StartMenuInterop.GetClassName(root, rootClass, 256);
-                if (rootClass.ToString() == "Shell_TrayWnd")
-                {
-                    // We're inside the taskbar — check if the Start button HWND contains our click point
-                    var startHwnd = StartMenuInterop.FindWindow("Start", null);
-                    if (startHwnd != IntPtr.Zero)
-                    {
-                        StartMenuInterop.GetWindowRect(startHwnd, out var startRect);
-                        // Get cursor position (more reliable than hook point for RECT check)
-                        StartMenuInterop.GetCursorPos(out var cursorPt);
-                        if (cursorPt.X >= startRect.Left && cursorPt.X <= startRect.Right &&
-                            cursorPt.Y >= startRect.Top && cursorPt.Y <= startRect.Bottom)
-                        {
-                            return true;
-                        }
-                    }
-                }
+                if (IsPointInTaskbarStartZone(secondaryTray, clickPt))
+                    return true;
+
+                secondaryTray = StartMenuInterop.FindWindowEx(IntPtr.Zero, secondaryTray, "Shell_SecondaryTrayWnd", null);
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Checks if click point is within the Start button zone of a taskbar.
+        /// Finds the "Start" child window within the taskbar, or falls back to
+        /// checking the first ~60px of the taskbar (where Start lives when left-aligned).
+        /// </summary>
+        private static bool IsPointInTaskbarStartZone(IntPtr taskbarHwnd, StartMenuInterop.POINT pt)
+        {
+            // First check if the click is even on this taskbar
+            if (!StartMenuInterop.GetWindowRect(taskbarHwnd, out var taskbarRect))
+                return false;
+
+            if (pt.X < taskbarRect.Left || pt.X > taskbarRect.Right ||
+                pt.Y < taskbarRect.Top || pt.Y > taskbarRect.Bottom)
+                return false;
+
+            // Look for a "Start" child within this taskbar
+            var startChild = StartMenuInterop.FindWindowEx(taskbarHwnd, IntPtr.Zero, "Start", null);
+            if (startChild != IntPtr.Zero)
+                return IsPointInWindowRect(startChild, pt, padding: 4);
+
+            // Walk all children looking for "Start" class (may be nested)
+            var child = StartMenuInterop.FindWindowEx(taskbarHwnd, IntPtr.Zero, null, null);
+            while (child != IntPtr.Zero)
+            {
+                var nested = StartMenuInterop.FindWindowEx(child, IntPtr.Zero, "Start", null);
+                if (nested != IntPtr.Zero)
+                    return IsPointInWindowRect(nested, pt, padding: 4);
+
+                child = StartMenuInterop.FindWindowEx(taskbarHwnd, child, null, null);
+            }
+
+            return false;
+        }
+
+        private static bool IsPointInWindowRect(IntPtr hwnd, StartMenuInterop.POINT pt, int padding = 0)
+        {
+            if (!StartMenuInterop.GetWindowRect(hwnd, out var rect))
+                return false;
+
+            return pt.X >= rect.Left - padding && pt.X <= rect.Right + padding &&
+                   pt.Y >= rect.Top - padding && pt.Y <= rect.Bottom + padding;
         }
 
         public void Dispose()
