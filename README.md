@@ -15,8 +15,8 @@ Win7 Revival is a WinUI 3 desktop app built around a strict module system. Each 
 ```
 Win7Revival/
 |-- Win7Revival.Core/            Core services, module lifecycle, settings
-|-- Win7Revival.Modules.Taskbar/ Transparent Taskbar module
-|-- Win7Revival.App/             WinUI 3 desktop app + tray icon
+|-- Win7Revival.Modules.Taskbar/ Transparent Taskbar module (dual-mode rendering)
+|-- Win7Revival.App/             WinUI 3 desktop app, localization, tray icon
 |-- Win7Revival.Core.Tests/      xUnit tests (CoreService, SettingsService)
 ```
 
@@ -32,39 +32,47 @@ Core principles:
 
 ## Current Status
 
-Sprint 1 shipped (transparent taskbar, settings UI, tray, auto-start, 15 tests).  
-January 31, 2026 stabilization patch:
-- Taskbar overlay now re-applies its accent policy on a 100 ms timer to resist Windows resetting the effect (e.g., opening Start menu).
-- Tray icon uses `PopupMenu`/`ICommand` for better Windows 11 compatibility; left-click restores the window.
-- Windows App SDK bumped to 1.5.240627; WinUI app publishes self-contained `win-x64` (no MSIX).
-- Solution adds x64 configs; VS Code tasks added for build/test/publish.
+**Sprint 1 complete** — transparent taskbar, settings UI, tray, auto-start, 15 tests.
+
+Latest changes (February 2026):
+- **Dual-mode overlay rendering**: documented DWM APIs (overlay mode, update-proof) + `SetWindowCompositionAttribute` (legacy fallback). RenderMode selector in UI (Auto/Overlay/Legacy).
+- **Localization**: Romanian and English with runtime language switching.
+- **Tabbed settings UI**: TabView with Taskbar, Start Menu, Theme Engine, General, Help/About tabs.
+- **CI/CD**: GitHub Actions with CodeQL security scanning and Dependabot for NuGet/GitHub Actions.
+- **Repository security**: SECURITY.md, CODEOWNERS, branch protection guidance.
 
 ---
 
 ## Modules
 
-### Transparent Taskbar (Sprint 1)
+### Transparent Taskbar (Sprint 1 — Live)
 - `TaskbarDetector`: finds all taskbar handles (primary + secondary), positions, auto-hide state.
-- `OverlayWindow`: applies blur/acrylic/mica/none with opacity (0–100%) and custom RGB tint; now auto re-applies the effect periodically to stay active.
-- `TaskbarModule`: orchestrates detector + overlay + settings; resilient to Explorer.exe restarts via `TaskbarCreated` listener; marked with `[SupportedOSPlatform("windows")]`.
+- `OverlayWindow`: dual-mode rendering:
+  - **Overlay mode** (Win11 22H2+): creates transparent overlay windows using documented DWM APIs (`DwmExtendFrameIntoClientArea`, `DWMWA_SYSTEMBACKDROP_TYPE`). Update-proof — survives Windows feature updates.
+  - **Legacy mode** (Win10/older Win11): applies blur/acrylic/mica/none via `SetWindowCompositionAttribute` in-place on taskbar handles.
+  - **Auto mode**: selects overlay on build ≥22000, legacy on older builds.
+- `TaskbarModule`: orchestrates detector + overlay + settings; resilient to Explorer.exe restarts via `TaskbarCreated` listener.
+- Supports: blur, acrylic, mica, glass effects with opacity (0–100%) and custom RGB tint.
+- Multi-monitor support with auto-hide detection.
 
-### Classic Start Menu (Planned – Sprint 2)
+### Classic Start Menu (Planned — Sprint 2)
 - WinUI 3 menu in Windows 7 layout, optional Win key interception, search/indexing.
 
-### Theme Engine (Planned – Sprint 3)
+### Theme Engine (Planned — Sprint 3)
 - Color schemes, icon packs, sound schemes, accent overrides.
 
 ---
 
 ## Features
 
-- WinUI 3 settings UI: Expander, sliders, effect picker, RGB tint, diagnostics.
-- System tray: H.NotifyIcon.WinUI popup menu (Show Settings / Exit), left-click restore.
-- Explorer resilience: re-detects taskbars and re-applies effects after Explorer restarts.
-- Auto-start: HKCU Run with `--minimized` support.
-- Settings persistence: JSON in `%AppData%`, survives corrupt files.
-- Multi-monitor: applies effects to all taskbars with safe handle snapshots.
-- Live preview: opacity/effect/tint changes apply instantly.
+- **Tabbed settings UI**: WinUI 3 TabView with per-module tabs, sliders, effect picker, RGB tint, render mode, diagnostics.
+- **Localization**: English and Romanian with runtime language switching (ComboBox in header).
+- **System tray**: H.NotifyIcon.WinUI popup menu (Show Settings / Exit), left-click restore.
+- **Explorer resilience**: re-detects taskbars and re-applies effects after Explorer restarts.
+- **Auto-start**: HKCU Run with `--minimized` support.
+- **Settings persistence**: JSON in `%AppData%`, survives corrupt files.
+- **Multi-monitor**: applies effects to all taskbars with safe handle snapshots.
+- **Live preview**: opacity/effect/tint/render mode changes apply instantly.
 
 ---
 
@@ -99,27 +107,41 @@ Result is in `publish/` with all WinAppSDK dependencies for offline install.
 Win7Revival/
 |-- Win7Revival.Core/
 |   |-- Interfaces/IModule.cs
-|   |-- Models/ModuleSettings.cs
+|   |-- Models/ModuleSettings.cs (EffectType, RenderMode enums)
 |   |-- Services/CoreService.cs, SettingsService.cs, AutoStartService.cs
 |-- Win7Revival.Modules.Taskbar/
-|   |-- Interop/Win32Interop.cs
+|   |-- Interop/Win32Interop.cs (user32, dwmapi, shell32, shcore P/Invoke)
 |   |-- TaskbarDetector.cs, OverlayWindow.cs, TaskbarModule.cs
 |-- Win7Revival.App/
 |   |-- App.xaml(.cs), MainWindow.xaml(.cs), TrayIconManager.cs
+|   |-- Localization/Strings.cs (EN/RO dictionaries)
+|   |-- Models/AppSettings.cs (language preference)
 |-- Win7Revival.Core.Tests/
 |   |-- CoreServiceTests.cs, SettingsServiceTests.cs
+|-- .github/
+|   |-- workflows/ (dotnet-desktop.yml, codeql.yml)
+|   |-- CODEOWNERS, dependabot.yml
 |-- .vscode/ (build/test/publish tasks + debug launch)
 |-- publish/ (self-contained output when you run the publish task)
 ```
 
 ---
 
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting. The project uses:
+- CodeQL static analysis via GitHub Actions
+- Dependabot for NuGet and GitHub Actions dependency updates
+- `TreatWarningsAsErrors` and `NuGetAudit` in `Directory.Build.props`
+
+---
+
 ## License and Contributing
 
-MIT License.  
+MIT License.
 Contributions are currently limited to the internal team.
 
 ---
 
-Last updated: January 31, 2026  
+Last updated: February 2, 2026
 Project status: Active development

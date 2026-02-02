@@ -27,8 +27,10 @@ This project uses Win32 P/Invoke APIs to customize Windows UI elements. Security
 
 - **Settings file handling** (`%AppData%/Win7Revival/`) — path traversal, JSON deserialization
 - **Registry access** (HKCU auto-start) — key injection
-- **P/Invoke surface** — memory safety in `Marshal.AllocHGlobal`/`FreeHGlobal` calls
-- **NuGet dependencies** — supply chain vulnerabilities
+- **P/Invoke surface** — memory safety in `Marshal.AllocHGlobal`/`FreeHGlobal` calls, DWM/user32/shell32 interop
+- **Overlay window creation** — Win32 `CreateWindowEx` with elevated window styles (WS_EX_TOPMOST, WS_EX_LAYERED)
+- **NuGet dependencies** — supply chain vulnerabilities (monitored by Dependabot)
+- **CI/CD** — GitHub Actions workflows (monitored by CodeQL and Dependabot)
 
 ## Out of Scope
 
