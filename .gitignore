@@ -69,3 +69,4 @@ appsettings.*.json
 publish/
 .claude/
 nul
+*.log

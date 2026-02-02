@@ -45,9 +45,12 @@ namespace Win7Revival.App.Localization
             ["DiagMonitorsUnknown"] = "Monitors: unknown",
             ["DiagMonitorsNone"] = "Monitors: none detected",
 
-            // Coming soon
-            ["StartMenuTitle"] = "Classic Start Menu (Planned)",
-            ["StartMenuDescription"] = "Windows 7-style start menu with search and Win key interception will arrive in Sprint 2.",
+            // Start Menu module
+            ["StartMenuTitle"] = "Classic Start Menu",
+            ["StartMenuDescription"] = "Windows 7-style start menu with Control Panel access, search, and Win key interception.",
+            ["InterceptWinKey"] = "Intercept Win Key",
+            ["InterceptWinKeyDescription"] = "Press Win key to open Classic Start Menu instead of Windows 11 Start.",
+            ["ErrorToggleStartMenu"] = "Failed to toggle Classic Start Menu",
             ["ThemeEngineTitle"] = "Theme Engine (Planned)",
             ["ThemeEngineDescription"] = "Color schemes, icon packs, fonts, and sound schemes will be configurable here.",
 
@@ -67,7 +70,7 @@ namespace Win7Revival.App.Localization
 
             // Help tab
             ["HelpAbout"] = "A modular toolkit to bring back the Windows 7 look & usability on Windows 11.",
-            ["HelpModules"] = "Modules: Taskbar (live), Classic Start Menu (planned), Theme Engine (planned).",
+            ["HelpModules"] = "Modules: Taskbar (live), Classic Start Menu (live), Theme Engine (planned).",
             ["HelpSupport"] = "Support: Internal dev team. For issues, create a ticket on the repo.",
 
             // Footer / Buttons
@@ -117,9 +120,12 @@ namespace Win7Revival.App.Localization
             ["DiagMonitorsUnknown"] = "Monitoare: necunoscut",
             ["DiagMonitorsNone"] = "Monitoare: nedetectate",
 
-            // Coming soon
-            ["StartMenuTitle"] = "Meniu Start Clasic (Planificat)",
-            ["StartMenuDescription"] = "Meniu Start în stil Windows 7 cu căutare și interceptare tastă Win va sosi în Sprint 2.",
+            // Start Menu module
+            ["StartMenuTitle"] = "Meniu Start Clasic",
+            ["StartMenuDescription"] = "Meniu Start în stil Windows 7 cu acces la Control Panel, căutare și interceptare tastă Win.",
+            ["InterceptWinKey"] = "Interceptare tastă Win",
+            ["InterceptWinKeyDescription"] = "Apasă tasta Win pentru a deschide Meniul Start Clasic în loc de cel din Windows 11.",
+            ["ErrorToggleStartMenu"] = "Nu s-a putut comuta Meniul Start Clasic",
             ["ThemeEngineTitle"] = "Motor de teme (Planificat)",
             ["ThemeEngineDescription"] = "Scheme de culori, pachete de iconuri, fonturi și scheme de sunet vor fi configurabile aici.",
 
@@ -139,7 +145,7 @@ namespace Win7Revival.App.Localization
 
             // Help tab
             ["HelpAbout"] = "Un toolkit modular pentru a readuce aspectul și funcționalitatea Windows 7 pe Windows 11.",
-            ["HelpModules"] = "Module: Taskbar (activ), Meniu Start Clasic (planificat), Motor de teme (planificat).",
+            ["HelpModules"] = "Module: Taskbar (activ), Meniu Start Clasic (activ), Motor de teme (planificat).",
             ["HelpSupport"] = "Suport: Echipă internă de dezvoltare. Pentru probleme, creează un tichet pe repo.",
 
             // Footer / Buttons

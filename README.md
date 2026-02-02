@@ -32,14 +32,20 @@ Core principles:
 
 ## Current Status
 
-**Sprint 1 complete** — transparent taskbar, settings UI, tray, auto-start, 15 tests.
+Sprint 1 shipped (transparent taskbar, settings UI, tray, auto-start, 15 tests).
+January 31, 2026 stabilization patch:
+- Taskbar overlay now re-applies its accent policy on a 100 ms timer to resist Windows resetting the effect (e.g., opening Start menu).
+- Tray icon uses `PopupMenu`/`ICommand` for better Windows 11 compatibility; left-click restores the window.
+- Windows App SDK bumped to 1.5.240627; WinUI app publishes self-contained `win-x64` (no MSIX).
+- Solution adds x64 configs; VS Code tasks added for build/test/publish.
 
-Latest changes (February 2026):
-- **Dual-mode overlay rendering**: documented DWM APIs (overlay mode, update-proof) + `SetWindowCompositionAttribute` (legacy fallback). RenderMode selector in UI (Auto/Overlay/Legacy).
-- **Localization**: Romanian and English with runtime language switching.
-- **Tabbed settings UI**: TabView with Taskbar, Start Menu, Theme Engine, General, Help/About tabs.
-- **CI/CD**: GitHub Actions with CodeQL security scanning and Dependabot for NuGet/GitHub Actions.
-- **Repository security**: SECURITY.md, CODEOWNERS, branch protection guidance.
+Sprint 1.1 — Icons, UI polish & bug fixes:
+- Custom app icon (`app.ico`) for taskbar/title bar, custom tray icon (`tray.ico`).
+- Language selector uses flag icons (EN/RO) instead of text labels.
+- Tabs are non-closable (navigation only, no X buttons or add button).
+- App manifest (`asInvoker`) — no longer requires Run as Administrator.
+- Fix: Reset button now properly disables the module, resets the toggle, and persists settings.
+- Fix: ScrollViewer padding prevents scrollbar overlapping content.
 
 ---
 
@@ -65,14 +71,14 @@ Latest changes (February 2026):
 
 ## Features
 
-- **Tabbed settings UI**: WinUI 3 TabView with per-module tabs, sliders, effect picker, RGB tint, render mode, diagnostics.
-- **Localization**: English and Romanian with runtime language switching (ComboBox in header).
-- **System tray**: H.NotifyIcon.WinUI popup menu (Show Settings / Exit), left-click restore.
-- **Explorer resilience**: re-detects taskbars and re-applies effects after Explorer restarts.
-- **Auto-start**: HKCU Run with `--minimized` support.
-- **Settings persistence**: JSON in `%AppData%`, survives corrupt files.
-- **Multi-monitor**: applies effects to all taskbars with safe handle snapshots.
-- **Live preview**: opacity/effect/tint/render mode changes apply instantly.
+- WinUI 3 tabbed settings UI: sliders, effect picker, RGB tint, diagnostics, flag-based language selector.
+- Custom app and tray icons with multi-size ICO support for all DPI scales.
+- System tray: H.NotifyIcon.WinUI with custom icon, popup menu (Show Settings / Exit), left-click restore.
+- Explorer resilience: re-detects taskbars and re-applies effects after Explorer restarts.
+- Auto-start: HKCU Run with `--minimized` support.
+- Settings persistence: JSON in `%AppData%`, survives corrupt files.
+- Multi-monitor: applies effects to all taskbars with safe handle snapshots.
+- Live preview: opacity/effect/tint changes apply instantly.
 
 ---
 
@@ -113,9 +119,9 @@ Win7Revival/
 |   |-- Interop/Win32Interop.cs (user32, dwmapi, shell32, shcore P/Invoke)
 |   |-- TaskbarDetector.cs, OverlayWindow.cs, TaskbarModule.cs
 |-- Win7Revival.App/
-|   |-- App.xaml(.cs), MainWindow.xaml(.cs), TrayIconManager.cs
-|   |-- Localization/Strings.cs (EN/RO dictionaries)
-|   |-- Models/AppSettings.cs (language preference)
+|   |-- App.xaml(.cs), MainWindow.xaml(.cs), TrayIconManager.cs, WindowIconHelper.cs
+|   |-- Assets/ (app.ico, tray.ico, Flags/en.png, Flags/ro.png)
+|   |-- app.manifest
 |-- Win7Revival.Core.Tests/
 |   |-- CoreServiceTests.cs, SettingsServiceTests.cs
 |-- .github/

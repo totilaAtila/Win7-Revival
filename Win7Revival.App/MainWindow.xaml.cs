@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -8,6 +10,7 @@ using Win7Revival.App.Localization;
 using Win7Revival.Core.Models;
 using Win7Revival.Core.Services;
 using Win7Revival.Modules.Taskbar;
+using Win7Revival.Modules.StartMenu;
 
 namespace Win7Revival.App
 {
@@ -17,24 +20,97 @@ namespace Win7Revival.App
         private readonly SettingsService _settingsService;
         private TrayIconManager? _trayIconManager;
         private TaskbarModule? _taskbarModule;
+        private StartMenuModule? _startMenuModule;
         private bool _isInitializing = true;
+        private bool _firstActivation = true;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+
+        // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+        private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new(-4);
 
         public MainWindow(CoreService coreService, SettingsService settingsService)
         {
-            this.InitializeComponent();
+            AppLogger.Log("MainWindow constructor started");
+
             _coreService = coreService;
             _settingsService = settingsService;
 
+            try
+            {
+                this.InitializeComponent();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogException(ex, "InitializeComponent");
+                throw;
+            }
+
+            // Best-effort DPI awareness
+            try
+            {
+                SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+                AppLogger.Log("SetProcessDpiAwarenessContext succeeded");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Log($"SetProcessDpiAwarenessContext not available: {ex.Message}");
+            }
+
             LanguageComboBox.SelectedIndex = 0;
             CheckAdminStatus();
-            LoadLanguageAsync();
-            LoadTaskbarModule();
-            LoadAutoStartState();
 
-            _isInitializing = false;
+            // Defer module loading to Loaded event
+            var rootElement = this.Content as FrameworkElement;
+            if (rootElement != null)
+            {
+                rootElement.Loaded += OnRootLoaded;
+            }
+
+            this.Activated += OnWindowActivated;
+
+            AppLogger.Log("MainWindow constructor completed");
         }
 
-        private async void LoadLanguageAsync()
+        private async void OnRootLoaded(object sender, RoutedEventArgs e)
+        {
+            AppLogger.Log("Window Loaded");
+
+            // Let the UI settle before loading modules
+            await Task.Delay(100);
+            await LoadContentAsync();
+
+            _isInitializing = false;
+            AppLogger.Log("Window content loaded, _isInitializing = false");
+        }
+
+        private async Task LoadContentAsync()
+        {
+            try
+            {
+                await LoadLanguageAsync_Internal();
+                LoadTaskbarModule();
+                LoadStartMenuModule();
+                LoadAutoStartState();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogException(ex, "LoadContentAsync");
+            }
+        }
+
+        private void OnWindowActivated(object sender, WindowActivatedEventArgs args)
+        {
+            if (_firstActivation)
+            {
+                _firstActivation = false;
+                AppLogger.Log("First window activation — refreshing diagnostics");
+                UpdateDiagnostics();
+            }
+        }
+
+        private async Task LoadLanguageAsync_Internal()
         {
             var appSettings = await _settingsService.LoadSettingsAsync<AppSettings>("App");
             var lang = appSettings.Language == "Română" ? AppLanguage.Română : AppLanguage.English;
@@ -78,9 +154,16 @@ namespace Win7Revival.App
             OpacityLabel.Text = Strings.Get("Opacity");
             ColorTintLabel.Text = Strings.Get("ColorTint");
 
-            // Coming soon tabs
+            // Start Menu module
             StartMenuTitle.Text = Strings.Get("StartMenuTitle");
             StartMenuDescription.Text = Strings.Get("StartMenuDescription");
+            InterceptWinKeyLabel.Text = Strings.Get("InterceptWinKey");
+            InterceptWinKeyDescription.Text = Strings.Get("InterceptWinKeyDescription");
+            StartMenuEffectLabel.Text = Strings.Get("EffectType");
+            StartMenuOpacityLabel.Text = Strings.Get("Opacity");
+            StartMenuColorTintLabel.Text = Strings.Get("ColorTint");
+
+            // Coming soon tabs
             ThemeEngineTitle.Text = Strings.Get("ThemeEngineTitle");
             ThemeEngineDescription.Text = Strings.Get("ThemeEngineDescription");
 
@@ -217,6 +300,48 @@ namespace Win7Revival.App
             }
         }
 
+        private void LoadStartMenuModule()
+        {
+            foreach (var module in _coreService.Modules)
+            {
+                if (module is StartMenuModule sm)
+                {
+                    _startMenuModule = sm;
+                    break;
+                }
+            }
+
+            if (_startMenuModule == null)
+            {
+                Debug.WriteLine("[MainWindow] StartMenuModule not found in CoreService.");
+                return;
+            }
+
+            var settings = _startMenuModule.CurrentSettings;
+            StartMenuToggle.IsOn = _startMenuModule.IsEnabled;
+            StartMenuVersionBadge.Text = $"v{_startMenuModule.Version}";
+            InterceptWinKeyToggle.IsOn = settings.InterceptWinKey;
+
+            StartMenuOpacitySlider.Value = settings.Opacity;
+            StartMenuOpacityValueText.Text = $"{settings.Opacity}%";
+
+            StartMenuEffectComboBox.SelectedIndex = settings.Effect switch
+            {
+                EffectType.Blur => 0,
+                EffectType.Acrylic => 1,
+                EffectType.Mica => 2,
+                EffectType.Glass => 3,
+                _ => 0
+            };
+
+            SMTintRSlider.Value = settings.TintR;
+            SMTintGSlider.Value = settings.TintG;
+            SMTintBSlider.Value = settings.TintB;
+            SMTintRValue.Text = settings.TintR.ToString();
+            SMTintGValue.Text = settings.TintG.ToString();
+            SMTintBValue.Text = settings.TintB.ToString();
+        }
+
         private void LoadAutoStartState()
         {
             AutoStartToggle.IsOn = AutoStartService.IsEnabled();
@@ -331,11 +456,18 @@ namespace Win7Revival.App
             await dialog.ShowAsync();
         }
 
-        private void ResetButton_Click(object sender, RoutedEventArgs e)
+        private async void ResetButton_Click(object sender, RoutedEventArgs e)
         {
             if (_taskbarModule == null) return;
 
+            // Disable the module first if it's running
+            if (_taskbarModule.IsEnabled)
+            {
+                await _coreService.DisableModuleAsync(_taskbarModule.Name);
+            }
+
             _isInitializing = true;
+            TaskbarToggle.IsOn = false;
             OpacitySlider.Value = 80;
             OpacityValueText.Text = "80%";
             EffectComboBox.SelectedIndex = 0;
@@ -349,7 +481,84 @@ namespace Win7Revival.App
             UpdateColorPreview();
             _isInitializing = false;
 
-            _taskbarModule.UpdateSettings(80, EffectType.Blur, 0, 0, 0, RenderMode.Auto);
+            _taskbarModule.UpdateSettings(80, EffectType.Blur, 0, 0, 0);
+            await _taskbarModule.SaveSettingsAsync();
+        }
+
+        // ================================================================
+        // Start Menu Event Handlers
+        // ================================================================
+
+        private async void StartMenuToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _startMenuModule == null) return;
+
+            try
+            {
+                if (StartMenuToggle.IsOn && !_startMenuModule.IsEnabled)
+                {
+                    await _coreService.EnableModuleAsync(_startMenuModule.Name);
+                    await _startMenuModule.SaveSettingsAsync();
+                }
+                else if (!StartMenuToggle.IsOn && _startMenuModule.IsEnabled)
+                {
+                    await _coreService.DisableModuleAsync(_startMenuModule.Name);
+                    await _startMenuModule.SaveSettingsAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialog($"{Strings.Get("ErrorToggleStartMenu")}: {ex.Message}");
+                _isInitializing = true;
+                StartMenuToggle.IsOn = _startMenuModule.IsEnabled;
+                _isInitializing = false;
+            }
+        }
+
+        private void InterceptWinKeyToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _startMenuModule == null) return;
+            ApplyStartMenuSettings();
+        }
+
+        private EffectType GetSelectedStartMenuEffect() => StartMenuEffectComboBox.SelectedIndex switch
+        {
+            0 => EffectType.Blur,
+            1 => EffectType.Acrylic,
+            2 => EffectType.Mica,
+            3 => EffectType.Glass,
+            _ => EffectType.Blur
+        };
+
+        private void ApplyStartMenuSettings()
+        {
+            if (_isInitializing || _startMenuModule == null) return;
+            _startMenuModule.UpdateSettings(
+                (int)StartMenuOpacitySlider.Value,
+                GetSelectedStartMenuEffect(),
+                InterceptWinKeyToggle.IsOn,
+                (byte)SMTintRSlider.Value, (byte)SMTintGSlider.Value, (byte)SMTintBSlider.Value);
+        }
+
+        private void StartMenuEffectComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            ApplyStartMenuSettings();
+        }
+
+        private void StartMenuOpacitySlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (StartMenuOpacityValueText == null) return;
+            StartMenuOpacityValueText.Text = $"{(int)e.NewValue}%";
+            ApplyStartMenuSettings();
+        }
+
+        private void StartMenuTintSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (SMTintRValue == null) return;
+            SMTintRValue.Text = ((int)SMTintRSlider.Value).ToString();
+            SMTintGValue.Text = ((int)SMTintGSlider.Value).ToString();
+            SMTintBValue.Text = ((int)SMTintBSlider.Value).ToString();
+            ApplyStartMenuSettings();
         }
 
         private async void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

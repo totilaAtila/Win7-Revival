@@ -53,14 +53,8 @@ namespace Win7Revival.App
                     ToolTipText = Strings.Get("TrayTooltip")
                 };
 
-                _taskbarIcon.IconSource = new GeneratedIconSource
-                {
-                    Text = "W7",
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                        Microsoft.UI.Colors.White),
-                    FontSize = 24,
-                    FontWeight = Microsoft.UI.Text.FontWeights.Bold
-                };
+                var trayIcoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "tray.ico");
+                _taskbarIcon.Icon = new System.Drawing.Icon(trayIcoPath);
 
                 // Context menu — use Command instead of Click for PopupMenu compatibility
                 var menuFlyout = new MenuFlyout();

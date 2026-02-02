@@ -36,9 +36,13 @@
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <TextBlock x:Name="HeaderLanguageLabel" Text="Language" VerticalAlignment="Center" Opacity="0.7"/>
-                <ComboBox x:Name="LanguageComboBox" Width="140" SelectionChanged="LanguageComboBox_SelectionChanged">
-                    <ComboBoxItem Content="English" Tag="English"/>
-                    <ComboBoxItem Content="Română" Tag="Română"/>
+                <ComboBox x:Name="LanguageComboBox" Width="80" MinHeight="40" SelectionChanged="LanguageComboBox_SelectionChanged">
+                    <ComboBoxItem Tag="English" MinHeight="36">
+                        <Image Source="Assets/Flags/en.png" Width="40" Height="40" Stretch="Uniform"/>
+                    </ComboBoxItem>
+                    <ComboBoxItem Tag="Română" MinHeight="36">
+                        <Image Source="Assets/Flags/ro.png" Width="40" Height="40" Stretch="Uniform"/>
+                    </ComboBoxItem>
                 </ComboBox>
             </StackPanel>
 
@@ -54,11 +58,11 @@
 
         <!-- CONTENT -->
         <Grid Grid.Row="1" Padding="24,16">
-            <muxc:TabView x:Name="SettingsTabView" TabWidthMode="Equal">
+            <muxc:TabView x:Name="SettingsTabView" TabWidthMode="Equal" IsAddTabButtonVisible="False">
                 <muxc:TabView.TabItems>
                     <!-- Taskbar -->
-                    <muxc:TabViewItem x:Name="TaskbarTab" Header="Taskbar">
-                        <ScrollViewer Padding="0,8">
+                    <muxc:TabViewItem x:Name="TaskbarTab" Header="Taskbar" IsClosable="False">
+                        <ScrollViewer Padding="0,8,16,8">
                             <StackPanel Spacing="16">
                                 <Grid Padding="0,8">
                                     <Grid.ColumnDefinitions>
@@ -192,18 +196,125 @@
                     </muxc:TabViewItem>
 
                     <!-- Classic Start Menu -->
-                    <muxc:TabViewItem x:Name="StartMenuTab" Header="Start Menu">
-                        <Grid Padding="12" Opacity="0.7">
-                            <StackPanel Spacing="8">
-                                <TextBlock x:Name="StartMenuTitle" Text="Classic Start Menu (Planned)" FontSize="16" FontWeight="SemiBold"/>
-                                <TextBlock x:Name="StartMenuDescription" Text="Windows 7-style start menu with search and Win key interception will arrive in Sprint 2."
-                                           Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
+                    <muxc:TabViewItem x:Name="StartMenuTab" Header="Start Menu" IsClosable="False">
+                        <ScrollViewer Padding="0,8,16,8">
+                            <StackPanel Spacing="16">
+                                <Grid Padding="0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE737;" FontSize="16"/>
+                                            <TextBlock x:Name="StartMenuTitle" Text="Classic Start Menu" FontSize="16" FontWeight="SemiBold"/>
+                                            <Border Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                                    CornerRadius="4" Padding="6,2">
+                                                <TextBlock x:Name="StartMenuVersionBadge" Text="v1.0.0"
+                                                           FontSize="10" Opacity="0.8"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock x:Name="StartMenuDescription" Text="Windows 7-style start menu with Control Panel access, search, and Win key interception."
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Opacity="0.6" Margin="24,2,0,0"/>
+                                    </StackPanel>
+
+                                    <ToggleSwitch x:Name="StartMenuToggle" Grid.Column="1"
+                                                  Toggled="StartMenuToggle_Toggled"
+                                                  VerticalAlignment="Center"/>
+                                </Grid>
+
+                                <!-- Win Key Intercept -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="InterceptWinKeyLabel" Text="Intercept Win Key" FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="InterceptWinKeyDescription" Text="Press Win key to open Classic Start Menu instead of Windows 11 Start."
+                                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="InterceptWinKeyToggle" Grid.Column="1"
+                                                  Toggled="InterceptWinKeyToggle_Toggled"
+                                                  VerticalAlignment="Center"/>
+                                </Grid>
+
+                                <!-- Effect Type -->
+                                <StackPanel Spacing="6">
+                                    <TextBlock x:Name="StartMenuEffectLabel" Text="Effect Type" FontWeight="SemiBold"/>
+                                    <ComboBox x:Name="StartMenuEffectComboBox" HorizontalAlignment="Stretch"
+                                              SelectionChanged="StartMenuEffectComboBox_SelectionChanged">
+                                        <ComboBoxItem Content="Blur (Aero Glass)" Tag="Blur"/>
+                                        <ComboBoxItem Content="Acrylic" Tag="Acrylic"/>
+                                        <ComboBoxItem Content="Mica (Host Backdrop)" Tag="Mica"/>
+                                        <ComboBoxItem Content="Glass (No Blur)" Tag="Glass"/>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- Opacity Slider -->
+                                <StackPanel Spacing="6">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="StartMenuOpacityLabel" Text="Opacity" FontWeight="SemiBold" Grid.Column="0"/>
+                                        <TextBlock x:Name="StartMenuOpacityValueText" Text="85%" Grid.Column="1"
+                                                   Opacity="0.7" FontFamily="Consolas"/>
+                                    </Grid>
+                                    <Slider x:Name="StartMenuOpacitySlider" Minimum="0" Maximum="100" Value="85"
+                                            StepFrequency="5"
+                                            ValueChanged="StartMenuOpacitySlider_ValueChanged"/>
+                                </StackPanel>
+
+                                <!-- Color Tint -->
+                                <StackPanel Spacing="6">
+                                    <TextBlock x:Name="StartMenuColorTintLabel" Text="Color Tint" FontWeight="SemiBold"/>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="28"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="36"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Text="R" Grid.Row="0" Grid.Column="0"
+                                                   VerticalAlignment="Center" Foreground="#FFE06060" FontWeight="SemiBold"/>
+                                        <Slider x:Name="SMTintRSlider" Grid.Row="0" Grid.Column="1"
+                                                Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                                ValueChanged="StartMenuTintSlider_ValueChanged"/>
+                                        <TextBlock x:Name="SMTintRValue" Grid.Row="0" Grid.Column="2"
+                                                   Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+
+                                        <TextBlock Text="G" Grid.Row="1" Grid.Column="0"
+                                                   VerticalAlignment="Center" Foreground="#FF60C060" FontWeight="SemiBold"/>
+                                        <Slider x:Name="SMTintGSlider" Grid.Row="1" Grid.Column="1"
+                                                Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                                ValueChanged="StartMenuTintSlider_ValueChanged"/>
+                                        <TextBlock x:Name="SMTintGValue" Grid.Row="1" Grid.Column="2"
+                                                   Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+
+                                        <TextBlock Text="B" Grid.Row="2" Grid.Column="0"
+                                                   VerticalAlignment="Center" Foreground="#FF6080E0" FontWeight="SemiBold"/>
+                                        <Slider x:Name="SMTintBSlider" Grid.Row="2" Grid.Column="1"
+                                                Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                                ValueChanged="StartMenuTintSlider_ValueChanged"/>
+                                        <TextBlock x:Name="SMTintBValue" Grid.Row="2" Grid.Column="2"
+                                                   Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+                                    </Grid>
+                                </StackPanel>
                             </StackPanel>
-                        </Grid>
+                        </ScrollViewer>
                     </muxc:TabViewItem>
 
                     <!-- Theme Engine -->
-                    <muxc:TabViewItem x:Name="ThemeEngineTab" Header="Theme Engine">
+                    <muxc:TabViewItem x:Name="ThemeEngineTab" Header="Theme Engine" IsClosable="False">
                         <Grid Padding="12" Opacity="0.7">
                             <StackPanel Spacing="8">
                                 <TextBlock x:Name="ThemeEngineTitle" Text="Theme Engine (Planned)" FontSize="16" FontWeight="SemiBold"/>
@@ -214,7 +325,7 @@
                     </muxc:TabViewItem>
 
                     <!-- General -->
-                    <muxc:TabViewItem x:Name="GeneralTab" Header="General">
+                    <muxc:TabViewItem x:Name="GeneralTab" Header="General" IsClosable="False">
                         <StackPanel Padding="12" Spacing="12">
                             <TextBlock x:Name="GeneralLabel" Text="General" FontSize="16" FontWeight="SemiBold"/>
 
@@ -236,7 +347,7 @@
                     </muxc:TabViewItem>
 
                     <!-- Help / About -->
-                    <muxc:TabViewItem x:Name="HelpTab" Header="Help / About">
+                    <muxc:TabViewItem x:Name="HelpTab" Header="Help / About" IsClosable="False">
                         <StackPanel Padding="12" Spacing="10">
                             <TextBlock x:Name="HelpTitle" Text="Win7 Revival" FontSize="18" FontWeight="SemiBold"/>
                             <TextBlock x:Name="HelpAbout" Text="A modular toolkit to bring back the Windows 7 look &amp; usability on Windows 11."
