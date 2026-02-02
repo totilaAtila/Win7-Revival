@@ -32,6 +32,7 @@ namespace Win7Revival.Modules.Taskbar
         private ushort _classAtom;
         private const string OverlayClassName = "Win7Revival_TaskbarOverlay";
         private volatile bool _threadReady;
+        private volatile uint _overlayThreadId;
 
         // --- Legacy mode state ---
         private Timer? _reapplyTimer;
@@ -152,19 +153,22 @@ namespace Win7Revival.Modules.Taskbar
 
         private void RemoveOverlayMode()
         {
-            if (_timerOwnerHwnd != IntPtr.Zero)
+            uint threadId = _overlayThreadId;
+            if (threadId != 0)
             {
-                Win32Interop.PostMessage(_timerOwnerHwnd, Win32Interop.WM_QUIT, IntPtr.Zero, IntPtr.Zero);
+                Win32Interop.PostThreadMessage(threadId, Win32Interop.WM_QUIT, IntPtr.Zero, IntPtr.Zero);
             }
             _overlayThread?.Join(3000);
             _overlayThread = null;
             _threadReady = false;
+            _overlayThreadId = 0;
 
             Debug.WriteLine("[OverlayWindow] Overlay mode stopped.");
         }
 
         private void OverlayThreadLoop()
         {
+            _overlayThreadId = Win32Interop.GetCurrentThreadId();
             var hInstance = Win32Interop.GetModuleHandle(null);
 
             _wndProcDelegate = OverlayWndProc;
@@ -282,13 +286,16 @@ namespace Win7Revival.Modules.Taskbar
                 rect.Left, rect.Top, rect.Width, rect.Height,
                 Win32Interop.SWP_NOACTIVATE | Win32Interop.SWP_SHOWWINDOW);
 
-            _overlays.Add(new OverlayInfo
+            lock (_lock)
             {
-                TaskbarHandle = taskbarHandle,
-                OverlayHandle = overlayHwnd,
-                LastRect = rect,
-                IsVisible = true
-            });
+                _overlays.Add(new OverlayInfo
+                {
+                    TaskbarHandle = taskbarHandle,
+                    OverlayHandle = overlayHwnd,
+                    LastRect = rect,
+                    IsVisible = true
+                });
+            }
         }
 
         private void ApplyDwmEffect(IntPtr overlayHwnd)
@@ -351,7 +358,13 @@ namespace Win7Revival.Modules.Taskbar
 
         private void UpdateOverlayEffects()
         {
-            foreach (var info in _overlays)
+            OverlayInfo[] snapshot;
+            lock (_lock)
+            {
+                snapshot = _overlays.ToArray();
+            }
+
+            foreach (var info in snapshot)
             {
                 if (!Win32Interop.IsWindow(info.OverlayHandle)) continue;
 
@@ -367,48 +380,51 @@ namespace Win7Revival.Modules.Taskbar
         /// </summary>
         private void RepositionOverlays()
         {
-            for (int i = _overlays.Count - 1; i >= 0; i--)
+            lock (_lock)
             {
-                var info = _overlays[i];
-
-                if (!Win32Interop.IsWindow(info.TaskbarHandle))
+                for (int i = _overlays.Count - 1; i >= 0; i--)
                 {
-                    Win32Interop.DestroyWindow(info.OverlayHandle);
-                    _overlays.RemoveAt(i);
-                    continue;
-                }
+                    var info = _overlays[i];
 
-                if (!Win32Interop.GetWindowRect(info.TaskbarHandle, out var rect)) continue;
+                    if (!Win32Interop.IsWindow(info.TaskbarHandle))
+                    {
+                        Win32Interop.DestroyWindow(info.OverlayHandle);
+                        _overlays.RemoveAt(i);
+                        continue;
+                    }
 
-                // Auto-hide: taskbar collapses to ≤2px when hidden
-                bool taskbarHidden = rect.Width <= 2 || rect.Height <= 2;
+                    if (!Win32Interop.GetWindowRect(info.TaskbarHandle, out var rect)) continue;
 
-                if (taskbarHidden && info.IsVisible)
-                {
-                    Win32Interop.ShowWindow(info.OverlayHandle, Win32Interop.SW_HIDE);
-                    info.IsVisible = false;
-                }
-                else if (!taskbarHidden && !info.IsVisible)
-                {
-                    Win32Interop.ShowWindow(info.OverlayHandle, Win32Interop.SW_SHOWNOACTIVATE);
-                    info.IsVisible = true;
-                }
+                    // Auto-hide: taskbar collapses to ≤2px when hidden
+                    bool taskbarHidden = rect.Width <= 2 || rect.Height <= 2;
 
-                if (taskbarHidden) continue;
+                    if (taskbarHidden && info.IsVisible)
+                    {
+                        Win32Interop.ShowWindow(info.OverlayHandle, Win32Interop.SW_HIDE);
+                        info.IsVisible = false;
+                    }
+                    else if (!taskbarHidden && !info.IsVisible)
+                    {
+                        Win32Interop.ShowWindow(info.OverlayHandle, Win32Interop.SW_SHOWNOACTIVATE);
+                        info.IsVisible = true;
+                    }
 
-                if (rect.Left != info.LastRect.Left || rect.Top != info.LastRect.Top ||
-                    rect.Width != info.LastRect.Width || rect.Height != info.LastRect.Height)
-                {
-                    Win32Interop.SetWindowPos(info.OverlayHandle, Win32Interop.HWND_TOPMOST,
-                        rect.Left, rect.Top, rect.Width, rect.Height,
-                        Win32Interop.SWP_NOACTIVATE | Win32Interop.SWP_SHOWWINDOW);
-                    info.LastRect = rect;
-                }
-                else
-                {
-                    Win32Interop.SetWindowPos(info.OverlayHandle, Win32Interop.HWND_TOPMOST,
-                        0, 0, 0, 0,
-                        Win32Interop.SWP_NOMOVE | Win32Interop.SWP_NOSIZE | Win32Interop.SWP_NOACTIVATE);
+                    if (taskbarHidden) continue;
+
+                    if (rect.Left != info.LastRect.Left || rect.Top != info.LastRect.Top ||
+                        rect.Width != info.LastRect.Width || rect.Height != info.LastRect.Height)
+                    {
+                        Win32Interop.SetWindowPos(info.OverlayHandle, Win32Interop.HWND_TOPMOST,
+                            rect.Left, rect.Top, rect.Width, rect.Height,
+                            Win32Interop.SWP_NOACTIVATE | Win32Interop.SWP_SHOWWINDOW);
+                        info.LastRect = rect;
+                    }
+                    else
+                    {
+                        Win32Interop.SetWindowPos(info.OverlayHandle, Win32Interop.HWND_TOPMOST,
+                            0, 0, 0, 0,
+                            Win32Interop.SWP_NOMOVE | Win32Interop.SWP_NOSIZE | Win32Interop.SWP_NOACTIVATE);
+                    }
                 }
             }
 
@@ -417,13 +433,17 @@ namespace Win7Revival.Modules.Taskbar
             {
                 if (!_detector.IsHandleValid(taskbarHandle)) continue;
 
-                bool alreadyTracked = false;
-                foreach (var info in _overlays)
+                bool alreadyTracked;
+                lock (_lock)
                 {
-                    if (info.TaskbarHandle == taskbarHandle)
+                    alreadyTracked = false;
+                    foreach (var info in _overlays)
                     {
-                        alreadyTracked = true;
-                        break;
+                        if (info.TaskbarHandle == taskbarHandle)
+                        {
+                            alreadyTracked = true;
+                            break;
+                        }
                     }
                 }
 
@@ -434,12 +454,15 @@ namespace Win7Revival.Modules.Taskbar
 
         private void DestroyAllOverlays()
         {
-            foreach (var info in _overlays)
+            lock (_lock)
             {
-                if (Win32Interop.IsWindow(info.OverlayHandle))
-                    Win32Interop.DestroyWindow(info.OverlayHandle);
+                foreach (var info in _overlays)
+                {
+                    if (Win32Interop.IsWindow(info.OverlayHandle))
+                        Win32Interop.DestroyWindow(info.OverlayHandle);
+                }
+                _overlays.Clear();
             }
-            _overlays.Clear();
         }
 
         // ================================================================

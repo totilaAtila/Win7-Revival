@@ -245,6 +245,13 @@ namespace Win7Revival.Modules.Taskbar.Interop
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool PostThreadMessage(uint threadId, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("kernel32.dll")]
+        public static extern uint GetCurrentThreadId();
+
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         public static extern ushort RegisterClass(ref WNDCLASS lpWndClass);
 
