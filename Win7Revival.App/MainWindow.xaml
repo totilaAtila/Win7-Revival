@@ -17,7 +17,7 @@
         </Grid.RowDefinitions>
 
         <!-- HEADER -->
-        <Grid Grid.Row="0" Padding="24,20" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+        <Grid Grid.Row="0" Padding="16,12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -25,23 +25,23 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0">
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                    <FontIcon Glyph="&#xE771;" FontSize="28"/>
-                    <TextBlock x:Name="HeaderTitle" Text="Win7 Revival" FontSize="24" FontWeight="Bold" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE771;" FontSize="22"/>
+                    <TextBlock x:Name="HeaderTitle" Text="Win7 Revival" FontSize="20" FontWeight="Bold" VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock x:Name="HeaderSubtitle" Text="Windows 11 Customization Toolkit"
                            Style="{StaticResource CaptionTextBlockStyle}"
-                           Opacity="0.6" Margin="38,4,0,0"/>
+                           Opacity="0.6" Margin="30,2,0,0"/>
             </StackPanel>
 
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                 <TextBlock x:Name="HeaderLanguageLabel" Text="Language" VerticalAlignment="Center" Opacity="0.7"/>
-                <ComboBox x:Name="LanguageComboBox" Width="80" MinHeight="40" SelectionChanged="LanguageComboBox_SelectionChanged">
-                    <ComboBoxItem Tag="English" MinHeight="36">
-                        <Image Source="Assets/Flags/en.png" Width="40" Height="40" Stretch="Uniform"/>
+                <ComboBox x:Name="LanguageComboBox" Width="68" MinHeight="32" SelectionChanged="LanguageComboBox_SelectionChanged">
+                    <ComboBoxItem Tag="English" MinHeight="28">
+                        <Image Source="Assets/Flags/en.png" Width="32" Height="32" Stretch="Uniform"/>
                     </ComboBoxItem>
-                    <ComboBoxItem Tag="Română" MinHeight="36">
-                        <Image Source="Assets/Flags/ro.png" Width="40" Height="40" Stretch="Uniform"/>
+                    <ComboBoxItem Tag="Română" MinHeight="28">
+                        <Image Source="Assets/Flags/ro.png" Width="32" Height="32" Stretch="Uniform"/>
                     </ComboBoxItem>
                 </ComboBox>
             </StackPanel>
@@ -57,258 +57,290 @@
         </Grid>
 
         <!-- CONTENT -->
-        <Grid Grid.Row="1" Padding="24,16">
+        <Grid Grid.Row="1" Padding="16,12">
             <muxc:TabView x:Name="SettingsTabView" TabWidthMode="Equal" IsAddTabButtonVisible="False">
                 <muxc:TabView.TabItems>
                     <!-- Taskbar -->
                     <muxc:TabViewItem x:Name="TaskbarTab" Header="Taskbar" IsClosable="False">
-                        <ScrollViewer Padding="0,8,16,8">
-                            <StackPanel Spacing="16">
-                                <Grid Padding="0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
+                        <ScrollViewer Padding="0,6,12,6">
+                            <StackPanel Spacing="12">
+                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="12">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
 
-                                    <StackPanel Grid.Column="0">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon Glyph="&#xE7C5;" FontSize="16"/>
-                                            <TextBlock x:Name="TaskbarTitle" Text="Taskbar Transparent" FontSize="16" FontWeight="SemiBold"/>
-                                            <Border Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
-                                                    CornerRadius="4" Padding="6,2">
-                                                <TextBlock x:Name="TaskbarVersionBadge" Text="v1.1.0"
-                                                           FontSize="10" Opacity="0.8"/>
-                                            </Border>
+                                        <StackPanel Grid.Column="0">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon Glyph="&#xE7C5;" FontSize="14"/>
+                                                <TextBlock x:Name="TaskbarTitle" Text="Taskbar Transparent" FontSize="15" FontWeight="SemiBold"/>
+                                                <Border Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                                        CornerRadius="4" Padding="6,2">
+                                                    <TextBlock x:Name="TaskbarVersionBadge" Text="v1.1.0"
+                                                               FontSize="10" Opacity="0.8"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock x:Name="TaskbarDescription" Text="Transparency, blur, acrylic, mica or glass effects on the Taskbar."
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Opacity="0.6" Margin="22,2,0,0"/>
                                         </StackPanel>
-                                        <TextBlock x:Name="TaskbarDescription" Text="Transparency, blur, acrylic, mica or glass effects on the Taskbar."
-                                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                                   Opacity="0.6" Margin="24,2,0,0"/>
-                                    </StackPanel>
 
-                                    <ToggleSwitch x:Name="TaskbarToggle" Grid.Column="1"
-                                                  Toggled="TaskbarToggle_Toggled"
-                                                  VerticalAlignment="Center"/>
-                                </Grid>
-
-                                <!-- Effect Type -->
-                                <StackPanel Spacing="6">
-                                    <TextBlock x:Name="EffectTypeLabel" Text="Effect Type" FontWeight="SemiBold"/>
-                                    <ComboBox x:Name="EffectComboBox" HorizontalAlignment="Stretch"
-                                              SelectionChanged="EffectComboBox_SelectionChanged">
-                                        <ComboBoxItem x:Name="EffectBlurItem" Content="Blur (Aero Glass)" Tag="Blur"/>
-                                        <ComboBoxItem x:Name="EffectAcrylicItem" Content="Acrylic" Tag="Acrylic"/>
-                                        <ComboBoxItem x:Name="EffectMicaItem" Content="Mica (Host Backdrop)" Tag="Mica"/>
-                                        <ComboBoxItem x:Name="EffectGlassItem" Content="Glass (No Blur)" Tag="Glass"/>
-                                    </ComboBox>
-                                </StackPanel>
-
-                                <!-- Render Mode -->
-                                <StackPanel Spacing="6">
-                                    <TextBlock x:Name="RenderModeLabel" Text="Render Mode" FontWeight="SemiBold"/>
-                                    <ComboBox x:Name="RenderModeComboBox" HorizontalAlignment="Stretch"
-                                              SelectionChanged="RenderModeComboBox_SelectionChanged">
-                                        <ComboBoxItem x:Name="RenderModeAutoItem" Content="Auto (recommended)" Tag="Auto"/>
-                                        <ComboBoxItem x:Name="RenderModeOverlayItem" Content="Overlay (DWM)" Tag="Overlay"/>
-                                        <ComboBoxItem x:Name="RenderModeLegacyItem" Content="Legacy (in-place)" Tag="Legacy"/>
-                                    </ComboBox>
-                                </StackPanel>
-
-                                <!-- Opacity Slider -->
-                                <StackPanel Spacing="6">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="OpacityLabel" Text="Opacity" FontWeight="SemiBold" Grid.Column="0"/>
-                                        <TextBlock x:Name="OpacityValueText" Text="80%" Grid.Column="1"
-                                                   Opacity="0.7" FontFamily="Consolas"/>
+                                        <ToggleSwitch x:Name="TaskbarToggle" Grid.Column="1"
+                                                      Toggled="TaskbarToggle_Toggled"
+                                                      VerticalAlignment="Center"/>
                                     </Grid>
-                                    <Slider x:Name="OpacitySlider" Minimum="0" Maximum="100" Value="80"
-                                            StepFrequency="5"
-                                            ValueChanged="OpacitySlider_ValueChanged"/>
-                                </StackPanel>
+                                </Border>
 
-                                <!-- Color Tint -->
-                                <StackPanel Spacing="6">
-                                    <Grid>
+                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="12">
+                                    <Grid RowSpacing="10" ColumnSpacing="12">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                    <TextBlock x:Name="ColorTintLabel" Text="Color Tint" FontWeight="SemiBold" Grid.Column="0"/>
-                                    <Border x:Name="ColorPreview" Grid.Column="1"
-                                            Width="32" Height="20" CornerRadius="4"
-                                            BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
-                                            BorderThickness="1">
-                                        <Border.Background>
-                                            <SolidColorBrush x:Name="ColorPreviewBrush" Color="#FF000000"/>
-                                        </Border.Background>
-                                    </Border>
-                                </Grid>
-                                <Grid ColumnSpacing="12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="28"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="36"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
 
-                                    <TextBlock Text="R" Grid.Row="0" Grid.Column="0"
-                                               VerticalAlignment="Center" Foreground="#FFE06060" FontWeight="SemiBold"/>
-                                    <Slider x:Name="TintRSlider" Grid.Row="0" Grid.Column="1"
-                                            Minimum="0" Maximum="255" Value="0" StepFrequency="1"
-                                            ValueChanged="TintSlider_ValueChanged"/>
-                                    <TextBlock x:Name="TintRValue" Grid.Row="0" Grid.Column="2"
-                                               Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+                                        <!-- Effect Type -->
+                                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                                            <TextBlock x:Name="EffectTypeLabel" Text="Effect Type" FontWeight="SemiBold"/>
+                                            <ComboBox x:Name="EffectComboBox" HorizontalAlignment="Stretch"
+                                                      SelectionChanged="EffectComboBox_SelectionChanged">
+                                                <ComboBoxItem x:Name="EffectBlurItem" Content="Blur (Aero Glass)" Tag="Blur"/>
+                                                <ComboBoxItem x:Name="EffectAcrylicItem" Content="Acrylic" Tag="Acrylic"/>
+                                                <ComboBoxItem x:Name="EffectMicaItem" Content="Mica (Host Backdrop)" Tag="Mica"/>
+                                                <ComboBoxItem x:Name="EffectGlassItem" Content="Glass (No Blur)" Tag="Glass"/>
+                                            </ComboBox>
+                                        </StackPanel>
 
-                                    <TextBlock Text="G" Grid.Row="1" Grid.Column="0"
-                                               VerticalAlignment="Center" Foreground="#FF60C060" FontWeight="SemiBold"/>
-                                    <Slider x:Name="TintGSlider" Grid.Row="1" Grid.Column="1"
-                                            Minimum="0" Maximum="255" Value="0" StepFrequency="1"
-                                            ValueChanged="TintSlider_ValueChanged"/>
-                                    <TextBlock x:Name="TintGValue" Grid.Row="1" Grid.Column="2"
-                                               Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+                                        <!-- Render Mode -->
+                                        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4">
+                                            <TextBlock x:Name="RenderModeLabel" Text="Render Mode" FontWeight="SemiBold"/>
+                                            <ComboBox x:Name="RenderModeComboBox" HorizontalAlignment="Stretch"
+                                                      SelectionChanged="RenderModeComboBox_SelectionChanged">
+                                                <ComboBoxItem x:Name="RenderModeAutoItem" Content="Auto (recommended)" Tag="Auto"/>
+                                                <ComboBoxItem x:Name="RenderModeOverlayItem" Content="Overlay (DWM)" Tag="Overlay"/>
+                                                <ComboBoxItem x:Name="RenderModeLegacyItem" Content="Legacy (in-place)" Tag="Legacy"/>
+                                            </ComboBox>
+                                        </StackPanel>
 
-                                    <TextBlock Text="B" Grid.Row="2" Grid.Column="0"
-                                               VerticalAlignment="Center" Foreground="#FF6080E0" FontWeight="SemiBold"/>
-                                    <Slider x:Name="TintBSlider" Grid.Row="2" Grid.Column="1"
-                                            Minimum="0" Maximum="255" Value="0" StepFrequency="1"
-                                            ValueChanged="TintSlider_ValueChanged"/>
-                                    <TextBlock x:Name="TintBValue" Grid.Row="2" Grid.Column="2"
-                                               Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
-                                </Grid>
-                            </StackPanel>
+                                        <!-- Opacity Slider -->
+                                        <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Spacing="4">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="OpacityLabel" Text="Opacity" FontWeight="SemiBold" Grid.Column="0"/>
+                                                <TextBlock x:Name="OpacityValueText" Text="80%" Grid.Column="1"
+                                                           Opacity="0.7" FontFamily="Consolas"/>
+                                            </Grid>
+                                            <Slider x:Name="OpacitySlider" Minimum="0" Maximum="100" Value="80"
+                                                    StepFrequency="5"
+                                                    ValueChanged="OpacitySlider_ValueChanged"/>
+                                        </StackPanel>
 
-                            <!-- Diagnostics -->
-                            <StackPanel Spacing="4" Opacity="0.5" Margin="0,12,0,0">
-                                <TextBlock x:Name="DiagnosticsText" Text="Taskbar: detecting..."
-                                           Style="{StaticResource CaptionTextBlockStyle}" FontFamily="Consolas"/>
-                                <TextBlock x:Name="MonitorInfoText" Text="Monitors: detecting..."
-                                           Style="{StaticResource CaptionTextBlockStyle}" FontFamily="Consolas"/>
-                            </StackPanel>
+                                        <!-- Color Tint -->
+                                        <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Spacing="4">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="ColorTintLabel" Text="Color Tint" FontWeight="SemiBold" Grid.Column="0"/>
+                                                <Border x:Name="ColorPreview" Grid.Column="1"
+                                                        Width="28" Height="18" CornerRadius="4"
+                                                        BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                                        BorderThickness="1">
+                                                    <Border.Background>
+                                                        <SolidColorBrush x:Name="ColorPreviewBrush" Color="#FF000000"/>
+                                                    </Border.Background>
+                                                </Border>
+                                            </Grid>
+                                            <Grid ColumnSpacing="10" RowSpacing="4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="22"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="34"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+
+                                                <TextBlock Text="R" Grid.Row="0" Grid.Column="0"
+                                                           VerticalAlignment="Center" Foreground="#FFE06060" FontWeight="SemiBold"/>
+                                                <Slider x:Name="TintRSlider" Grid.Row="0" Grid.Column="1"
+                                                        Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                                        ValueChanged="TintSlider_ValueChanged"/>
+                                                <TextBlock x:Name="TintRValue" Grid.Row="0" Grid.Column="2"
+                                                           Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+
+                                                <TextBlock Text="G" Grid.Row="1" Grid.Column="0"
+                                                           VerticalAlignment="Center" Foreground="#FF60C060" FontWeight="SemiBold"/>
+                                                <Slider x:Name="TintGSlider" Grid.Row="1" Grid.Column="1"
+                                                        Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                                        ValueChanged="TintSlider_ValueChanged"/>
+                                                <TextBlock x:Name="TintGValue" Grid.Row="1" Grid.Column="2"
+                                                           Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+
+                                                <TextBlock Text="B" Grid.Row="2" Grid.Column="0"
+                                                           VerticalAlignment="Center" Foreground="#FF6080E0" FontWeight="SemiBold"/>
+                                                <Slider x:Name="TintBSlider" Grid.Row="2" Grid.Column="1"
+                                                        Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                                        ValueChanged="TintSlider_ValueChanged"/>
+                                                <TextBlock x:Name="TintBValue" Grid.Row="2" Grid.Column="2"
+                                                           Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Diagnostics -->
+                                <StackPanel Spacing="2" Opacity="0.5">
+                                    <TextBlock x:Name="DiagnosticsText" Text="Taskbar: detecting..."
+                                               Style="{StaticResource CaptionTextBlockStyle}" FontFamily="Consolas"/>
+                                    <TextBlock x:Name="MonitorInfoText" Text="Monitors: detecting..."
+                                               Style="{StaticResource CaptionTextBlockStyle}" FontFamily="Consolas"/>
+                                </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
                     </muxc:TabViewItem>
 
                     <!-- Classic Start Menu -->
                     <muxc:TabViewItem x:Name="StartMenuTab" Header="Start Menu" IsClosable="False">
-                        <ScrollViewer Padding="0,8,16,8">
-                            <StackPanel Spacing="16">
-                                <Grid Padding="0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <StackPanel Grid.Column="0">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon Glyph="&#xE737;" FontSize="16"/>
-                                            <TextBlock x:Name="StartMenuTitle" Text="Classic Start Menu" FontSize="16" FontWeight="SemiBold"/>
-                                            <Border Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
-                                                    CornerRadius="4" Padding="6,2">
-                                                <TextBlock x:Name="StartMenuVersionBadge" Text="v1.0.0"
-                                                           FontSize="10" Opacity="0.8"/>
-                                            </Border>
-                                        </StackPanel>
-                                        <TextBlock x:Name="StartMenuDescription" Text="Windows 7-style start menu with Control Panel access, search, and Win key interception."
-                                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                                   Opacity="0.6" Margin="24,2,0,0"/>
-                                    </StackPanel>
-
-                                    <ToggleSwitch x:Name="StartMenuToggle" Grid.Column="1"
-                                                  Toggled="StartMenuToggle_Toggled"
-                                                  VerticalAlignment="Center"/>
-                                </Grid>
-
-                                <!-- Win Key Intercept -->
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <TextBlock x:Name="InterceptWinKeyLabel" Text="Intercept Win Key" FontWeight="SemiBold"/>
-                                        <TextBlock x:Name="InterceptWinKeyDescription" Text="Press Win key to open Classic Start Menu instead of Windows 11 Start."
-                                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
-                                    </StackPanel>
-                                    <ToggleSwitch x:Name="InterceptWinKeyToggle" Grid.Column="1"
-                                                  Toggled="InterceptWinKeyToggle_Toggled"
-                                                  VerticalAlignment="Center"/>
-                                </Grid>
-
-                                <!-- Effect Type -->
-                                <StackPanel Spacing="6">
-                                    <TextBlock x:Name="StartMenuEffectLabel" Text="Effect Type" FontWeight="SemiBold"/>
-                                    <ComboBox x:Name="StartMenuEffectComboBox" HorizontalAlignment="Stretch"
-                                              SelectionChanged="StartMenuEffectComboBox_SelectionChanged">
-                                        <ComboBoxItem Content="Blur (Aero Glass)" Tag="Blur"/>
-                                        <ComboBoxItem Content="Acrylic" Tag="Acrylic"/>
-                                        <ComboBoxItem Content="Mica (Host Backdrop)" Tag="Mica"/>
-                                        <ComboBoxItem Content="Glass (No Blur)" Tag="Glass"/>
-                                    </ComboBox>
-                                </StackPanel>
-
-                                <!-- Opacity Slider -->
-                                <StackPanel Spacing="6">
+                        <ScrollViewer Padding="0,6,12,6">
+                            <StackPanel Spacing="12">
+                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="12">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="StartMenuOpacityLabel" Text="Opacity" FontWeight="SemiBold" Grid.Column="0"/>
-                                        <TextBlock x:Name="StartMenuOpacityValueText" Text="85%" Grid.Column="1"
-                                                   Opacity="0.7" FontFamily="Consolas"/>
-                                    </Grid>
-                                    <Slider x:Name="StartMenuOpacitySlider" Minimum="0" Maximum="100" Value="85"
-                                            StepFrequency="5"
-                                            ValueChanged="StartMenuOpacitySlider_ValueChanged"/>
-                                </StackPanel>
 
-                                <!-- Color Tint -->
-                                <StackPanel Spacing="6">
-                                    <TextBlock x:Name="StartMenuColorTintLabel" Text="Color Tint" FontWeight="SemiBold"/>
-                                    <Grid ColumnSpacing="12">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="28"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="36"/>
-                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon Glyph="&#xE737;" FontSize="14"/>
+                                                <TextBlock x:Name="StartMenuTitle" Text="Classic Start Menu" FontSize="15" FontWeight="SemiBold"/>
+                                                <Border Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                                        CornerRadius="4" Padding="6,2">
+                                                    <TextBlock x:Name="StartMenuVersionBadge" Text="v1.0.0"
+                                                               FontSize="10" Opacity="0.8"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock x:Name="StartMenuDescription" Text="Windows 7-style start menu with Control Panel access, search, and Win key interception."
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Opacity="0.6" Margin="22,2,0,0"/>
+                                        </StackPanel>
+
+                                        <ToggleSwitch x:Name="StartMenuToggle" Grid.Column="1"
+                                                      Toggled="StartMenuToggle_Toggled"
+                                                      VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="12">
+                                    <Grid RowSpacing="10" ColumnSpacing="12">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
 
-                                        <TextBlock Text="R" Grid.Row="0" Grid.Column="0"
-                                                   VerticalAlignment="Center" Foreground="#FFE06060" FontWeight="SemiBold"/>
-                                        <Slider x:Name="SMTintRSlider" Grid.Row="0" Grid.Column="1"
-                                                Minimum="0" Maximum="255" Value="0" StepFrequency="1"
-                                                ValueChanged="StartMenuTintSlider_ValueChanged"/>
-                                        <TextBlock x:Name="SMTintRValue" Grid.Row="0" Grid.Column="2"
-                                                   Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+                                        <!-- Win Key Intercept -->
+                                        <Grid Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="InterceptWinKeyLabel" Text="Intercept Win Key" FontWeight="SemiBold"/>
+                                                <TextBlock x:Name="InterceptWinKeyDescription" Text="Press Win key to open Classic Start Menu instead of Windows 11 Start."
+                                                           Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                                            </StackPanel>
+                                            <ToggleSwitch x:Name="InterceptWinKeyToggle" Grid.Column="1"
+                                                          Toggled="InterceptWinKeyToggle_Toggled"
+                                                          VerticalAlignment="Center"/>
+                                        </Grid>
 
-                                        <TextBlock Text="G" Grid.Row="1" Grid.Column="0"
-                                                   VerticalAlignment="Center" Foreground="#FF60C060" FontWeight="SemiBold"/>
-                                        <Slider x:Name="SMTintGSlider" Grid.Row="1" Grid.Column="1"
-                                                Minimum="0" Maximum="255" Value="0" StepFrequency="1"
-                                                ValueChanged="StartMenuTintSlider_ValueChanged"/>
-                                        <TextBlock x:Name="SMTintGValue" Grid.Row="1" Grid.Column="2"
-                                                   Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+                                        <!-- Effect Type -->
+                                        <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4">
+                                            <TextBlock x:Name="StartMenuEffectLabel" Text="Effect Type" FontWeight="SemiBold"/>
+                                            <ComboBox x:Name="StartMenuEffectComboBox" HorizontalAlignment="Stretch"
+                                                      SelectionChanged="StartMenuEffectComboBox_SelectionChanged">
+                                                <ComboBoxItem Content="Blur (Aero Glass)" Tag="Blur"/>
+                                                <ComboBoxItem Content="Acrylic" Tag="Acrylic"/>
+                                                <ComboBoxItem Content="Mica (Host Backdrop)" Tag="Mica"/>
+                                                <ComboBoxItem Content="Glass (No Blur)" Tag="Glass"/>
+                                            </ComboBox>
+                                        </StackPanel>
 
-                                        <TextBlock Text="B" Grid.Row="2" Grid.Column="0"
-                                                   VerticalAlignment="Center" Foreground="#FF6080E0" FontWeight="SemiBold"/>
-                                        <Slider x:Name="SMTintBSlider" Grid.Row="2" Grid.Column="1"
-                                                Minimum="0" Maximum="255" Value="0" StepFrequency="1"
-                                                ValueChanged="StartMenuTintSlider_ValueChanged"/>
-                                        <TextBlock x:Name="SMTintBValue" Grid.Row="2" Grid.Column="2"
-                                                   Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+                                        <!-- Opacity Slider -->
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="StartMenuOpacityLabel" Text="Opacity" FontWeight="SemiBold" Grid.Column="0"/>
+                                                <TextBlock x:Name="StartMenuOpacityValueText" Text="85%" Grid.Column="1"
+                                                           Opacity="0.7" FontFamily="Consolas"/>
+                                            </Grid>
+                                            <Slider x:Name="StartMenuOpacitySlider" Minimum="0" Maximum="100" Value="85"
+                                                    StepFrequency="5"
+                                                    ValueChanged="StartMenuOpacitySlider_ValueChanged"/>
+                                        </StackPanel>
+
+                                        <!-- Color Tint -->
+                                        <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Spacing="4">
+                                            <TextBlock x:Name="StartMenuColorTintLabel" Text="Color Tint" FontWeight="SemiBold"/>
+                                            <Grid ColumnSpacing="10" RowSpacing="4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="22"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="34"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+
+                                                <TextBlock Text="R" Grid.Row="0" Grid.Column="0"
+                                                           VerticalAlignment="Center" Foreground="#FFE06060" FontWeight="SemiBold"/>
+                                                <Slider x:Name="SMTintRSlider" Grid.Row="0" Grid.Column="1"
+                                                        Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                                        ValueChanged="StartMenuTintSlider_ValueChanged"/>
+                                                <TextBlock x:Name="SMTintRValue" Grid.Row="0" Grid.Column="2"
+                                                           Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+
+                                                <TextBlock Text="G" Grid.Row="1" Grid.Column="0"
+                                                           VerticalAlignment="Center" Foreground="#FF60C060" FontWeight="SemiBold"/>
+                                                <Slider x:Name="SMTintGSlider" Grid.Row="1" Grid.Column="1"
+                                                        Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                                        ValueChanged="StartMenuTintSlider_ValueChanged"/>
+                                                <TextBlock x:Name="SMTintGValue" Grid.Row="1" Grid.Column="2"
+                                                           Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+
+                                                <TextBlock Text="B" Grid.Row="2" Grid.Column="0"
+                                                           VerticalAlignment="Center" Foreground="#FF6080E0" FontWeight="SemiBold"/>
+                                                <Slider x:Name="SMTintBSlider" Grid.Row="2" Grid.Column="1"
+                                                        Minimum="0" Maximum="255" Value="0" StepFrequency="1"
+                                                        ValueChanged="StartMenuTintSlider_ValueChanged"/>
+                                                <TextBlock x:Name="SMTintBValue" Grid.Row="2" Grid.Column="2"
+                                                           Text="0" VerticalAlignment="Center" Opacity="0.7" FontFamily="Consolas"/>
+                                            </Grid>
+                                        </StackPanel>
                                     </Grid>
-                                </StackPanel>
+                                </Border>
                             </StackPanel>
                         </ScrollViewer>
                     </muxc:TabViewItem>
@@ -316,8 +348,8 @@
                     <!-- Theme Engine -->
                     <muxc:TabViewItem x:Name="ThemeEngineTab" Header="Theme Engine" IsClosable="False">
                         <Grid Padding="12" Opacity="0.7">
-                            <StackPanel Spacing="8">
-                                <TextBlock x:Name="ThemeEngineTitle" Text="Theme Engine (Planned)" FontSize="16" FontWeight="SemiBold"/>
+                            <StackPanel Spacing="6">
+                                <TextBlock x:Name="ThemeEngineTitle" Text="Theme Engine (Planned)" FontSize="15" FontWeight="SemiBold"/>
                                 <TextBlock x:Name="ThemeEngineDescription" Text="Color schemes, icon packs, fonts, and sound schemes will be configurable here."
                                            Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
                             </StackPanel>
@@ -326,30 +358,32 @@
 
                     <!-- General -->
                     <muxc:TabViewItem x:Name="GeneralTab" Header="General" IsClosable="False">
-                        <StackPanel Padding="12" Spacing="12">
-                            <TextBlock x:Name="GeneralLabel" Text="General" FontSize="16" FontWeight="SemiBold"/>
+                        <StackPanel Padding="12" Spacing="10">
+                            <TextBlock x:Name="GeneralLabel" Text="General" FontSize="15" FontWeight="SemiBold"/>
 
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                    <TextBlock x:Name="AutoStartLabel" Text="Start with Windows"/>
-                                    <TextBlock x:Name="AutoStartDescription" Text="Automatically start the application at boot (minimized to tray)."
-                                               Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
-                                </StackPanel>
-                                <ToggleSwitch x:Name="AutoStartToggle" Grid.Column="1"
-                                              Toggled="AutoStartToggle_Toggled"
-                                              VerticalAlignment="Center"/>
-                            </Grid>
+                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="AutoStartLabel" Text="Start with Windows"/>
+                                        <TextBlock x:Name="AutoStartDescription" Text="Automatically start the application at boot (minimized to tray)."
+                                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="AutoStartToggle" Grid.Column="1"
+                                                  Toggled="AutoStartToggle_Toggled"
+                                                  VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
                         </StackPanel>
                     </muxc:TabViewItem>
 
                     <!-- Help / About -->
                     <muxc:TabViewItem x:Name="HelpTab" Header="Help / About" IsClosable="False">
-                        <StackPanel Padding="12" Spacing="10">
-                            <TextBlock x:Name="HelpTitle" Text="Win7 Revival" FontSize="18" FontWeight="SemiBold"/>
+                        <StackPanel Padding="12" Spacing="8">
+                            <TextBlock x:Name="HelpTitle" Text="Win7 Revival" FontSize="16" FontWeight="SemiBold"/>
                             <TextBlock x:Name="HelpAbout" Text="A modular toolkit to bring back the Windows 7 look &amp; usability on Windows 11."
                                        TextWrapping="Wrap" Opacity="0.7"/>
                             <TextBlock x:Name="HelpVersion" Text="Version: v1.1.0" Style="{StaticResource CaptionTextBlockStyle}"/>
@@ -365,7 +399,7 @@
         </Grid>
 
         <!-- FOOTER -->
-        <Grid Grid.Row="2" Padding="24,12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+        <Grid Grid.Row="2" Padding="16,10" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -376,11 +410,11 @@
                        Style="{StaticResource CaptionTextBlockStyle}"
                        Opacity="0.5" VerticalAlignment="Center"/>
 
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                 <Button x:Name="ApplyButton" Content="Apply &amp; Save" Click="ApplyButton_Click"
-                        Style="{StaticResource AccentButtonStyle}"/>
-                <Button x:Name="ResetButton" Content="Reset" Click="ResetButton_Click"/>
-                <Button x:Name="MinimizeToTrayButton" Content="Minimize to Tray" Click="MinimizeToTrayButton_Click"/>
+                        Style="{StaticResource AccentButtonStyle}" Padding="12,6"/>
+                <Button x:Name="ResetButton" Content="Reset" Click="ResetButton_Click" Padding="12,6"/>
+                <Button x:Name="MinimizeToTrayButton" Content="Minimize to Tray" Click="MinimizeToTrayButton_Click" Padding="12,6"/>
             </StackPanel>
         </Grid>
     </Grid>
