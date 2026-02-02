@@ -27,6 +27,9 @@ namespace Win7Revival.Core.Models
 
         [JsonPropertyName("tintB")]
         public byte TintB { get; set; } = 0;
+
+        [JsonPropertyName("renderMode")]
+        public RenderMode RenderMode { get; set; } = RenderMode.Auto;
     }
 
     /// <summary>
@@ -41,5 +44,20 @@ namespace Win7Revival.Core.Models
         Acrylic = 2,
         Mica = 3,
         Glass = 4
+    }
+
+    /// <summary>
+    /// Modul de randare al efectelor pe taskbar.
+    /// Auto detectează build-ul Windows și alege automat.
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum RenderMode
+    {
+        /// <summary>Detectare automată: Overlay pe Win11 22H2+, Legacy pe Win10.</summary>
+        Auto = 0,
+        /// <summary>Overlay propriu cu API-uri DWM documentate (stabil la Windows updates).</summary>
+        Overlay = 1,
+        /// <summary>SetWindowCompositionAttribute direct pe Shell_TrayWnd (nedocumentat).</summary>
+        Legacy = 2
     }
 }

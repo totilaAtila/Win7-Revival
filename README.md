@@ -15,8 +15,8 @@ Win7 Revival is a WinUI 3 desktop app built around a strict module system. Each 
 ```
 Win7Revival/
 |-- Win7Revival.Core/            Core services, module lifecycle, settings
-|-- Win7Revival.Modules.Taskbar/ Transparent Taskbar module
-|-- Win7Revival.App/             WinUI 3 desktop app + tray icon
+|-- Win7Revival.Modules.Taskbar/ Transparent Taskbar module (dual-mode rendering)
+|-- Win7Revival.App/             WinUI 3 desktop app, localization, tray icon
 |-- Win7Revival.Core.Tests/      xUnit tests (CoreService, SettingsService)
 ```
 
@@ -51,15 +51,20 @@ Sprint 1.1 — Icons, UI polish & bug fixes:
 
 ## Modules
 
-### Transparent Taskbar (Sprint 1)
+### Transparent Taskbar (Sprint 1 — Live)
 - `TaskbarDetector`: finds all taskbar handles (primary + secondary), positions, auto-hide state.
-- `OverlayWindow`: applies blur/acrylic/mica/none with opacity (0–100%) and custom RGB tint; now auto re-applies the effect periodically to stay active.
-- `TaskbarModule`: orchestrates detector + overlay + settings; resilient to Explorer.exe restarts via `TaskbarCreated` listener; marked with `[SupportedOSPlatform("windows")]`.
+- `OverlayWindow`: dual-mode rendering:
+  - **Overlay mode** (Win11 22H2+): creates transparent overlay windows using documented DWM APIs (`DwmExtendFrameIntoClientArea`, `DWMWA_SYSTEMBACKDROP_TYPE`). Update-proof — survives Windows feature updates.
+  - **Legacy mode** (Win10/older Win11): applies blur/acrylic/mica/none via `SetWindowCompositionAttribute` in-place on taskbar handles.
+  - **Auto mode**: selects overlay on build ≥22000, legacy on older builds.
+- `TaskbarModule`: orchestrates detector + overlay + settings; resilient to Explorer.exe restarts via `TaskbarCreated` listener.
+- Supports: blur, acrylic, mica, glass effects with opacity (0–100%) and custom RGB tint.
+- Multi-monitor support with auto-hide detection.
 
-### Classic Start Menu (Planned – Sprint 2)
+### Classic Start Menu (Planned — Sprint 2)
 - WinUI 3 menu in Windows 7 layout, optional Win key interception, search/indexing.
 
-### Theme Engine (Planned – Sprint 3)
+### Theme Engine (Planned — Sprint 3)
 - Color schemes, icon packs, sound schemes, accent overrides.
 
 ---
@@ -108,10 +113,10 @@ Result is in `publish/` with all WinAppSDK dependencies for offline install.
 Win7Revival/
 |-- Win7Revival.Core/
 |   |-- Interfaces/IModule.cs
-|   |-- Models/ModuleSettings.cs
+|   |-- Models/ModuleSettings.cs (EffectType, RenderMode enums)
 |   |-- Services/CoreService.cs, SettingsService.cs, AutoStartService.cs
 |-- Win7Revival.Modules.Taskbar/
-|   |-- Interop/Win32Interop.cs
+|   |-- Interop/Win32Interop.cs (user32, dwmapi, shell32, shcore P/Invoke)
 |   |-- TaskbarDetector.cs, OverlayWindow.cs, TaskbarModule.cs
 |-- Win7Revival.App/
 |   |-- App.xaml(.cs), MainWindow.xaml(.cs), TrayIconManager.cs, WindowIconHelper.cs
@@ -119,18 +124,30 @@ Win7Revival/
 |   |-- app.manifest
 |-- Win7Revival.Core.Tests/
 |   |-- CoreServiceTests.cs, SettingsServiceTests.cs
+|-- .github/
+|   |-- workflows/ (dotnet-desktop.yml, codeql.yml)
+|   |-- CODEOWNERS, dependabot.yml
 |-- .vscode/ (build/test/publish tasks + debug launch)
 |-- publish/ (self-contained output when you run the publish task)
 ```
 
 ---
 
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting. The project uses:
+- CodeQL static analysis via GitHub Actions
+- Dependabot for NuGet and GitHub Actions dependency updates
+- `TreatWarningsAsErrors` and `NuGetAudit` in `Directory.Build.props`
+
+---
+
 ## License and Contributing
 
-MIT License.  
+MIT License.
 Contributions are currently limited to the internal team.
 
 ---
 
-Last updated: January 31, 2026  
+Last updated: February 2, 2026
 Project status: Active development

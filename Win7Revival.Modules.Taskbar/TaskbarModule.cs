@@ -231,11 +231,9 @@ namespace Win7Revival.Modules.Taskbar
                     _detector?.Refresh();
                 }
 
-                if (_detector?.PrimaryHandle != IntPtr.Zero)
+                if (_detector?.PrimaryHandle != IntPtr.Zero && _overlay != null)
                 {
-                    _overlay?.Dispose();
-                    _overlay = new OverlayWindow(_detector!, _settings);
-                    _overlay.Apply();
+                    _overlay.OnExplorerRestarted();
                     Debug.WriteLine("[TaskbarModule] Effects reapplied after Explorer restart.");
                 }
                 else
@@ -253,13 +251,14 @@ namespace Win7Revival.Modules.Taskbar
         /// Updates settings (opacity, effect, tint color) live without disable/enable.
         /// Called from UI when slider, combobox, or color controls change.
         /// </summary>
-        public void UpdateSettings(int opacity, EffectType effect, byte tintR = 0, byte tintG = 0, byte tintB = 0)
+        public void UpdateSettings(int opacity, EffectType effect, byte tintR = 0, byte tintG = 0, byte tintB = 0, RenderMode? renderMode = null)
         {
             _settings.Opacity = Math.Clamp(opacity, 0, 100);
             _settings.Effect = effect;
             _settings.TintR = tintR;
             _settings.TintG = tintG;
             _settings.TintB = tintB;
+            if (renderMode.HasValue) _settings.RenderMode = renderMode.Value;
 
             OnPropertyChanged(nameof(CurrentSettings));
 

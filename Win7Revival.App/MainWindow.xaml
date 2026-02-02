@@ -102,6 +102,17 @@
                                     </ComboBox>
                                 </StackPanel>
 
+                                <!-- Render Mode -->
+                                <StackPanel Spacing="6">
+                                    <TextBlock x:Name="RenderModeLabel" Text="Render Mode" FontWeight="SemiBold"/>
+                                    <ComboBox x:Name="RenderModeComboBox" HorizontalAlignment="Stretch"
+                                              SelectionChanged="RenderModeComboBox_SelectionChanged">
+                                        <ComboBoxItem x:Name="RenderModeAutoItem" Content="Auto (recommended)" Tag="Auto"/>
+                                        <ComboBoxItem x:Name="RenderModeOverlayItem" Content="Overlay (DWM)" Tag="Overlay"/>
+                                        <ComboBoxItem x:Name="RenderModeLegacyItem" Content="Legacy (in-place)" Tag="Legacy"/>
+                                    </ComboBox>
+                                </StackPanel>
+
                                 <!-- Opacity Slider -->
                                 <StackPanel Spacing="6">
                                     <Grid>

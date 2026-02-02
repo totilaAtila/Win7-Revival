@@ -13,7 +13,7 @@ dotnet build Win7Revival.sln
 dotnet test Win7Revival.Core.Tests/
 ```
 
-No CI/CD pipeline yet. Tests are xUnit-based, covering CoreService and SettingsService.
+CI runs via GitHub Actions (`dotnet-desktop.yml` for build/test, `codeql.yml` for security scanning). Tests are xUnit-based, covering CoreService and SettingsService.
 
 The App project (`Win7Revival.App`) targets `net8.0-windows10.0.19041.0` and requires Windows to build. Core and Tests target `net8.0`.
 
@@ -30,16 +30,31 @@ Win7Revival.Core.Tests    → xUnit tests for CoreService + SettingsService
 
 - **Module lifecycle**: `InitializeAsync` → `EnableAsync` → `DisableAsync` → `SaveSettingsAsync`. All modules implement `IModule` + `INotifyPropertyChanged`.
 - **Thread-safety**: `CoreService` uses `lock` on all `_modules` operations with snapshot-based iteration.
-- **IDisposable cascade**: App.OnMainWindowClosed → CoreService.Dispose → TaskbarModule.Dispose → OverlayWindow.Dispose (restores ACCENT_DISABLED).
+- **IDisposable cascade**: App.OnMainWindowClosed → CoreService.Dispose → TaskbarModule.Dispose → OverlayWindow.Dispose (restores ACCENT_DISABLED or destroys overlay windows).
 - **Memory safety**: All `Marshal.AllocHGlobal` calls wrapped in `try/finally` with `Marshal.FreeHGlobal`.
 - **Settings**: JSON files in `%AppData%/Win7Revival/`. Module names sanitized via regex to prevent path traversal.
 - **UI guard**: `_isInitializing` flag prevents toggle event handlers from firing during UI setup.
 - **Exception propagation**: `CoreService.EnableModuleAsync` re-throws after cleanup so UI can show error dialogs and revert toggles.
 - **CancellationToken**: All `IModule` async methods accept optional `CancellationToken`.
+- **Localization**: Static EN/RO string dictionaries in `Localization/Strings.cs`, runtime switching via `ApplyLanguage()`. Language preference persisted in `AppSettings.cs`.
+
+### Dual-Mode Rendering (OverlayWindow)
+
+The taskbar module supports two rendering modes, selectable via `RenderMode` enum (Auto/Overlay/Legacy):
+
+- **Overlay mode** (documented DWM APIs — update-proof):
+  - Creates transparent `WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE` popup windows positioned over each taskbar.
+  - Applies effects via `DwmExtendFrameIntoClientArea`, `DwmSetWindowAttribute(DWMWA_SYSTEMBACKDROP_TYPE)` (build ≥22621), or `DwmEnableBlurBehindWindow` (build ≥22000).
+  - Runs on a dedicated STA thread with Win32 message pump (`GetMessage`/`DispatchMessage`).
+  - `SetTimer` at 100ms for repositioning, auto-hide detection (≤2px), z-order re-assertion, new monitor detection.
+
+- **Legacy mode** (undocumented — may break on Windows updates):
+  - Uses `SetWindowCompositionAttribute` with `ACCENT_POLICY` applied in-place to taskbar window handles (`Shell_TrayWnd` + `Shell_SecondaryTrayWnd`).
+  - 100ms timer re-applies accent to resist Windows resetting the effect.
+
+- **Auto mode**: selects overlay on build ≥22000, legacy on older builds.
 
 ### Win32 Interop
-
-The project uses `SetWindowCompositionAttribute` with `ACCENT_POLICY` to apply transparency effects directly to taskbar window handles (`Shell_TrayWnd` + `Shell_SecondaryTrayWnd`). No overlay windows are created — effects are applied in-place.
 
 Key P/Invoke surface:
 - `user32.dll`: FindWindow, FindWindowEx, SetWindowCompositionAttribute, EnumDisplayMonitors, GetMonitorInfo, IsWindow, GetWindowRect, ShowWindow, SetForegroundWindow, SendMessage, LoadImage
@@ -85,4 +100,5 @@ Win7Revival.App/Assets/
 - TaskbarModule unit tests (needs `ITaskbarDetector` interface for mocking)
 - Classic Start Menu module (Sprint 2)
 - Theme Engine module (Sprint 3)
-- CI/CD with GitHub Actions
+- Additional localization languages
+- Taskbar color tint improvements (gradient, per-monitor tint)
