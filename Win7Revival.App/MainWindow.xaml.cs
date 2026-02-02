@@ -71,6 +71,10 @@ namespace Win7Revival.App
             EffectAcrylicItem.Content = Strings.Get("EffectAcrylic");
             EffectMicaItem.Content = Strings.Get("EffectMica");
             EffectGlassItem.Content = Strings.Get("EffectGlass");
+            RenderModeLabel.Text = Strings.Get("RenderMode");
+            RenderModeAutoItem.Content = Strings.Get("RenderModeAuto");
+            RenderModeOverlayItem.Content = Strings.Get("RenderModeOverlay");
+            RenderModeLegacyItem.Content = Strings.Get("RenderModeLegacy");
             OpacityLabel.Text = Strings.Get("Opacity");
             ColorTintLabel.Text = Strings.Get("ColorTint");
 
@@ -162,6 +166,9 @@ namespace Win7Revival.App
                 EffectType.Glass => 3,
                 _ => 0
             };
+
+            // Render mode
+            RenderModeComboBox.SelectedIndex = (int)settings.RenderMode;
 
             // Color tint
             TintRSlider.Value = settings.TintR;
@@ -256,12 +263,21 @@ namespace Win7Revival.App
             _ => EffectType.Blur
         };
 
+        private RenderMode GetSelectedRenderMode() => RenderModeComboBox.SelectedIndex switch
+        {
+            0 => RenderMode.Auto,
+            1 => RenderMode.Overlay,
+            2 => RenderMode.Legacy,
+            _ => RenderMode.Auto
+        };
+
         private void ApplyCurrentSettings()
         {
             if (_isInitializing || _taskbarModule == null) return;
             _taskbarModule.UpdateSettings(
                 (int)OpacitySlider.Value, GetSelectedEffect(),
-                (byte)TintRSlider.Value, (byte)TintGSlider.Value, (byte)TintBSlider.Value);
+                (byte)TintRSlider.Value, (byte)TintGSlider.Value, (byte)TintBSlider.Value,
+                GetSelectedRenderMode());
         }
 
         private void UpdateColorPreview()
@@ -272,6 +288,11 @@ namespace Win7Revival.App
         }
 
         private void EffectComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            ApplyCurrentSettings();
+        }
+
+        private void RenderModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             ApplyCurrentSettings();
         }
@@ -318,6 +339,7 @@ namespace Win7Revival.App
             OpacitySlider.Value = 80;
             OpacityValueText.Text = "80%";
             EffectComboBox.SelectedIndex = 0;
+            RenderModeComboBox.SelectedIndex = 0;
             TintRSlider.Value = 0;
             TintGSlider.Value = 0;
             TintBSlider.Value = 0;
@@ -327,7 +349,7 @@ namespace Win7Revival.App
             UpdateColorPreview();
             _isInitializing = false;
 
-            _taskbarModule.UpdateSettings(80, EffectType.Blur, 0, 0, 0);
+            _taskbarModule.UpdateSettings(80, EffectType.Blur, 0, 0, 0, RenderMode.Auto);
         }
 
         private async void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

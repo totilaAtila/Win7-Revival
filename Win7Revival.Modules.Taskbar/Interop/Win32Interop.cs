@@ -282,5 +282,86 @@ namespace Win7Revival.Modules.Taskbar.Interop
 
         public static readonly IntPtr HWND_MESSAGE = new IntPtr(-3);
         public const uint WM_QUIT = 0x0012;
+
+        // ================================================================
+        // Window Styles — popup overlay windows
+        // ================================================================
+        public const int WS_POPUP = unchecked((int)0x80000000);
+
+        public const uint SWP_NOMOVE = 0x0002;
+        public const uint SWP_NOSIZE = 0x0001;
+
+        public const int SW_HIDE = 0;
+        public const int SW_SHOWNOACTIVATE = 4;
+
+        public const uint WM_TIMER = 0x0113;
+        public const uint WM_DISPLAYCHANGE = 0x007E;
+        public const uint WM_DPICHANGED = 0x02E0;
+
+        // ================================================================
+        // DWM — Documented Desktop Window Manager APIs
+        // ================================================================
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MARGINS
+        {
+            public int cxLeftWidth;
+            public int cxRightWidth;
+            public int cyTopHeight;
+            public int cyBottomHeight;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct DWM_BLURBEHIND
+        {
+            public uint dwFlags;
+            [MarshalAs(UnmanagedType.Bool)]
+            public bool fEnable;
+            public IntPtr hRgnBlur;
+            [MarshalAs(UnmanagedType.Bool)]
+            public bool fTransitionOnMaximized;
+        }
+
+        public const uint DWM_BB_ENABLE = 0x00000001;
+
+        /// <summary>DWMWA_USE_IMMERSIVE_DARK_MODE — required for backdrop effects.</summary>
+        public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
+        /// <summary>DWMWA_SYSTEMBACKDROP_TYPE — documented since Win11 22H2 (build 22621).</summary>
+        public const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
+
+        // DWMSBT values for DWMWA_SYSTEMBACKDROP_TYPE
+        public const int DWMSBT_NONE = 1;
+        public const int DWMSBT_MAINWINDOW = 2;       // Mica
+        public const int DWMSBT_TRANSIENTWINDOW = 3;   // Acrylic
+        public const int DWMSBT_TABBEDWINDOW = 4;      // Mica Alt
+
+        [DllImport("dwmapi.dll")]
+        public static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS pMarInset);
+
+        [DllImport("dwmapi.dll")]
+        public static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute,
+            ref int pvAttribute, int cbAttribute);
+
+        [DllImport("dwmapi.dll")]
+        public static extern int DwmEnableBlurBehindWindow(IntPtr hwnd, ref DWM_BLURBEHIND pBlurBehind);
+
+        // ================================================================
+        // P/Invoke — ShowWindow, SetTimer, KillTimer, UnregisterClass
+        // ================================================================
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        public static extern UIntPtr SetTimer(IntPtr hWnd, UIntPtr nIDEvent,
+            uint uElapse, IntPtr lpTimerFunc);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool KillTimer(IntPtr hWnd, UIntPtr uIDEvent);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool UnregisterClass(string lpClassName, IntPtr hInstance);
     }
 }
