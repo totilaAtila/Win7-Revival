@@ -1,72 +1,58 @@
-## .NET / Visual Studio
+# Build outputs
 bin/
 obj/
+out/
+build/
+*.exe
+*.dll
+*.pdb
+
+# Visual Studio / VSCode
+.vs/
+.vscode/
 *.user
 *.suo
-*.userosscache
-*.sln.docstates
 *.userprefs
+.DS_Store
 
-## Build results
-[Dd]ebug/
-[Rr]elease/
-x64/
-x86/
-build/
-bld/
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
 
-## NuGet
-*.nupkg
-*.snupkg
-**/packages/*
-!**/packages/build/
+# C++ intermediates
+*.obj
+*.o
+*.ilk
+*.iobj
+*.ipdb
+*.idb
+
+# C# intermediates
+*.cache
 project.lock.json
 project.fragment.lock.json
 artifacts/
 
-## Visual Studio
-.vs/
-*.rsuser
-*.cache
-*.ncb
-*.opendb
-*.opensdf
-*.sdf
-*.psess
-*.vsp
-*.vspx
-*.sap
-*.e2e
+# Logs
+*.log
+CrystalFrame.log
 
-## Rider / JetBrains
-.idea/
-*.sln.iml
+# Config (optional - uncomment if you don't want to commit user configs)
+# config.json
 
-## MSIX
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# Windows App SDK
 AppPackages/
 BundleArtifacts/
-*.msix
-*.msixbundle
-*.appx
-*.appxbundle
-*.appxupload
+Package.StoreAssociation.xml
 
-## OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-## Settings (runtime generated)
-Win7RevivalSettings/
-
-## Secrets
-*.env
-credentials.json
-appsettings.*.json
-!appsettings.json
-
-## Local tooling/output
-publish/
-.claude/
-nul
-*.log
+# Temporary files
+*.tmp
+*.temp
+~$*

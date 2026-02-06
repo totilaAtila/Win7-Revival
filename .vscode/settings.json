@@ -1,7 +1,0 @@
-{
-  "dotnet.defaultSolution": "Win7Revival.sln",
-  "files.exclude": {
-    "**/bin": true,
-    "**/obj": true
-  }
-}
