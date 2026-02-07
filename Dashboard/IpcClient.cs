@@ -47,6 +47,9 @@ namespace CrystalFrame.Dashboard
         private CancellationTokenSource _cts;
         private bool _disposed = false;
         
+        // ✅ ADDED: Signal for first successful connection
+        private TaskCompletionSource<bool> _firstConnectionTcs;
+        
         // Reconnection settings
         private static readonly int[] RetryDelaysMs = { 1000, 2000, 4000, 8000, 15000 };
         private const int MaxRetryDelay = 15000;
@@ -57,15 +60,35 @@ namespace CrystalFrame.Dashboard
         
         public bool IsConnected { get; private set; }
 
+        // ✅ MODIFIED: Now returns when first connection succeeds (or timeout)
         public async Task ConnectAsync()
         {
             _cts = new CancellationTokenSource();
-            await ConnectWithRetryAsync(_cts.Token);
+            _firstConnectionTcs = new TaskCompletionSource<bool>();
+            
+            // Start background reconnection loop (fire-and-forget)
+            _ = ConnectWithRetryAsync(_cts.Token);
+            
+            // Wait for first connection (max 10 seconds)
+            var timeoutTask = Task.Delay(10000);
+            var completedTask = await Task.WhenAny(_firstConnectionTcs.Task, timeoutTask);
+            
+            if (completedTask == timeoutTask)
+            {
+                throw new TimeoutException("Failed to connect to Core within 10 seconds");
+            }
+            
+            var connected = await _firstConnectionTcs.Task;
+            if (!connected)
+            {
+                throw new Exception("Initial connection failed");
+            }
         }
 
         private async Task ConnectWithRetryAsync(CancellationToken ct)
         {
             int attempt = 0;
+            bool firstConnectionAttempted = false;
             
             while (!ct.IsCancellationRequested)
             {
@@ -81,6 +104,13 @@ namespace CrystalFrame.Dashboard
                     ConnectionChanged?.Invoke(this, true);
                     Debug.WriteLine("IPC connected to Core");
                     
+                    // ✅ ADDED: Signal first connection success
+                    if (!firstConnectionAttempted)
+                    {
+                        _firstConnectionTcs?.TrySetResult(true);
+                        firstConnectionAttempted = true;
+                    }
+                    
                     attempt = 0;  // Reset on successful connection
                     
                     // Start listener (will return when connection drops)
@@ -89,6 +119,13 @@ namespace CrystalFrame.Dashboard
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
                     Debug.WriteLine($"IPC connection failed: {ex.Message}");
+                    
+                    // ✅ ADDED: Signal first connection failure
+                    if (!firstConnectionAttempted)
+                    {
+                        // Don't fail immediately, will retry
+                        firstConnectionAttempted = false;
+                    }
                 }
                 
                 // Connection lost or failed — clean up and retry
@@ -107,6 +144,12 @@ namespace CrystalFrame.Dashboard
                 
                 try { await Task.Delay(delay, ct); }
                 catch (TaskCanceledException) { break; }
+            }
+            
+            // ✅ ADDED: If loop exits without connection, signal failure
+            if (!firstConnectionAttempted)
+            {
+                _firstConnectionTcs?.TrySetResult(false);
             }
         }
 
