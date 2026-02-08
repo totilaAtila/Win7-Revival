@@ -57,3 +57,6 @@ Package.StoreAssociation.xml
 *.temp
 ~$*
 nul
+
+# Publishing outputs
+publish/
