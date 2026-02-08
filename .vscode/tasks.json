@@ -32,8 +32,10 @@
             "args": [
                 "-ExecutionPolicy",
                 "Bypass",
-                "-Command",
-                "& { $version = Read-Host 'Enter version (e.g., 1.0.0)'; if ($version) { .\\publish.ps1 -Version $version; Write-Host '`nPackage created! Opening folder...' -ForegroundColor Green; Start-Sleep 2; explorer .\\publish } else { Write-Host 'Version required!' -ForegroundColor Red } }"
+                "-File",
+                "${workspaceFolder}/.vscode/publish-prompt.ps1",
+                "-ScriptPath",
+                "${workspaceFolder}/publish.ps1"
             ],
             "presentation": {
                 "reveal": "always",
@@ -52,8 +54,10 @@
             "args": [
                 "-ExecutionPolicy",
                 "Bypass",
-                "-Command",
-                "& { $version = Read-Host 'Enter version (e.g., 1.0.0)'; if ($version) { .\\publish-standalone.ps1 -Version $version; Write-Host '`nStandalone package created! Opening folder...' -ForegroundColor Green; Start-Sleep 2; explorer .\\publish } else { Write-Host 'Version required!' -ForegroundColor Red } }"
+                "-File",
+                "${workspaceFolder}/.vscode/publish-prompt.ps1",
+                "-ScriptPath",
+                "${workspaceFolder}/publish-standalone.ps1"
             ],
             "presentation": {
                 "reveal": "always",
@@ -72,8 +76,11 @@
             "args": [
                 "-ExecutionPolicy",
                 "Bypass",
-                "-Command",
-                "& { $version = Read-Host 'Enter version (e.g., 1.0.0)'; if ($version) { .\\create-release.ps1 -Version $version; Write-Host '`nRelease packages created!' -ForegroundColor Green; Write-Host 'Next: Create release on GitHub and upload the ZIP files' -ForegroundColor Yellow; Start-Sleep 3; explorer .\\publish } else { Write-Host 'Version required!' -ForegroundColor Red } }"
+                "-File",
+                "${workspaceFolder}/.vscode/publish-prompt.ps1",
+                "-ScriptPath",
+                "${workspaceFolder}/create-release.ps1",
+                "-IsRelease"
             ],
             "presentation": {
                 "reveal": "always",
