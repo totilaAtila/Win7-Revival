@@ -53,14 +53,16 @@ Write-Host "  [OK] Core.dll built successfully" -ForegroundColor Green
 
 # Step 3: Publish Dashboard as self-contained with EVERYTHING
 Write-Host "`n[3/6] Publishing Dashboard (self-contained with .NET runtime)..." -ForegroundColor Yellow
-Push-Location Dashboard
 
-$publishPath = Join-Path ".." "publish\CrystalFrame-v$Version-Standalone"
+# Set publish path (absolute)
+$publishPath = Join-Path (Get-Location) "publish\CrystalFrame-v$Version-Standalone"
 
 # Remove old publish if exists
 if (Test-Path $publishPath) {
     Remove-Item $publishPath -Recurse -Force
 }
+
+Push-Location Dashboard
 
 dotnet publish `
     -c Release `
