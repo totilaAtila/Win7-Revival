@@ -9,7 +9,8 @@ build/
 
 # Visual Studio / VSCode
 .vs/
-.vscode/
+.vscode/settings.json
+.vscode/*.code-workspace
 *.user
 *.suo
 *.userprefs

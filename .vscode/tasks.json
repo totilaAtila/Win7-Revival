@@ -1,0 +1,152 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "🏗️ Build (Full)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/build.ps1"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false,
+                "echo": true,
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "📦 Publish - Framework Dependent",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& { $version = Read-Host 'Enter version (e.g., 1.0.0)'; if ($version) { .\\publish.ps1 -Version $version; Write-Host '`nPackage created! Opening folder...' -ForegroundColor Green; Start-Sleep 2; explorer .\\publish } else { Write-Host 'Version required!' -ForegroundColor Red } }"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true,
+                "echo": true,
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "📦 Publish - Standalone",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& { $version = Read-Host 'Enter version (e.g., 1.0.0)'; if ($version) { .\\publish-standalone.ps1 -Version $version; Write-Host '`nStandalone package created! Opening folder...' -ForegroundColor Green; Start-Sleep 2; explorer .\\publish } else { Write-Host 'Version required!' -ForegroundColor Red } }"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true,
+                "echo": true,
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "🚀 Create GitHub Release",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& { $version = Read-Host 'Enter version (e.g., 1.0.0)'; if ($version) { .\\create-release.ps1 -Version $version; Write-Host '`nRelease packages created!' -ForegroundColor Green; Write-Host 'Next: Create release on GitHub and upload the ZIP files' -ForegroundColor Yellow; Start-Sleep 3; explorer .\\publish } else { Write-Host 'Version required!' -ForegroundColor Red } }"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true,
+                "echo": true,
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "🧹 Clean All",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "Remove-Item .\\Core\\build -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item .\\Dashboard\\bin -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item .\\Dashboard\\obj -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item .\\publish -Recurse -Force -ErrorAction SilentlyContinue; Write-Host 'Clean complete!' -ForegroundColor Green"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false,
+                "echo": true,
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "▶️ Run Dashboard",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Dashboard\\bin\\x64\\Release\\net8.0-windows10.0.22621.0\\CrystalFrame.Dashboard.exe'"
+            ],
+            "dependsOn": ["🏗️ Build (Full)"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false,
+                "echo": true,
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "🎯 Quick Publish (1.0.0)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/create-release.ps1",
+                "-Version",
+                "1.0.0"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true,
+                "echo": true,
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
