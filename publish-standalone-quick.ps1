@@ -26,7 +26,7 @@ dotnet publish `
     -r win-x64 `
     --self-contained true `
     -p:PublishSingleFile=false `
-    -p:PublishReadyToRun=true `
+    -p:PublishReadyToRun=false `
     -p:IncludeNativeLibrariesForSelfExtract=true `
     -o $publishPath
 

@@ -68,7 +68,7 @@ dotnet publish `
     --self-contained true `
     -p:PublishSingleFile=false `
     -p:PublishTrimmed=false `
-    -p:PublishReadyToRun=true `
+    -p:PublishReadyToRun=false `
     -p:IncludeNativeLibrariesForSelfExtract=true `
     -p:IncludeAllContentForSelfExtract=true `
     -p:EnableCompressionInSingleFile=true `
