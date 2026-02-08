@@ -17,7 +17,7 @@ $ErrorActionPreference = "Stop"
 Write-Host "[1/6] Cleaning previous builds..." -ForegroundColor Yellow
 if (Test-Path ".\Core\build") {
     Remove-Item ".\Core\build" -Recurse -Force
-    Write-Host "  ✓ Core build cleaned" -ForegroundColor Green
+    Write-Host "  [OK] Core build cleaned" -ForegroundColor Green
 }
 
 # Step 2: Build Core (C++) with heap-friendly settings
@@ -49,7 +49,7 @@ if ($LASTEXITCODE -ne 0) {
 Pop-Location
 Pop-Location
 
-Write-Host "  ✓ Core.dll built successfully" -ForegroundColor Green
+Write-Host "  [OK] Core.dll built successfully" -ForegroundColor Green
 
 # Step 3: Publish Dashboard as self-contained with EVERYTHING
 Write-Host "`n[3/6] Publishing Dashboard (self-contained with .NET runtime)..." -ForegroundColor Yellow
@@ -82,13 +82,13 @@ if ($LASTEXITCODE -ne 0) {
 
 Pop-Location
 
-Write-Host "  ✓ Dashboard published with .NET runtime" -ForegroundColor Green
+Write-Host "  [OK] Dashboard published with .NET runtime" -ForegroundColor Green
 
 # Step 4: Copy Core.dll
 Write-Host "`n[4/6] Copying native Core.dll..." -ForegroundColor Yellow
 $coreSource = ".\Core\build\bin\Release\CrystalFrame.Core.dll"
 Copy-Item $coreSource -Destination $publishPath -Force
-Write-Host "  ✓ Core.dll copied" -ForegroundColor Green
+Write-Host "  [OK] Core.dll copied" -ForegroundColor Green
 
 # Step 5: Create comprehensive documentation
 Write-Host "`n[5/6] Creating user documentation..." -ForegroundColor Yellow
@@ -250,7 +250,7 @@ Package Type: Self-Contained (includes .NET runtime)
 Dependencies: NONE
 "@ | Out-File -FilePath (Join-Path $publishPath "VERSION.txt") -Encoding UTF8
 
-Write-Host "  ✓ Documentation created" -ForegroundColor Green
+Write-Host "  [OK] Documentation created" -ForegroundColor Green
 
 # Step 6: Create ZIP archive
 Write-Host "`n[6/6] Creating ZIP archive..." -ForegroundColor Yellow
@@ -265,28 +265,28 @@ $zipSize = (Get-Item $zipPath).Length / 1MB
 
 Write-Host ""
 Write-Host "==================================================================" -ForegroundColor Green
-Write-Host "  ✅ COMPLETE STANDALONE PACKAGE CREATED SUCCESSFULLY!" -ForegroundColor Green
+Write-Host "  COMPLETE STANDALONE PACKAGE CREATED SUCCESSFULLY!" -ForegroundColor Green
 Write-Host "==================================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "📦 Package Details:" -ForegroundColor Cyan
+Write-Host "Package Details:" -ForegroundColor Cyan
 Write-Host "  Location: $zipPath" -ForegroundColor White
 Write-Host "  Size: $([math]::Round($zipSize, 2)) MB" -ForegroundColor White
 Write-Host "  Type: Self-Contained (ZERO dependencies)" -ForegroundColor White
 Write-Host ""
-Write-Host "📋 What's Included:" -ForegroundColor Cyan
-Write-Host "  ✅ .NET 8 Runtime (embedded)" -ForegroundColor Green
-Write-Host "  ✅ CrystalFrame Core Engine" -ForegroundColor Green
-Write-Host "  ✅ Complete Dashboard Application" -ForegroundColor Green
-Write-Host "  ✅ All Required Libraries" -ForegroundColor Green
-Write-Host "  ✅ User Documentation" -ForegroundColor Green
+Write-Host "What's Included:" -ForegroundColor Cyan
+Write-Host "  [OK] .NET 8 Runtime (embedded)" -ForegroundColor Green
+Write-Host "  [OK] CrystalFrame Core Engine" -ForegroundColor Green
+Write-Host "  [OK] Complete Dashboard Application" -ForegroundColor Green
+Write-Host "  [OK] All Required Libraries" -ForegroundColor Green
+Write-Host "  [OK] User Documentation" -ForegroundColor Green
 Write-Host ""
-Write-Host "👤 User Experience:" -ForegroundColor Cyan
-Write-Host "  • Extract ZIP" -ForegroundColor White
-Write-Host "  • Run CrystalFrame.Dashboard.exe" -ForegroundColor White
-Write-Host "  • Click Start Core" -ForegroundColor White
-Write-Host "  • Done! No installation needed!" -ForegroundColor White
+Write-Host "User Experience:" -ForegroundColor Cyan
+Write-Host "  - Extract ZIP" -ForegroundColor White
+Write-Host "  - Run CrystalFrame.Dashboard.exe" -ForegroundColor White
+Write-Host "  - Click Start Core" -ForegroundColor White
+Write-Host "  - Done! No installation needed!" -ForegroundColor White
 Write-Host ""
-Write-Host "🚀 Ready for Distribution!" -ForegroundColor Yellow
+Write-Host "Ready for Distribution!" -ForegroundColor Yellow
 Write-Host "  Users can run this on ANY Windows 10/11 PC without installing anything!" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Opening publish folder..." -ForegroundColor Cyan
@@ -295,5 +295,5 @@ Start-Sleep -Seconds 2
 explorer ".\publish"
 
 Write-Host ""
-Write-Host "🎉 Package ready for GitHub Release or direct distribution!" -ForegroundColor Green
+Write-Host "Package ready for GitHub Release or direct distribution!" -ForegroundColor Green
 Write-Host ""
