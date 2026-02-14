@@ -680,7 +680,7 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
 
         default:
-            return DefWindowProc(hwnd, msg, wParam, lParam);
+            return DefWindowProc(m_hwnd, msg, wParam, lParam);
     }
 }
 
