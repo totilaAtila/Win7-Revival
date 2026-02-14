@@ -15,6 +15,10 @@ build/
 *.suo
 *.userprefs
 .DS_Store
+CppProperties.json
+
+# Claude Code (local session data)
+.claude/
 
 # CMake
 CMakeCache.txt
