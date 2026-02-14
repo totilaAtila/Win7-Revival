@@ -1,0 +1,56 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── C++ Core (CMake + MSVC) ──────────────────────────────────────
+      - name: Configure C++ Core (CMake)
+        run: |
+          cmake -S Core -B Core/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build C++ Core
+        run: cmake --build Core/build --config Release --parallel
+
+      # ── C# Dashboard (.NET 8 / WinUI 3) ─────────────────────────────
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore NuGet packages
+        run: dotnet restore Dashboard/CrystalFrame.Dashboard.csproj
+
+      - name: Build Dashboard
+        run: >
+          dotnet build Dashboard/CrystalFrame.Dashboard.csproj
+          --configuration Release
+          --no-restore
+          -p:Platform=x64
+
+      # ── Upload artifacts ──────────────────────────────────────────────
+      - name: Upload Core DLL
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: CrystalFrame.Core
+          path: Core/build/bin/Release/CrystalFrame.Core.dll
+          if-no-files-found: warn
+
+      - name: Upload Dashboard
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: CrystalFrame.Dashboard
+          path: Dashboard/bin/x64/Release/net8.0-windows10.0.22621.0/
+          if-no-files-found: warn
