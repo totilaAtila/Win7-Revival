@@ -93,7 +93,7 @@ namespace CrystalFrame.Dashboard
             _exitRequested = true;
             CloseDetailWindow();
             _trayIconManager?.Remove();
-            try   { await _viewModel.OnDashboardClosingAsync(); }
+            try   { await _viewModel.OnDashboardClosingAsync(forceShutdown: true); }
             catch (Exception ex) { Debug.WriteLine($"Error during exit: {ex.Message}"); }
             _appWindow.Destroy();
         }

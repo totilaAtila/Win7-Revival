@@ -473,14 +473,16 @@ namespace CrystalFrame.Dashboard
         }
 
         /// <summary>
-        /// Called when Dashboard closes
+        /// Called when Dashboard closes.
+        /// forceShutdown=true (Exit din tray) → Core se oprește întotdeauna, indiferent de CoreEnabled.
+        /// forceShutdown=false (comportament vechi) → Core rămâne activ dacă CoreEnabled=true.
         /// </summary>
-        public async Task OnDashboardClosingAsync()
+        public async Task OnDashboardClosingAsync(bool forceShutdown = false)
         {
-            if (!CoreEnabled)
+            if (forceShutdown || !CoreEnabled)
             {
-                Debug.WriteLine("CoreEnabled=false, shutting down Core");
-                _core.Dispose(); // Dispose calls Shutdown internally
+                Debug.WriteLine($"Shutting down Core (forceShutdown={forceShutdown}, CoreEnabled={CoreEnabled})");
+                _core.Dispose(); // Dispose calls Shutdown → RestoreWindow on all taskbars
             }
             else
             {
