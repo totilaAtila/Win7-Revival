@@ -51,7 +51,8 @@ public:
 
 private:
     bool m_running = false;
-    UINT_PTR m_timerId = 0;
+    ULONGLONG m_lastRefreshTick = 0;
+    ULONGLONG m_lastDetectTick  = 0;
     bool m_taskbarFound = false;
     bool m_startDetected = false;
     bool m_taskbarEnabled = true;

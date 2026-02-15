@@ -183,7 +183,7 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
     bool isStartMenu = (hwnd == m_hwndStart);
     const char* windowType = isStartMenu ? "START MENU" : "TASKBAR";
 
-    CF_LOG(Info, "[" << windowType << "] ApplyTransparencyWithColor called: HWND=0x"
+    CF_LOG(Debug, "[" << windowType << "] ApplyTransparencyWithColor: HWND=0x"
                  << std::hex << reinterpret_cast<uintptr_t>(hwnd) << std::dec
                  << ", opacity=" << opacity << ", enabled=" << enabled
                  << ", RGB=(" << r << "," << g << "," << b << ")"
@@ -212,11 +212,10 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
         accent.GradientColor = gradientColor;
         accent.AccentFlags = 2;
 
-        CF_LOG(Info, "[" << windowType << "] Applying "
+        CF_LOG(Debug, "[" << windowType << "] Applying "
                      << (useBlur ? "ACRYLIC" : "TRANSPARENTGRADIENT")
-                     << ": opacity=" << opacity << "%, alpha=" << (int)alpha
-                     << ", RGB=(" << r << "," << g << "," << b << ")"
-                     << ", GradientColor=0x" << std::hex << gradientColor << std::dec);
+                     << ": opacity=" << opacity << "%, GradientColor=0x"
+                     << std::hex << gradientColor << std::dec);
     } else {
         accent.AccentState = ACCENT_DISABLED;
         accent.GradientColor = 0;
@@ -231,8 +230,8 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
     data.cbData = sizeof(accent);
 
     BOOL result = m_setWindowCompositionAttribute(hwnd, &data);
-    CF_LOG(Info, "SetWindowCompositionAttribute result: " << result
-                 << " for HWND 0x" << std::hex << reinterpret_cast<uintptr_t>(hwnd) << std::dec);
+    CF_LOG(Debug, "SetWindowCompositionAttribute result: " << result
+                  << " for HWND 0x" << std::hex << reinterpret_cast<uintptr_t>(hwnd) << std::dec);
 }
 
 void Renderer::RestoreWindow(HWND hwnd) {

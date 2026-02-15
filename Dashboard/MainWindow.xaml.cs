@@ -96,6 +96,7 @@ namespace CrystalFrame.Dashboard
             try   { await _viewModel.OnDashboardClosingAsync(forceShutdown: true); }
             catch (Exception ex) { Debug.WriteLine($"Error during exit: {ex.Message}"); }
             _appWindow.Destroy();
+            Environment.Exit(0);
         }
 
         // ── Inițializare asincronă ────────────────────────────────────────────────

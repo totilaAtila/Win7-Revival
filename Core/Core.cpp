@@ -98,9 +98,8 @@ bool Core::Initialize() {
         return false;
     }
 
-    // Create refresh timer (store ID so it can be killed in Shutdown)
-    m_timerId = SetTimer(nullptr, 0, REFRESH_INTERVAL_MS, nullptr);
-    CF_LOG(Info, "Refresh timer created with ID: " << m_timerId);
+    m_lastRefreshTick = GetTickCount64();
+    m_lastDetectTick  = GetTickCount64();
 
     CF_LOG(Info, "=== CrystalFrame Core Ready ===");
 
@@ -121,34 +120,37 @@ bool Core::ProcessMessages() {
             m_running = false;
             return false;
         }
-
-        if (msg.message == WM_TIMER && msg.hwnd == nullptr) {
-            // Thread timer (no window) - handle manually, skip DispatchMessage
-            RefreshTransparency();
-            continue;
-        }
-
         TranslateMessage(&msg);
         DispatchMessage(&msg);
+    }
+
+    ULONGLONG now = GetTickCount64();
+
+    // Refresh transparency every ~100ms (called on background thread — fixes thread-affinity
+    // issue with the old SetTimer approach which fired on UI thread but was processed here)
+    if (now - m_lastRefreshTick >= REFRESH_INTERVAL_MS) {
+        m_lastRefreshTick = now;
+        RefreshTransparency();
+    }
+
+    // Re-detect taskbar every 2s to catch alignment / position changes that reset SWCA
+    constexpr ULONGLONG REDETECT_INTERVAL_MS = 2000;
+    if (now - m_lastDetectTick >= REDETECT_INTERVAL_MS) {
+        m_lastDetectTick = now;
+        if (m_locator) m_locator->RefreshTaskbar();
     }
 
     return true;
 }
 
 void Core::Shutdown() {
-    if (!m_running && !m_timerId) {
+    if (!m_running) {
         return; // Already shut down
     }
 
     CF_LOG(Info, "Core shutdown initiated");
 
     m_running = false;
-
-    // Kill the refresh timer first
-    if (m_timerId) {
-        KillTimer(nullptr, m_timerId);
-        m_timerId = 0;
-    }
 
     // Reset all modules - destructors call their own Shutdown()
     m_startMenuWindow.reset();

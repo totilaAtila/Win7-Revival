@@ -57,6 +57,9 @@ public:
     TaskbarInfo GetTaskbarInfo() const;
     std::vector<TaskbarInfo> GetTaskbarInfoList() const;
     StartInfo GetStartInfo() const;
+
+    // Re-run taskbar detection (call periodically to catch alignment/position changes)
+    void RefreshTaskbar() { DetectTaskbar(); }
     
 private:
     IShellTargetCallback* m_callback = nullptr;
