@@ -16,28 +16,40 @@ namespace CrystalFrame.Dashboard
     {
         private MainViewModel _viewModel;
         private bool _isInitialized = false;
+        private string _activePanel = "";
+        private AppWindow _appWindow;
+        private DetailWindow? _detailWindow;
+
+        private const int MainFrameWidth  = 200;
+        private const int WindowHeight    = 340;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            // Set window size and icon
-            var hwnd = WindowNative.GetWindowHandle(this);
+            // Setup fereastră
+            var hwnd     = WindowNative.GetWindowHandle(this);
             var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
-            var appWindow = AppWindow.GetFromWindowId(windowId);
-            appWindow.Resize(new SizeInt32(480, 530));
+            _appWindow   = AppWindow.GetFromWindowId(windowId);
+            _appWindow.Resize(new SizeInt32(MainFrameWidth, WindowHeight));
 
-            // Set window icon
+            // Blocat redimensionare manuală
+            if (_appWindow.Presenter is OverlappedPresenter presenter)
+            {
+                presenter.IsResizable   = false;
+                presenter.IsMaximizable = false;
+            }
+
+            // Icoană
             var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "app.ico");
             if (System.IO.File.Exists(iconPath))
-            {
-                appWindow.SetIcon(iconPath);
-            }
+                _appWindow.SetIcon(iconPath);
 
             _viewModel = new MainViewModel();
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
 
-            // Handle Dashboard closing - Core behavior depends on toggle state
+            RootGrid.DataContext = _viewModel;
+
             this.Closed += OnWindowClosed;
 
             _ = InitializeAsync();
@@ -45,15 +57,12 @@ namespace CrystalFrame.Dashboard
 
         private async void OnWindowClosed(object sender, WindowEventArgs e)
         {
-            try
-            {
-                await _viewModel.OnDashboardClosingAsync();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error during Dashboard close: {ex.Message}");
-            }
+            CloseDetailWindow();
+            try   { await _viewModel.OnDashboardClosingAsync(); }
+            catch (Exception ex) { Debug.WriteLine($"Error during close: {ex.Message}"); }
         }
+
+        // ── Inițializare asincronă ────────────────────────────────────────────────
 
         private async Task InitializeAsync()
         {
@@ -62,93 +71,52 @@ namespace CrystalFrame.Dashboard
                 var success = await _viewModel.InitializeAsync();
 
                 if (!success && !string.IsNullOrEmpty(_viewModel.ExtractionError))
-                {
-                    // Show extraction error dialog
                     await ShowExtractionErrorDialogAsync(_viewModel.ExtractionError);
-                }
 
-                // Update UI with loaded config - wrap in try/catch to handle partial failures
                 try
                 {
-                    TaskbarOpacitySlider.Value = _viewModel.TaskbarOpacity;
-                    StartOpacitySlider.Value = _viewModel.StartOpacity;
-                    TaskbarEnabledToggle.IsOn = _viewModel.TaskbarEnabled;
-                    StartEnabledToggle.IsOn = _viewModel.StartEnabled;
-                    CoreRunningToggle.IsOn = _viewModel.CoreRunning;
-
-                    TaskbarColorRSlider.Value = _viewModel.TaskbarColorR;
-                    TaskbarColorGSlider.Value = _viewModel.TaskbarColorG;
-                    TaskbarColorBSlider.Value = _viewModel.TaskbarColorB;
-
-                    StartBgColorRSlider.Value = _viewModel.StartBgColorR;
-                    StartBgColorGSlider.Value = _viewModel.StartBgColorG;
-                    StartBgColorBSlider.Value = _viewModel.StartBgColorB;
-
-                    StartTextColorRSlider.Value = _viewModel.StartTextColorR;
-                    StartTextColorGSlider.Value = _viewModel.StartTextColorG;
-                    StartTextColorBSlider.Value = _viewModel.StartTextColorB;
-
-                    StartShowControlPanel.IsChecked = _viewModel.StartShowControlPanel;
-                    StartShowDeviceManager.IsChecked = _viewModel.StartShowDeviceManager;
-                    StartShowInstalledApps.IsChecked = _viewModel.StartShowInstalledApps;
-                    StartShowDocuments.IsChecked = _viewModel.StartShowDocuments;
-                    StartShowPictures.IsChecked = _viewModel.StartShowPictures;
-                    StartShowVideos.IsChecked = _viewModel.StartShowVideos;
-                    StartShowRecentFiles.IsChecked = _viewModel.StartShowRecentFiles;
-
+                    CoreRunningToggle.IsOn  = _viewModel.CoreRunning;
                     RunAtStartupToggle.IsOn = _viewModel.RunAtStartup;
 
-                    UpdateOpacityText();
                     UpdateStatus();
                     UpdateCoreStatus();
+                    UpdateNavHighlight();
                 }
                 catch (Exception uiEx)
                 {
-                    Debug.WriteLine($"UI update failed: {uiEx.Message}, but continuing...");
-                    // Don't block initialization for UI update failures
+                    Debug.WriteLine($"UI update failed: {uiEx.Message}, continuing...");
                 }
 
-                // IMPORTANT: Set _isInitialized = true even if Core connection failed
-                // This allows UI controls to work for manual retry
                 _isInitialized = true;
-
-                Debug.WriteLine($"[INIT] Dashboard initialized successfully, _isInitialized={_isInitialized}");
+                Debug.WriteLine($"[INIT] Done, _isInitialized={_isInitialized}");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Dashboard initialization failed: {ex.Message}\n{ex.StackTrace}");
-                ConnectionStatusText.Text = $"✗ Initialization failed: {ex.Message}";
-
-                // Still enable UI for manual control even after initialization failure
+                Debug.WriteLine($"Init failed: {ex.Message}\n{ex.StackTrace}");
+                ConnectionStatusText.Text = $"✗ Init failed: {ex.Message}";
                 _isInitialized = true;
             }
         }
 
         private async Task ShowExtractionErrorDialogAsync(string errorMessage)
         {
-            // Wait for XamlRoot to be available
             if (this.Content.XamlRoot == null)
             {
                 var tcs = new TaskCompletionSource<bool>();
                 if (this.Content is FrameworkElement fe)
-                {
                     fe.Loaded += (s, e) => tcs.TrySetResult(true);
-                }
                 else
-                {
-                    tcs.TrySetResult(true); // Fallback, proceed anyway
-                }
+                    tcs.TrySetResult(true);
                 await tcs.Task;
             }
 
             var dialog = new ContentDialog
             {
-                Title = "Core Engine Extraction Failed",
-                Content = $"Could not extract the Core engine:\n\n{errorMessage}\n\nPlease try reinstalling CrystalFrame or check your antivirus settings.",
+                Title           = "Core Engine Extraction Failed",
+                Content         = $"Could not extract the Core engine:\n\n{errorMessage}\n\nPlease try reinstalling CrystalFrame or check your antivirus settings.",
                 CloseButtonText = "OK",
-                XamlRoot = this.Content.XamlRoot
+                XamlRoot        = this.Content.XamlRoot
             };
-
             await dialog.ShowAsync();
         }
 
@@ -157,11 +125,9 @@ namespace CrystalFrame.Dashboard
             DispatcherQueue.TryEnqueue(() =>
             {
                 UpdateStatus();
-                
                 if (e.PropertyName == nameof(MainViewModel.CoreRunning))
                 {
                     UpdateCoreStatus();
-                    // Sync toggle without re-triggering event
                     if (CoreRunningToggle.IsOn != _viewModel.CoreRunning)
                     {
                         _isInitialized = false;
@@ -172,33 +138,72 @@ namespace CrystalFrame.Dashboard
             });
         }
 
+        // ── Navigare ─────────────────────────────────────────────────────────────
+
+        private void Nav_Taskbar_Click(object sender, RoutedEventArgs e) => TogglePanel("Taskbar");
+        private void Nav_Start_Click(object sender, RoutedEventArgs e)   => TogglePanel("StartMenu");
+
+        private void TogglePanel(string panelName)
+        {
+            if (_activePanel == panelName)
+            {
+                _activePanel = "";
+                CloseDetailWindow();
+            }
+            else if (_detailWindow != null)
+            {
+                _activePanel = panelName;
+                _detailWindow.SwitchPanel(panelName);
+            }
+            else
+            {
+                _activePanel = panelName;
+                OpenDetailWindow(panelName);
+            }
+
+            UpdateNavHighlight();
+        }
+
+        private void OpenDetailWindow(string panelName)
+        {
+            _detailWindow = new DetailWindow(_viewModel, panelName);
+            _detailWindow.PositionNextTo(
+                _appWindow.Position.X + _appWindow.Size.Width,
+                _appWindow.Position.Y);
+            _detailWindow.Closed += OnDetailWindowClosed;
+            _detailWindow.Activate();
+        }
+
+        private void OnDetailWindowClosed(object sender, WindowEventArgs e)
+        {
+            _detailWindow = null;
+            _activePanel  = "";
+            UpdateNavHighlight();
+        }
+
+        private void CloseDetailWindow()
+        {
+            if (_detailWindow != null)
+            {
+                var dw = _detailWindow;
+                _detailWindow = null;
+                _activePanel  = "";
+                dw.Closed -= OnDetailWindowClosed;
+                dw.Close();
+            }
+        }
+
+        // ── Toggle handlers (MainWindow — solo Core + RunAtStartup) ──────────────
+
         private async void CoreRunning_Toggled(object sender, RoutedEventArgs e)
         {
             if (!_isInitialized) return;
-
             try
             {
                 await _viewModel.SetCoreRunningAsync(CoreRunningToggle.IsOn);
                 UpdateCoreStatus();
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Failed to toggle Core: {ex.Message}");
-            }
-        }
-
-        private async void TaskbarEnabled_Toggled(object sender, RoutedEventArgs e)
-        {
-            if (!_isInitialized) return;
-
-            try
-            {
-                await _viewModel.SetTaskbarEnabledAsync(TaskbarEnabledToggle.IsOn);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Failed to toggle taskbar: {ex.Message}");
-            }
+            catch (Exception ex) { Debug.WriteLine($"Failed to toggle Core: {ex.Message}"); }
         }
 
         private void RunAtStartup_Toggled(object sender, RoutedEventArgs e)
@@ -207,213 +212,25 @@ namespace CrystalFrame.Dashboard
             _viewModel.RunAtStartup = RunAtStartupToggle.IsOn;
         }
 
-        private void TaskbarOpacity_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+        // ── Highlight nav button ──────────────────────────────────────────────────
+
+        private void UpdateNavHighlight()
         {
-            int value = (int)e.NewValue;
-            TaskbarOpacityValue.Text = value.ToString();
+            var accentBrush = new SolidColorBrush(Color.FromArgb(255, 0, 120, 212));
 
-            if (!_isInitialized) return;
+            bool isDark = Application.Current.RequestedTheme == ApplicationTheme.Dark;
+            var inactiveBrush = isDark
+                ? new SolidColorBrush(Color.FromArgb(255, 26, 26, 26))
+                : new SolidColorBrush(Color.FromArgb(255, 240, 240, 240));
 
-            try
-            {
-                _viewModel.OnTaskbarOpacityChanged(value);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[UI] TaskbarOpacity error: {ex.Message}");
-            }
+            NavTaskbar.Background   = _activePanel == "Taskbar"   ? accentBrush : inactiveBrush;
+            NavStartMenu.Background = _activePanel == "StartMenu" ? accentBrush : inactiveBrush;
         }
 
-        private async void StartEnabled_Toggled(object sender, RoutedEventArgs e)
-        {
-            if (!_isInitialized) return;
-
-            try
-            {
-                await _viewModel.SetStartEnabledAsync(StartEnabledToggle.IsOn);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Failed to toggle start: {ex.Message}");
-            }
-        }
-
-        private void StartOpacity_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-        {
-            int value = (int)e.NewValue;
-            StartOpacityValue.Text = value.ToString();
-
-            if (!_isInitialized) return;
-
-            _viewModel.OnStartOpacityChanged(value);
-        }
-
-        private void TaskbarColorR_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-        {
-            if (!_isInitialized) return;
-            int value = (int)e.NewValue;
-            TaskbarColorRValue.Text = value.ToString();
-            UpdateTaskbarColorPreview();
-            _viewModel.OnTaskbarColorChanged(value, (int)TaskbarColorGSlider.Value, (int)TaskbarColorBSlider.Value);
-        }
-
-        private void TaskbarColorG_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-        {
-            if (!_isInitialized) return;
-            int value = (int)e.NewValue;
-            TaskbarColorGValue.Text = value.ToString();
-            UpdateTaskbarColorPreview();
-            _viewModel.OnTaskbarColorChanged((int)TaskbarColorRSlider.Value, value, (int)TaskbarColorBSlider.Value);
-        }
-
-        private void TaskbarColorB_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-        {
-            if (!_isInitialized) return;
-            int value = (int)e.NewValue;
-            TaskbarColorBValue.Text = value.ToString();
-            UpdateTaskbarColorPreview();
-            _viewModel.OnTaskbarColorChanged((int)TaskbarColorRSlider.Value, (int)TaskbarColorGSlider.Value, value);
-        }
-
-        private void UpdateTaskbarColorPreview()
-        {
-            var r = (byte)(int)TaskbarColorRSlider.Value;
-            var g = (byte)(int)TaskbarColorGSlider.Value;
-            var b = (byte)(int)TaskbarColorBSlider.Value;
-            TaskbarColorPreview.Background = new SolidColorBrush(Color.FromArgb(255, r, g, b));
-        }
-
-        // Start Menu Background Color Handlers
-        private void StartBgColorR_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-        {
-            if (!_isInitialized) return;
-            int value = (int)e.NewValue;
-            StartBgColorRValue.Text = value.ToString();
-            UpdateStartBgColorPreview();
-            _viewModel.OnStartBgColorChanged(value, (int)StartBgColorGSlider.Value, (int)StartBgColorBSlider.Value);
-        }
-
-        private void StartBgColorG_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-        {
-            if (!_isInitialized) return;
-            int value = (int)e.NewValue;
-            StartBgColorGValue.Text = value.ToString();
-            UpdateStartBgColorPreview();
-            _viewModel.OnStartBgColorChanged((int)StartBgColorRSlider.Value, value, (int)StartBgColorBSlider.Value);
-        }
-
-        private void StartBgColorB_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-        {
-            if (!_isInitialized) return;
-            int value = (int)e.NewValue;
-            StartBgColorBValue.Text = value.ToString();
-            UpdateStartBgColorPreview();
-            _viewModel.OnStartBgColorChanged((int)StartBgColorRSlider.Value, (int)StartBgColorGSlider.Value, value);
-        }
-
-        private void UpdateStartBgColorPreview()
-        {
-            var r = (byte)(int)StartBgColorRSlider.Value;
-            var g = (byte)(int)StartBgColorGSlider.Value;
-            var b = (byte)(int)StartBgColorBSlider.Value;
-            StartBgColorPreview.Background = new SolidColorBrush(Color.FromArgb(255, r, g, b));
-        }
-
-        // Start Menu Text Color Handlers
-        private void StartTextColorR_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-        {
-            if (!_isInitialized) return;
-            int value = (int)e.NewValue;
-            StartTextColorRValue.Text = value.ToString();
-            UpdateStartTextColorPreview();
-            _viewModel.OnStartTextColorChanged(value, (int)StartTextColorGSlider.Value, (int)StartTextColorBSlider.Value);
-        }
-
-        private void StartTextColorG_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-        {
-            if (!_isInitialized) return;
-            int value = (int)e.NewValue;
-            StartTextColorGValue.Text = value.ToString();
-            UpdateStartTextColorPreview();
-            _viewModel.OnStartTextColorChanged((int)StartTextColorRSlider.Value, value, (int)StartTextColorBSlider.Value);
-        }
-
-        private void StartTextColorB_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-        {
-            if (!_isInitialized) return;
-            int value = (int)e.NewValue;
-            StartTextColorBValue.Text = value.ToString();
-            UpdateStartTextColorPreview();
-            _viewModel.OnStartTextColorChanged((int)StartTextColorRSlider.Value, (int)StartTextColorGSlider.Value, value);
-        }
-
-        private void UpdateStartTextColorPreview()
-        {
-            var r = (byte)(int)StartTextColorRSlider.Value;
-            var g = (byte)(int)StartTextColorGSlider.Value;
-            var b = (byte)(int)StartTextColorBSlider.Value;
-            StartTextColorPreview.Background = new SolidColorBrush(Color.FromArgb(255, r, g, b));
-        }
-
-        // Start Menu Items Handler
-        private void StartMenuItem_Changed(object sender, RoutedEventArgs e)
-        {
-            if (!_isInitialized) return;
-
-            var checkbox = sender as CheckBox;
-            if (checkbox == null) return;
-
-            bool isChecked = checkbox.IsChecked ?? false;
-            string itemName = "";
-
-            if (checkbox == StartShowControlPanel) itemName = "ControlPanel";
-            else if (checkbox == StartShowDeviceManager) itemName = "DeviceManager";
-            else if (checkbox == StartShowInstalledApps) itemName = "InstalledApps";
-            else if (checkbox == StartShowDocuments) itemName = "Documents";
-            else if (checkbox == StartShowPictures) itemName = "Pictures";
-            else if (checkbox == StartShowVideos) itemName = "Videos";
-            else if (checkbox == StartShowRecentFiles) itemName = "RecentFiles";
-
-            if (!string.IsNullOrEmpty(itemName))
-            {
-                _viewModel.OnStartMenuItemChanged(itemName, isChecked);
-                Debug.WriteLine($"[StartMenuItem] {itemName} = {isChecked}");
-            }
-        }
-
-        private void UpdateOpacityText()
-        {
-            TaskbarOpacityValue.Text = ((int)TaskbarOpacitySlider.Value).ToString();
-            StartOpacityValue.Text = ((int)StartOpacitySlider.Value).ToString();
-        }
+        // ── Status helpers ────────────────────────────────────────────────────────
 
         private void UpdateStatus()
         {
-            // Taskbar status
-            if (_viewModel.TaskbarFound)
-            {
-                TaskbarStatusText.Text = "✓ Taskbar found";
-                TaskbarStatusText.Foreground = new SolidColorBrush(Colors.Green);
-            }
-            else
-            {
-                TaskbarStatusText.Text = "⚠ Taskbar not detected";
-                TaskbarStatusText.Foreground = new SolidColorBrush(Colors.Orange);
-            }
-
-            // Start status
-            if (_viewModel.StartDetected)
-            {
-                StartStatusText.Text = "✓ Start menu detected";
-                StartStatusText.Foreground = new SolidColorBrush(Colors.Green);
-            }
-            else
-            {
-                StartStatusText.Text = "⚠ Start menu not detected";
-                StartStatusText.Foreground = new SolidColorBrush(Colors.Orange);
-            }
-
-            // Connection status
             ConnectionStatusText.Text = _viewModel.ConnectionStatus;
         }
 
@@ -421,13 +238,13 @@ namespace CrystalFrame.Dashboard
         {
             if (_viewModel.CoreRunning)
             {
-                CoreStatusDot.Fill = new SolidColorBrush(Colors.LimeGreen);
-                CoreStatusDetail.Text = "Running — overlay effects active";
+                CoreStatusDot.Fill    = new SolidColorBrush(Colors.LimeGreen);
+                CoreStatusDetail.Text = "Running";
             }
             else
             {
-                CoreStatusDot.Fill = new SolidColorBrush(Colors.Gray);
-                CoreStatusDetail.Text = "Stopped — no overlay effects";
+                CoreStatusDot.Fill    = new SolidColorBrush(Colors.Gray);
+                CoreStatusDetail.Text = "Stopped";
             }
         }
     }
