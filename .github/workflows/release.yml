@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write   # required for gh release create
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── C++ Core (CMake + MSVC) ───────────────────────────────────────
+      - name: Build Core (C++)
+        run: |
+          cmake -S Core -B Core/build -G "Visual Studio 17 2022" -A x64
+          cmake --build Core/build --config Release --parallel
+
+      # ── C# Dashboard (.NET 8 / WinUI 3) ──────────────────────────────
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish Dashboard (self-contained x64)
+        run: >
+          dotnet publish Dashboard/CrystalFrame.Dashboard.csproj
+          -c Release -p:Platform=x64 -r win-x64
+          --self-contained true
+          -o publish/CrystalFrame-${{ github.ref_name }}
+
+      - name: Copy Core DLL to publish folder
+        shell: pwsh
+        run: |
+          Copy-Item Core/build/bin/Release/CrystalFrame.Core.dll `
+                    publish/CrystalFrame-${{ github.ref_name }}/
+
+      - name: Zip release
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "publish/CrystalFrame-${{ github.ref_name }}/*" `
+            -DestinationPath "CrystalFrame-${{ github.ref_name }}-win-x64.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "CrystalFrame ${{ github.ref_name }}"
+          draft: false
+          prerelease: true
+          body: |
+            ## ⚠️ Early Development Release
+
+            CrystalFrame este în dezvoltare activă. Această versiune poate conține
+            bugs cunoscuți, în special la funcționalitatea **Start Menu**.
+
+            ### Ce funcționează
+            - Taskbar overlay (transparență + culoare RGB + blur/acrylic)
+            - Start Menu overlay (basic)
+            - Run at Startup
+            - System tray icon
+            - Multi-monitor support
+
+            ### Instalare
+            1. Extrage zip-ul
+            2. Rulează `CrystalFrame.Dashboard.exe`
+            3. Activează Core Engine din toggle
+
+            Raportează probleme la [Issues](../../issues).
+          files: CrystalFrame-${{ github.ref_name }}-win-x64.zip

@@ -11,6 +11,8 @@ struct Config {
     int startOpacity = 50;         // 0-100
     bool taskbarEnabled = true;
     bool startEnabled = true;
+    bool taskbarBlur = false;
+    bool startBlur = false;
 };
 
 class ConfigManager {
@@ -30,6 +32,8 @@ public:
     void SetStartOpacity(int opacity);
     void SetTaskbarEnabled(bool enabled);
     void SetStartEnabled(bool enabled);
+    void SetTaskbarBlur(bool blur);
+    void SetStartBlur(bool blur);
     
 private:
     std::wstring m_configPath;

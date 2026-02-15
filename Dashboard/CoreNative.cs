@@ -68,6 +68,12 @@ namespace CrystalFrame.Dashboard
         public static extern void CoreSetTaskbarColor(int r, int g, int b);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void CoreSetTaskbarBlur([MarshalAs(UnmanagedType.Bool)] bool enabled);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void CoreSetStartBlur([MarshalAs(UnmanagedType.Bool)] bool enabled);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern void CoreSetStartMenuOpacity(int opacity);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]

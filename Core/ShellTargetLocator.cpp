@@ -70,6 +70,11 @@ TaskbarInfo ShellTargetLocator::GetTaskbarInfo() const {
     return m_taskbarInfo;
 }
 
+std::vector<TaskbarInfo> ShellTargetLocator::GetTaskbarInfoList() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_taskbarInfoList;
+}
+
 StartInfo ShellTargetLocator::GetStartInfo() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_startInfo;
@@ -77,76 +82,100 @@ StartInfo ShellTargetLocator::GetStartInfo() const {
 
 // ========== TASKBAR DETECTION ==========
 
+// Helper to build a TaskbarInfo from an HWND
+static TaskbarInfo BuildTaskbarInfo(HWND hwnd) {
+    TaskbarInfo info;
+    info.hwnd = hwnd;
+    info.found = false;
+
+    if (!hwnd || !IsWindow(hwnd) || !IsWindowVisible(hwnd))
+        return info;
+
+    if (!GetWindowRect(hwnd, &info.rect))
+        return info;
+
+    APPBARDATA abd = {};
+    abd.cbSize = sizeof(APPBARDATA);
+    abd.hWnd = hwnd;
+    UINT state = (UINT)SHAppBarMessage(ABM_GETSTATE, &abd);
+    info.autoHide = (state & ABS_AUTOHIDE) != 0;
+    info.found = true;
+    return info;
+}
+
 bool ShellTargetLocator::DetectTaskbar() {
-    // Find Shell_TrayWnd
-    HWND hwnd = FindWindowW(L"Shell_TrayWnd", nullptr);
-    
-    if (!hwnd || !IsWindow(hwnd) || !IsWindowVisible(hwnd)) {
+    std::vector<TaskbarInfo> infos;
+
+    // ── Primary taskbar ───────────────────────────────────────────────────────
+    HWND hwndPrimary = FindWindowW(L"Shell_TrayWnd", nullptr);
+    if (!hwndPrimary || !IsWindow(hwndPrimary) || !IsWindowVisible(hwndPrimary)) {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_taskbarInfo.found = false;
         m_taskbarInfo.hwnd = nullptr;
+        m_taskbarInfoList.clear();
         return false;
     }
-    
-    // Get taskbar rect
-    RECT rect;
-    if (!GetWindowRect(hwnd, &rect)) {
-        CF_LOG(Error, "GetWindowRect failed for taskbar");
-        return false;
+
+    TaskbarInfo primary = BuildTaskbarInfo(hwndPrimary);
+    if (!primary.found) return false;
+    primary.edge = DetermineEdge(hwndPrimary, primary.rect);
+    infos.push_back(primary);
+
+    // ── Secondary taskbars (multi-monitor) ────────────────────────────────────
+    HWND hwndSec = nullptr;
+    while ((hwndSec = FindWindowExW(nullptr, hwndSec, L"Shell_SecondaryTrayWnd", nullptr)) != nullptr) {
+        if (!IsWindow(hwndSec) || !IsWindowVisible(hwndSec))
+            continue;
+        TaskbarInfo sec = BuildTaskbarInfo(hwndSec);
+        if (sec.found) {
+            sec.edge = DetermineEdge(hwndSec, sec.rect);
+            infos.push_back(sec);
+        }
     }
-    
-    // Determine edge
-    Edge edge = DetermineEdge(rect);
-    
-    // Check auto-hide
-    bool autoHide = CheckAutoHide(hwnd);
-    
-    // Update info
+
+    // ── Update state ─────────────────────────────────────────────────────────
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        m_taskbarInfo.hwnd = hwnd;
-        m_taskbarInfo.rect = rect;
-        m_taskbarInfo.edge = edge;
-        m_taskbarInfo.autoHide = autoHide;
-        m_taskbarInfo.found = true;
+        m_taskbarInfo = infos[0];
+        m_taskbarInfoList = infos;
     }
-    
-    CF_LOG(Info, "Taskbar found: edge=" << EdgeToString(edge) 
-                 << ", autoHide=" << autoHide
-                 << ", rect=(" << rect.left << "," << rect.top << "," 
-                 << rect.right << "," << rect.bottom << ")");
-    
-    // Notify callback
+
+    CF_LOG(Info, "Taskbars found: count=" << infos.size()
+                 << ", primary edge=" << EdgeToString(infos[0].edge)
+                 << ", rect=(" << infos[0].rect.left << "," << infos[0].rect.top << ","
+                 << infos[0].rect.right << "," << infos[0].rect.bottom << ")");
+
+    // ── Notify callback ───────────────────────────────────────────────────────
     if (m_callback) {
-        m_callback->OnTaskbarChanged(m_taskbarInfo);
+        m_callback->OnTaskbarsChanged(infos);  // multi-monitor aware
     }
-    
+
     return true;
 }
 
-Edge ShellTargetLocator::DetermineEdge(const RECT& rect) {
-    int width = rect.right - rect.left;
+Edge ShellTargetLocator::DetermineEdge(HWND hwnd, const RECT& rect) {
+    int width  = rect.right  - rect.left;
     int height = rect.bottom - rect.top;
-    
-    // Get screen dimensions
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    
-    // Heuristic: if height < width, it's horizontal (top or bottom)
+
+    // Use the monitor that contains this taskbar window for per-monitor coordinates
+    HMONITOR hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi = {};
+    mi.cbSize = sizeof(mi);
+    if (!GetMonitorInfoW(hMon, &mi)) {
+        // Fallback to primary screen metrics
+        mi.rcMonitor = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+    }
+
+    int screenWidth  = mi.rcMonitor.right  - mi.rcMonitor.left;
+    int screenHeight = mi.rcMonitor.bottom - mi.rcMonitor.top;
+
+    // Heuristic: horizontal taskbar if height < width
     if (height < width) {
-        // Horizontal taskbar
-        if (rect.top < screenHeight / 2) {
-            return Edge::Top;
-        } else {
-            return Edge::Bottom;
-        }
+        int midY = mi.rcMonitor.top + screenHeight / 2;
+        return (rect.top < midY) ? Edge::Top : Edge::Bottom;
     } else {
-        // Vertical taskbar
-        if (rect.left < screenWidth / 2) {
-            return Edge::Left;
-        } else {
-            return Edge::Right;
-        }
+        int midX = mi.rcMonitor.left + screenWidth / 2;
+        return (rect.left < midX) ? Edge::Left : Edge::Right;
     }
 }
 

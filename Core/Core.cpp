@@ -36,6 +36,8 @@ bool Core::Initialize() {
     m_startOpacity = config.startOpacity;
     m_taskbarEnabled = config.taskbarEnabled;
     m_startEnabled = config.startEnabled;
+    m_taskbarBlur = config.taskbarBlur;
+    m_startBlur = config.startBlur;
 
     // Initialize renderer (loads SetWindowCompositionAttribute)
     if (!m_renderer->Initialize()) {
@@ -48,6 +50,8 @@ bool Core::Initialize() {
     m_renderer->SetStartOpacity(m_startOpacity);
     m_renderer->SetTaskbarEnabled(m_taskbarEnabled);
     m_renderer->SetStartEnabled(m_startEnabled);
+    m_renderer->SetTaskbarBlur(m_taskbarBlur);
+    m_renderer->SetStartBlur(m_startBlur);
 
     // Initialize shell target locator (finds taskbar/start windows)
     if (!m_locator->Initialize(this)) {
@@ -158,10 +162,37 @@ void Core::Shutdown() {
 
 // IShellTargetCallback interface implementation
 void Core::OnTaskbarChanged(const TaskbarInfo& info) {
-    CF_LOG(Info, "Taskbar found - HWND: 0x" << std::hex << reinterpret_cast<uintptr_t>(info.hwnd) << std::dec);
+    // Delegated to by OnTaskbarsChanged default impl — handle single-monitor case directly
+    CF_LOG(Info, "Taskbar found (single) - HWND: 0x"
+                 << std::hex << reinterpret_cast<uintptr_t>(info.hwnd) << std::dec);
+
+    m_taskbarFound = info.found;
+    if (m_renderer && info.hwnd) {
+        m_renderer->SetTaskbarWindow(info.hwnd);
+    }
+}
+
+void Core::OnTaskbarsChanged(const std::vector<TaskbarInfo>& infos) {
+    CF_LOG(Info, "Taskbars changed: count=" << infos.size());
+
+    if (infos.empty()) {
+        m_taskbarFound = false;
+        return;
+    }
 
     m_taskbarFound = true;
-    m_renderer->SetTaskbarWindow(info.hwnd);
+
+    // Collect valid HWNDs from all detected taskbars
+    std::vector<HWND> hwnds;
+    for (const auto& info : infos) {
+        if (info.hwnd && info.found) {
+            hwnds.push_back(info.hwnd);
+        }
+    }
+
+    if (m_renderer && !hwnds.empty()) {
+        m_renderer->SetTaskbarWindows(hwnds);
+    }
 }
 
 void Core::OnStartShown(const StartInfo& info) {
@@ -234,6 +265,26 @@ void Core::SetTaskbarColor(int r, int g, int b) {
         m_renderer->SetTaskbarColor(r, g, b);
     }
     CF_LOG(Info, "Taskbar color set to RGB(" << r << ", " << g << ", " << b << ")");
+}
+
+void Core::SetTaskbarBlur(bool enabled) {
+    m_taskbarBlur = enabled;
+    if (m_renderer) {
+        m_renderer->SetTaskbarBlur(enabled);
+    }
+    if (m_config) {
+        m_config->SetTaskbarBlur(enabled);
+    }
+}
+
+void Core::SetStartBlur(bool enabled) {
+    m_startBlur = enabled;
+    if (m_renderer) {
+        m_renderer->SetStartBlur(enabled);
+    }
+    if (m_config) {
+        m_config->SetStartBlur(enabled);
+    }
 }
 
 void Core::SetStartMenuHookEnabled(bool enabled) {

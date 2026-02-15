@@ -106,6 +106,22 @@ CRYSTALFRAME_API void CoreSetTaskbarColor(int r, int g, int b) {
     g_core->SetTaskbarColor(r, g, b);
 }
 
+CRYSTALFRAME_API void CoreSetTaskbarBlur(bool enabled) {
+    if (!g_core) {
+        CF_LOG(Warning, "CoreSetTaskbarBlur: Core not initialized");
+        return;
+    }
+    g_core->SetTaskbarBlur(enabled);
+}
+
+CRYSTALFRAME_API void CoreSetStartBlur(bool enabled) {
+    if (!g_core) {
+        CF_LOG(Warning, "CoreSetStartBlur: Core not initialized");
+        return;
+    }
+    g_core->SetStartBlur(enabled);
+}
+
 CRYSTALFRAME_API void CoreSetStartMenuHookEnabled(bool enabled) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetStartMenuHookEnabled: Core not initialized");

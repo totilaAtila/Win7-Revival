@@ -131,6 +131,20 @@ namespace CrystalFrame.Dashboard
         private bool _startShowRecentFiles;
         public bool StartShowRecentFiles { get => _startShowRecentFiles; set { if (SetProperty(ref _startShowRecentFiles, value)) _config.StartShowRecentFiles = value; } }
 
+        private bool _taskbarBlur;
+        public bool TaskbarBlur
+        {
+            get => _taskbarBlur;
+            set { if (SetProperty(ref _taskbarBlur, value)) _config.TaskbarBlur = value; }
+        }
+
+        private bool _startBlur;
+        public bool StartBlur
+        {
+            get => _startBlur;
+            set { if (SetProperty(ref _startBlur, value)) _config.StartBlur = value; }
+        }
+
         private bool _taskbarEnabled;
         public bool TaskbarEnabled
         {
@@ -218,6 +232,8 @@ namespace CrystalFrame.Dashboard
                 StartOpacity = _config.StartOpacity;
                 TaskbarEnabled = _config.TaskbarEnabled;
                 StartEnabled = _config.StartEnabled;
+                TaskbarBlur = _config.TaskbarBlur;
+                StartBlur = _config.StartBlur;
                 CoreEnabled = _config.CoreEnabled;
                 TaskbarColorR = _config.TaskbarColorR;
                 TaskbarColorG = _config.TaskbarColorG;
@@ -262,6 +278,8 @@ namespace CrystalFrame.Dashboard
                 _core.SetTaskbarEnabled(TaskbarEnabled);
                 _core.SetStartEnabled(StartEnabled);
                 _core.SetTaskbarColor(TaskbarColorR, TaskbarColorG, TaskbarColorB);
+                _core.SetTaskbarBlur(TaskbarBlur);
+                _core.SetStartBlur(StartBlur);
 
                 // Apply Start Menu customization
                 _core.SetStartMenuOpacity(StartOpacity);
@@ -314,6 +332,8 @@ namespace CrystalFrame.Dashboard
                     _core.SetTaskbarEnabled(TaskbarEnabled);
                     _core.SetStartEnabled(StartEnabled);
                     _core.SetTaskbarColor(TaskbarColorR, TaskbarColorG, TaskbarColorB);
+                    _core.SetTaskbarBlur(TaskbarBlur);
+                    _core.SetStartBlur(StartBlur);
 
                     // Reapply Start Menu customization
                     _core.SetStartMenuOpacity(StartOpacity);
@@ -366,6 +386,18 @@ namespace CrystalFrame.Dashboard
             StartOpacity = value;
             _core.SetStartOpacity(value); // Windows Start Menu (native)
             _core.SetStartMenuOpacity(value); // Custom Start Menu window
+        }
+
+        public void OnTaskbarBlurChanged(bool enabled)
+        {
+            TaskbarBlur = enabled;
+            _core.SetTaskbarBlur(enabled);
+        }
+
+        public void OnStartBlurChanged(bool enabled)
+        {
+            StartBlur = enabled;
+            _core.SetStartBlur(enabled);
         }
 
         public void OnTaskbarColorChanged(int r, int g, int b)

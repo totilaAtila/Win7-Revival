@@ -1,6 +1,7 @@
 #pragma once
 #include <Windows.h>
 #include <wrl/client.h>
+#include <vector>
 
 using Microsoft::WRL::ComPtr;
 
@@ -44,8 +45,9 @@ public:
     bool Initialize();
     void Shutdown();
 
-    // Set target windows
+    // Set target windows (single = primary; multi = all monitors)
     void SetTaskbarWindow(HWND hwnd);
+    void SetTaskbarWindows(const std::vector<HWND>& hwnds);
     void SetStartWindow(HWND hwnd);
 
     // Opacity control (0 = fully transparent, 100 = opaque)
@@ -59,26 +61,32 @@ public:
     void SetTaskbarEnabled(bool enabled);
     void SetStartEnabled(bool enabled);
 
+    // Enable/disable blur/acrylic effect
+    void SetTaskbarBlur(bool useBlur);
+    void SetStartBlur(bool useBlur);
+
     // Reapply transparency (call periodically to maintain effect)
     void RefreshTransparency();
 
 private:
     pfnSetWindowCompositionAttribute m_setWindowCompositionAttribute = nullptr;
 
-    HWND m_hwndTaskbar = nullptr;
+    std::vector<HWND> m_hwndTaskbars;
     HWND m_hwndStart = nullptr;
 
     int m_taskbarOpacity = 75;
     int m_startOpacity = 50;
     bool m_taskbarEnabled = true;
     bool m_startEnabled = true;
+    bool m_taskbarBlur = false;
+    bool m_startBlur = false;
 
     int m_taskbarColorR = 0;
     int m_taskbarColorG = 0;
     int m_taskbarColorB = 0;
 
-    void ApplyTransparency(HWND hwnd, int opacity, bool enabled);
-    void ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled, int r, int g, int b);
+    void ApplyTransparency(HWND hwnd, int opacity, bool enabled, bool useBlur);
+    void ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled, int r, int g, int b, bool useBlur);
     void RestoreWindow(HWND hwnd);
 };
 

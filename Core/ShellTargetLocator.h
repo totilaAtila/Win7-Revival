@@ -4,6 +4,7 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
+#include <vector>
 
 namespace CrystalFrame {
 
@@ -36,6 +37,10 @@ public:
     virtual ~IShellTargetCallback() = default;
     
     virtual void OnTaskbarChanged(const TaskbarInfo& info) = 0;
+    // Called when taskbar list changes (multi-monitor); default delegates to OnTaskbarChanged for primary
+    virtual void OnTaskbarsChanged(const std::vector<TaskbarInfo>& infos) {
+        if (!infos.empty()) OnTaskbarChanged(infos[0]);
+    }
     virtual void OnStartShown(const StartInfo& info) = 0;
     virtual void OnStartHidden() = 0;
     virtual void OnStartDetectionFailed() = 0;
@@ -50,6 +55,7 @@ public:
     void Shutdown();
     
     TaskbarInfo GetTaskbarInfo() const;
+    std::vector<TaskbarInfo> GetTaskbarInfoList() const;
     StartInfo GetStartInfo() const;
     
 private:
@@ -57,6 +63,7 @@ private:
     
     // Taskbar tracking
     TaskbarInfo m_taskbarInfo;
+    std::vector<TaskbarInfo> m_taskbarInfoList;
     HWND m_msgWindow = nullptr;
     UINT m_taskbarCreatedMsg = 0;
     
@@ -71,7 +78,7 @@ private:
     
     // Taskbar methods
     bool DetectTaskbar();
-    Edge DetermineEdge(const RECT& rect);
+    Edge DetermineEdge(HWND hwnd, const RECT& rect);
     bool CheckAutoHide(HWND hwnd);
     void MonitorTaskbar();
     

@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Windows.Graphics;
 using Windows.UI;
@@ -19,7 +20,11 @@ namespace CrystalFrame.Dashboard
         private string _activePanel = "";
         private AppWindow _appWindow;
         private DetailWindow? _detailWindow;
+        private TrayIconManager? _trayIconManager;
+        private bool _exitRequested = false;
 
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
 
         public MainWindow()
         {
@@ -49,7 +54,13 @@ namespace CrystalFrame.Dashboard
             RootGrid.DataContext = _viewModel;
             RootGrid.Loaded += (s, e) => MeasureAndResize();
 
-            this.Closed += OnWindowClosed;
+            // Intercept Close button → hide to tray instead of exiting
+            _appWindow.Closing += OnAppWindowClosing;
+
+            // System tray icon
+            _trayIconManager = new TrayIconManager(hwnd, iconPath,
+                onShow: ShowFromTray,
+                onExit: ExitFromTray);
 
             _ = InitializeAsync();
         }
@@ -63,11 +74,28 @@ namespace CrystalFrame.Dashboard
                 _appWindow.Resize(new SizeInt32(w, h + 34)); // +34 titlebar
         }
 
-        private async void OnWindowClosed(object sender, WindowEventArgs e)
+        private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
         {
+            if (_exitRequested) return; // real exit — let it proceed
+            args.Cancel = true;
+            _appWindow.Hide();
+        }
+
+        private void ShowFromTray()
+        {
+            _appWindow.Show();
+            _appWindow.SetPresenter(AppWindowPresenterKind.Default);
+            SetForegroundWindow(WindowNative.GetWindowHandle(this));
+        }
+
+        private async void ExitFromTray()
+        {
+            _exitRequested = true;
             CloseDetailWindow();
+            _trayIconManager?.Remove();
             try   { await _viewModel.OnDashboardClosingAsync(); }
-            catch (Exception ex) { Debug.WriteLine($"Error during close: {ex.Message}"); }
+            catch (Exception ex) { Debug.WriteLine($"Error during exit: {ex.Message}"); }
+            _appWindow.Destroy();
         }
 
         // ── Inițializare asincronă ────────────────────────────────────────────────

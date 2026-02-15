@@ -46,6 +46,12 @@ CRYSTALFRAME_API void CoreSetStartEnabled(bool enabled);
 // Set taskbar color (RGB 0-255)
 CRYSTALFRAME_API void CoreSetTaskbarColor(int r, int g, int b);
 
+// Enable/disable blur/acrylic effect on taskbar
+CRYSTALFRAME_API void CoreSetTaskbarBlur(bool enabled);
+
+// Enable/disable blur/acrylic effect on start menu
+CRYSTALFRAME_API void CoreSetStartBlur(bool enabled);
+
 // Enable/disable custom Start Menu hook (intercepts Windows key and Start button clicks)
 CRYSTALFRAME_API void CoreSetStartMenuHookEnabled(bool enabled);
 

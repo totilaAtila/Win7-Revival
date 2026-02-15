@@ -119,6 +119,24 @@
                     </Border>
                 </StackPanel>
 
+                <!-- Blur / Acrylic -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="Blur effect (acrylic)"
+                               FontSize="13" FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                               VerticalAlignment="Center"/>
+                    <ToggleSwitch Grid.Column="1"
+                                  x:Name="TaskbarBlurToggle"
+                                  OnContent="" OffContent=""
+                                  Toggled="TaskbarBlur_Toggled"
+                                  Margin="0,-4,0,0"/>
+                </Grid>
+
             </StackPanel>
 
             <!-- ── Start Menu Panel ──────────────────────────────────── -->
@@ -168,6 +186,24 @@
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     </Grid>
                 </StackPanel>
+
+                <!-- Blur / Acrylic -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="Blur effect (acrylic)"
+                               FontSize="13" FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                               VerticalAlignment="Center"/>
+                    <ToggleSwitch Grid.Column="1"
+                                  x:Name="StartBlurToggle"
+                                  OnContent="" OffContent=""
+                                  Toggled="StartBlur_Toggled"
+                                  Margin="0,-4,0,0"/>
+                </Grid>
 
                 <!-- Culoare fundal -->
                 <StackPanel Spacing="4" MinWidth="250">

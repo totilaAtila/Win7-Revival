@@ -20,6 +20,7 @@ public:
 
     // IShellTargetCallback interface
     void OnTaskbarChanged(const TaskbarInfo& info) override;
+    void OnTaskbarsChanged(const std::vector<TaskbarInfo>& infos) override;
     void OnStartShown(const StartInfo& info) override;
     void OnStartHidden() override;
     void OnStartDetectionFailed() override;
@@ -30,6 +31,8 @@ public:
     void SetTaskbarEnabled(bool enabled);
     void SetStartEnabled(bool enabled);
     void SetTaskbarColor(int r, int g, int b);
+    void SetTaskbarBlur(bool enabled);
+    void SetStartBlur(bool enabled);
     void SetStartMenuHookEnabled(bool enabled);
     void SetStartMenuOpacity(int opacity);
     void SetStartMenuBackgroundColor(DWORD rgb);
@@ -53,6 +56,8 @@ private:
     bool m_startDetected = false;
     bool m_taskbarEnabled = true;
     bool m_startEnabled = true;
+    bool m_taskbarBlur = false;
+    bool m_startBlur = false;
     int m_taskbarOpacity = 75;
     int m_startOpacity = 50;
 

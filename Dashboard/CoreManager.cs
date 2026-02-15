@@ -203,6 +203,26 @@ namespace CrystalFrame.Dashboard
         }
 
         /// <summary>
+        /// Enable/disable blur/acrylic effect on taskbar
+        /// </summary>
+        public void SetTaskbarBlur(bool enabled)
+        {
+            if (!_running) return;
+            Debug.WriteLine($"[CoreManager] SetTaskbarBlur({enabled})");
+            CoreNative.CoreSetTaskbarBlur(enabled);
+        }
+
+        /// <summary>
+        /// Enable/disable blur/acrylic effect on start menu
+        /// </summary>
+        public void SetStartBlur(bool enabled)
+        {
+            if (!_running) return;
+            Debug.WriteLine($"[CoreManager] SetStartBlur({enabled})");
+            CoreNative.CoreSetStartBlur(enabled);
+        }
+
+        /// <summary>
         /// Enable/disable custom Start Menu hook (intercepts Windows key and Start button clicks)
         /// </summary>
         public void SetStartMenuHookEnabled(bool enabled)

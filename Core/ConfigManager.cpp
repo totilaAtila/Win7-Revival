@@ -73,6 +73,12 @@ bool ConfigManager::Load() {
         else if (line.find("\"startEnabled\":") != std::string::npos) {
             m_config.startEnabled = (line.find("true") != std::string::npos);
         }
+        else if (line.find("\"taskbarBlur\":") != std::string::npos) {
+            m_config.taskbarBlur = (line.find("true") != std::string::npos);
+        }
+        else if (line.find("\"startBlur\":") != std::string::npos) {
+            m_config.startBlur = (line.find("true") != std::string::npos);
+        }
     }
     
     file.close();
@@ -97,7 +103,9 @@ bool ConfigManager::Save() {
     file << "  \"taskbarOpacity\": " << m_config.taskbarOpacity << ",\n";
     file << "  \"startOpacity\": " << m_config.startOpacity << ",\n";
     file << "  \"taskbarEnabled\": " << (m_config.taskbarEnabled ? "true" : "false") << ",\n";
-    file << "  \"startEnabled\": " << (m_config.startEnabled ? "true" : "false") << "\n";
+    file << "  \"startEnabled\": " << (m_config.startEnabled ? "true" : "false") << ",\n";
+    file << "  \"taskbarBlur\": " << (m_config.taskbarBlur ? "true" : "false") << ",\n";
+    file << "  \"startBlur\": " << (m_config.startBlur ? "true" : "false") << "\n";
     file << "}\n";
     
     file.close();
@@ -135,6 +143,16 @@ void ConfigManager::SetTaskbarEnabled(bool enabled) {
 void ConfigManager::SetStartEnabled(bool enabled) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_config.startEnabled = enabled;
+}
+
+void ConfigManager::SetTaskbarBlur(bool blur) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_config.taskbarBlur = blur;
+}
+
+void ConfigManager::SetStartBlur(bool blur) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_config.startBlur = blur;
 }
 
 std::wstring ConfigManager::GetConfigDirectory() {

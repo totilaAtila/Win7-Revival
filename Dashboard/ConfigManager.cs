@@ -39,6 +39,8 @@ namespace CrystalFrame.Dashboard
         public bool StartShowPlaceholder3 { get; set; } = false;
         public bool StartShowPlaceholder4 { get; set; } = false;
         public bool StartShowPlaceholder5 { get; set; } = false;
+        public bool TaskbarBlur { get; set; } = false;
+        public bool StartBlur { get; set; } = false;
     }
 
     public class ConfigManager
@@ -158,6 +160,8 @@ namespace CrystalFrame.Dashboard
         public bool StartShowPlaceholder3 { get => _config.StartShowPlaceholder3; set { _config.StartShowPlaceholder3 = value; _ = SaveAsync(); } }
         public bool StartShowPlaceholder4 { get => _config.StartShowPlaceholder4; set { _config.StartShowPlaceholder4 = value; _ = SaveAsync(); } }
         public bool StartShowPlaceholder5 { get => _config.StartShowPlaceholder5; set { _config.StartShowPlaceholder5 = value; _ = SaveAsync(); } }
+        public bool TaskbarBlur { get => _config.TaskbarBlur; set { _config.TaskbarBlur = value; _ = SaveAsync(); } }
+        public bool StartBlur   { get => _config.StartBlur;   set { _config.StartBlur   = value; _ = SaveAsync(); } }
 
         public async Task LoadAsync()
         {

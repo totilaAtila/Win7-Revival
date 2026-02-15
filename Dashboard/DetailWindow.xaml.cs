@@ -122,6 +122,7 @@ namespace CrystalFrame.Dashboard
             {
                 TaskbarOpacitySlider.Value  = _viewModel.TaskbarOpacity;
                 TaskbarEnabledToggle.IsOn   = _viewModel.TaskbarEnabled;
+                TaskbarBlurToggle.IsOn      = _viewModel.TaskbarBlur;
 
                 TaskbarColorRSlider.Value   = _viewModel.TaskbarColorR;
                 TaskbarColorGSlider.Value   = _viewModel.TaskbarColorG;
@@ -129,6 +130,7 @@ namespace CrystalFrame.Dashboard
 
                 StartOpacitySlider.Value    = _viewModel.StartOpacity;
                 StartEnabledToggle.IsOn     = _viewModel.StartEnabled;
+                StartBlurToggle.IsOn        = _viewModel.StartBlur;
 
                 StartBgColorRSlider.Value   = _viewModel.StartBgColorR;
                 StartBgColorGSlider.Value   = _viewModel.StartBgColorG;
@@ -225,6 +227,18 @@ namespace CrystalFrame.Dashboard
             if (!_isInitialized) return;
             try   { await _viewModel.SetTaskbarEnabledAsync(TaskbarEnabledToggle.IsOn); }
             catch (Exception ex) { Debug.WriteLine($"Failed to toggle taskbar: {ex.Message}"); }
+        }
+
+        private void TaskbarBlur_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (!_isInitialized) return;
+            _viewModel.OnTaskbarBlurChanged(TaskbarBlurToggle.IsOn);
+        }
+
+        private void StartBlur_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (!_isInitialized) return;
+            _viewModel.OnStartBlurChanged(StartBlurToggle.IsOn);
         }
 
         private async void StartEnabled_Toggled(object sender, RoutedEventArgs e)
