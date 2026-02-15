@@ -8,6 +8,8 @@
          NOTĂ: Window.Resources cu Style+ControlTemplate crashează XamlCompiler net472 Pass1.
          Proprietățile butoanelor sunt aplicate direct pe fiecare control (workaround). -->
     <Grid x:Name="RootGrid"
+          HorizontalAlignment="Left"
+          VerticalAlignment="Top"
           Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
         <!-- Singura coloană — nu mai există side panel -->
@@ -42,10 +44,7 @@
                     BorderThickness="0"
                     CornerRadius="6"
                     Click="Nav_Taskbar_Click">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <FontIcon Glyph="&#xEE56;" FontSize="16" VerticalAlignment="Center"/>
-                    <TextBlock Text="Taskbar" FontSize="13" VerticalAlignment="Center"/>
-                </StackPanel>
+                <TextBlock Text="Taskbar" FontSize="13"/>
             </Button>
 
             <!-- Nav: Start Menu -->
@@ -59,10 +58,7 @@
                     BorderThickness="0"
                     CornerRadius="6"
                     Click="Nav_Start_Click">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <FontIcon Glyph="&#xE782;" FontSize="16" VerticalAlignment="Center"/>
-                    <TextBlock Text="Start Menu" FontSize="13" VerticalAlignment="Center"/>
-                </StackPanel>
+                <TextBlock Text="Start Menu" FontSize="13"/>
             </Button>
 
             <!-- Separator -->
@@ -140,6 +136,7 @@
                 Padding="16,10,16,12">
             <StackPanel Spacing="3">
                 <TextBlock x:Name="ConnectionStatusText"
+                           MaxWidth="280"
                            FontSize="10"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            TextWrapping="Wrap"/>

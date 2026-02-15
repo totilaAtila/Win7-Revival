@@ -16,7 +16,7 @@ namespace CrystalFrame.Dashboard
         private readonly MainViewModel _viewModel;
         private bool _isInitialized = false;
         private AppWindow _appWindow;
-        private bool _sizeSettled = false;
+        private bool _windowLoaded = false;
 
         public DetailWindow(MainViewModel viewModel, string panelName)
         {
@@ -28,8 +28,8 @@ namespace CrystalFrame.Dashboard
             var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
             _appWindow   = AppWindow.GetFromWindowId(windowId);
 
-            // Initial size — height will be corrected by RootBorder.SizeChanged
-            _appWindow.Resize(new SizeInt32(340, 700));
+            // Initial size — Loaded va seta dimensiunea reală via Measure(∞,∞)
+            _appWindow.Resize(new SizeInt32(800, 800));
 
             if (_appWindow.Presenter is OverlappedPresenter presenter)
             {
@@ -46,49 +46,45 @@ namespace CrystalFrame.Dashboard
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
             this.Closed += (s, e) => _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
 
-            RootBorder.SizeChanged += RootBorder_SizeChanged;
+            RootBorder.Loaded += (s, e) => {
+                _windowLoaded = true;
+                MeasureAndResize();
+            };
         }
 
-        // ── Auto-size via SizeChanged ─────────────────────────────────────────────
+        // ── Auto-size via Measure(∞,∞) ───────────────────────────────────────────
 
-        private void RootBorder_SizeChanged(object sender, SizeChangedEventArgs e)
+        private void MeasureAndResize()
         {
-            if (_sizeSettled) return;
-            int h = (int)Math.Ceiling(e.NewSize.Height);
-            if (h > 50)
-            {
-                _sizeSettled = true;
-                ResizeToContent(h);
-            }
-        }
+            RootBorder.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+            int contentW = (int)Math.Ceiling(RootBorder.DesiredSize.Width);
+            int contentH = (int)Math.Ceiling(RootBorder.DesiredSize.Height);
+            if (contentW <= 0 || contentH <= 0) return;
 
-        // Redimensionează fereastra la înălțimea conținutului, respectând work area
-        // (fereastra nu depășește în jos limita superioară a taskbar-ului Windows).
-        private void ResizeToContent(int contentHeight)
-        {
             const int TitleBarHeight = 34;
-            int totalHeight = contentHeight + TitleBarHeight;
+            int totalH = contentH + TitleBarHeight;
 
-            // Obținem work area = ecranul fără taskbar Windows
+            // Work area — fereastra nu intră în taskbar-ul Windows
             var hwnd        = WindowNative.GetWindowHandle(this);
             var windowId    = Win32Interop.GetWindowIdFromWindow(hwnd);
             var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Nearest);
-            var workArea    = displayArea.WorkArea; // RectInt32
+            var workArea    = displayArea.WorkArea;
 
-            // Limităm înălțimea la work area
-            int finalHeight = Math.Min(totalHeight, workArea.Height);
+            totalH   = Math.Min(totalH,   workArea.Height);
+            contentW = Math.Min(contentW, workArea.Width);
 
-            // Ajustăm Y: marginea inferioară a ferestrei ≤ marginea inferioară a work area
-            int x             = _appWindow.Position.X;
-            int y             = _appWindow.Position.Y;
-            int workAreaBottom = workArea.Y + workArea.Height;
-
-            if (y + finalHeight > workAreaBottom)
-                y = workAreaBottom - finalHeight;
+            int x = _appWindow.Position.X;
+            int y = _appWindow.Position.Y;
+            if (y + totalH > workArea.Y + workArea.Height)
+                y = workArea.Y + workArea.Height - totalH;
             if (y < workArea.Y)
                 y = workArea.Y;
+            if (x + contentW > workArea.X + workArea.Width)
+                x = workArea.X + workArea.Width - contentW;
+            if (x < workArea.X)
+                x = workArea.X;
 
-            _appWindow.Resize(new SizeInt32(340, finalHeight));
+            _appWindow.Resize(new SizeInt32(contentW, totalH));
             _appWindow.Move(new PointInt32(x, y));
         }
 
@@ -96,10 +92,11 @@ namespace CrystalFrame.Dashboard
 
         public void SwitchPanel(string panelName)
         {
-            _sizeSettled = false;
             TaskbarPanel.Visibility   = panelName == "Taskbar"   ? Visibility.Visible : Visibility.Collapsed;
             StartMenuPanel.Visibility = panelName == "StartMenu" ? Visibility.Visible : Visibility.Collapsed;
             Title = panelName == "Taskbar" ? "Taskbar Settings" : "Start Menu Settings";
+
+            if (_windowLoaded) MeasureAndResize(); // nu apelat în constructor (înainte de Loaded)
         }
 
         // ── Positioning ───────────────────────────────────────────────────────────

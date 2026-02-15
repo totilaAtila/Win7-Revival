@@ -20,8 +20,6 @@ namespace CrystalFrame.Dashboard
         private AppWindow _appWindow;
         private DetailWindow? _detailWindow;
 
-        private const int MainFrameWidth  = 200;
-        private const int WindowHeight    = 340;
 
         public MainWindow()
         {
@@ -31,7 +29,7 @@ namespace CrystalFrame.Dashboard
             var hwnd     = WindowNative.GetWindowHandle(this);
             var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
             _appWindow   = AppWindow.GetFromWindowId(windowId);
-            _appWindow.Resize(new SizeInt32(MainFrameWidth, WindowHeight));
+            _appWindow.Resize(new SizeInt32(1, 1)); // placeholder; Loaded va seta dimensiunea reală
 
             // Blocat redimensionare manuală
             if (_appWindow.Presenter is OverlappedPresenter presenter)
@@ -49,10 +47,20 @@ namespace CrystalFrame.Dashboard
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
 
             RootGrid.DataContext = _viewModel;
+            RootGrid.Loaded += (s, e) => MeasureAndResize();
 
             this.Closed += OnWindowClosed;
 
             _ = InitializeAsync();
+        }
+
+        private void MeasureAndResize()
+        {
+            RootGrid.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+            int w = (int)Math.Ceiling(RootGrid.DesiredSize.Width);
+            int h = (int)Math.Ceiling(RootGrid.DesiredSize.Height);
+            if (w > 0 && h > 0)
+                _appWindow.Resize(new SizeInt32(w, h + 34)); // +34 titlebar
         }
 
         private async void OnWindowClosed(object sender, WindowEventArgs e)

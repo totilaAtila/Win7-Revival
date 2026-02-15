@@ -15,6 +15,8 @@
     <!-- Unpackaged deployment settings -->
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- Allows NuGet restore/dependency graph on non-Windows CI runners -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- Application icon -->
     <ApplicationIcon>..\assets\app.ico</ApplicationIcon>
   </PropertyGroup>

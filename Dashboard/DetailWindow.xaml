@@ -8,6 +8,7 @@
          NOTĂ: Window.Resources cu Style+ControlTemplate crashează XamlCompiler net472 Pass1.
          Toate proprietățile aplicate direct pe controale. -->
     <Border x:Name="RootBorder"
+            HorizontalAlignment="Left"
             VerticalAlignment="Top"
             Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
             Padding="16,12,12,16">
@@ -40,7 +41,7 @@
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
                 <!-- Transparență -->
-                <StackPanel Spacing="4">
+                <StackPanel Spacing="4" MinWidth="250">
                     <TextBlock Text="Transparency"
                                FontSize="13" FontWeight="SemiBold"
                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
@@ -63,7 +64,7 @@
                 </StackPanel>
 
                 <!-- Culoare fundal -->
-                <StackPanel Spacing="4">
+                <StackPanel Spacing="4" MinWidth="250">
                     <TextBlock Text="Background Color"
                                FontSize="13" FontWeight="SemiBold"
                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
@@ -146,7 +147,7 @@
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
                 <!-- Transparență -->
-                <StackPanel Spacing="4">
+                <StackPanel Spacing="4" MinWidth="250">
                     <TextBlock Text="Transparency"
                                FontSize="13" FontWeight="SemiBold"
                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
@@ -169,7 +170,7 @@
                 </StackPanel>
 
                 <!-- Culoare fundal -->
-                <StackPanel Spacing="4">
+                <StackPanel Spacing="4" MinWidth="250">
                     <TextBlock Text="Background Color"
                                FontSize="13" FontWeight="SemiBold"
                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
@@ -225,7 +226,7 @@
                 </StackPanel>
 
                 <!-- Culoare text -->
-                <StackPanel Spacing="4">
+                <StackPanel Spacing="4" MinWidth="250">
                     <TextBlock Text="Text Color"
                                FontSize="13" FontWeight="SemiBold"
                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
