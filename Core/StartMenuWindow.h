@@ -188,6 +188,9 @@ private:
     void LoadCustomNames();
     void SaveCustomNames();
 
+    // ── Power menu (Sleep / Shut down / Restart popup) ───────────────────────
+    void ShowPowerMenu();
+
     // ── Edit dialog (rename recommended item) ────────────────────────────────
     void ShowEditDialog(int itemIndex);
     static LRESULT CALLBACK EditDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);

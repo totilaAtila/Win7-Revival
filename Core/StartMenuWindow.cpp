@@ -9,8 +9,11 @@
 #include <sstream>
 #include <string>
 
+#include <powrprof.h>
+
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "powrprof.lib")
 
 namespace CrystalFrame {
 
@@ -671,6 +674,46 @@ void StartMenuWindow::ExecuteRecommendedItem(int index) {
     }
 }
 
+// ── Power menu ────────────────────────────────────────────────────────────────
+void StartMenuWindow::ShowPowerMenu() {
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return;
+
+    AppendMenuW(menu, MF_STRING, 1, L"Sleep");
+    AppendMenuW(menu, MF_STRING, 2, L"Shut down");
+    AppendMenuW(menu, MF_STRING, 3, L"Restart");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, 4, L"Cancel");
+
+    // Show menu near the power button (bottom-right corner of the Start Menu)
+    RECT wr = {};
+    GetWindowRect(m_hwnd, &wr);
+    int x = wr.right  - MARGIN - POWER_BTN_R * 2;
+    int y = wr.bottom - 62;
+
+    // Menu must be shown in the foreground window context
+    SetForegroundWindow(m_hwnd);
+    int cmd = TrackPopupMenu(menu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN | TPM_RETURNCMD,
+                             x, y, 0, m_hwnd, nullptr);
+    DestroyMenu(menu);
+
+    if (cmd == 4 || cmd == 0) return;  // Cancel or dismissed
+
+    Hide();
+
+    switch (cmd) {
+        case 1:  // Sleep
+            SetSuspendState(FALSE, FALSE, FALSE);
+            break;
+        case 2:  // Shut down
+            ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
+            break;
+        case 3:  // Restart
+            ExitWindowsEx(EWX_REBOOT | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
+            break;
+    }
+}
+
 // ── Window procedure ──────────────────────────────────────────────────────────
 LRESULT CALLBACK StartMenuWindow::WindowProc(HWND hwnd, UINT msg,
                                               WPARAM wParam, LPARAM lParam) {
@@ -733,10 +776,7 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         int r = GetRecommendedItemAtPoint(pt);
         if (r >= 0) { ExecuteRecommendedItem(r); return 0; }
         if (IsOverPowerButton(pt)) {
-            Hide();
-            // Open Windows shutdown dialog
-            ShellExecuteW(NULL, L"open", L"shutdown", L"/s /t 60 /d p:0:0",
-                          NULL, SW_HIDE);
+            ShowPowerMenu();
         }
         return 0;
     }
