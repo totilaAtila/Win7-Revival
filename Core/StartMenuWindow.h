@@ -7,174 +7,193 @@
 namespace CrystalFrame {
 
 /// <summary>
-/// Submenu item (appears in flyout)
+/// Submenu item (kept for API compatibility)
 /// </summary>
 struct SubMenuItem {
     const wchar_t* name;
-    const wchar_t* command;  // Shell command or path to execute
+    const wchar_t* command;
 };
 
 /// <summary>
-/// Menu item configuration
+/// Recommended section item configuration
 /// </summary>
 struct MenuItem {
     const wchar_t* name;
-    const wchar_t* icon;  // Unicode icon/emoji
+    const wchar_t* icon;
     bool visible;
-    SubMenuItem* submenuItems;  // Array of submenu items
-    int submenuCount;  // Number of submenu items
+    SubMenuItem* submenuItems;
+    int submenuCount;
 };
 
 /// <summary>
-/// Custom Start Menu window - Win32 layered window with full transparency control
+/// Pinned app shown in the Win11-style grid
+/// </summary>
+struct PinnedItem {
+    const wchar_t* name;       // Full app name (shown below icon square)
+    const wchar_t* shortName;  // Short label drawn inside icon square
+    const wchar_t* command;    // Shell command / URI to execute
+    COLORREF iconColor;        // Icon square background color
+};
+
+/// <summary>
+/// Custom Start Menu window — Windows 11-style layout
+/// Sections: Search box | Pinned grid (3x3) | Recommended list | Bottom bar
 /// </summary>
 class StartMenuWindow {
 public:
     StartMenuWindow();
     ~StartMenuWindow();
 
-    /// <summary>
-    /// Initialize window class (call once at startup)
-    /// </summary>
+    /// Initialize window classes (call once at startup)
     bool Initialize();
 
-    /// <summary>
-    /// Show the Start Menu at specified position
-    /// </summary>
+    /// Show the menu; x/y are hint coords (actual position is calculated from taskbar)
     void Show(int x, int y);
 
-    /// <summary>
-    /// Hide/close the Start Menu
-    /// </summary>
+    /// Hide the menu
     void Hide();
 
-    /// <summary>
-    /// Set transparency (0-100, same semantics as taskbar)
-    /// 0 = opaque, 100 = fully transparent
-    /// </summary>
+    /// Set background transparency (0 = opaque, 100 = fully transparent)
     void SetOpacity(int opacity);
 
-    /// <summary>
-    /// Set background color (RGB)
-    /// </summary>
+    /// Set background color (COLORREF)
     void SetBackgroundColor(COLORREF color);
 
-    /// <summary>
-    /// Set text color (RGB)
-    /// </summary>
+    /// Set text color (COLORREF)
     void SetTextColor(COLORREF color);
 
-    /// <summary>
-    /// Set menu items visibility
-    /// </summary>
+    /// Set which recommended items are visible
     void SetMenuItems(bool controlPanel, bool deviceManager, bool installedApps,
                       bool documents, bool pictures, bool videos, bool recentFiles);
 
-    /// <summary>
-    /// Check if window is currently visible
-    /// </summary>
     bool IsVisible() const { return m_visible; }
 
-    /// <summary>
-    /// Get window bounds (screen coordinates)
-    /// Returns empty RECT if window not visible or invalid
-    /// </summary>
+    /// Get current window bounds in screen coordinates (empty RECT if hidden)
     RECT GetWindowBounds() const;
 
-    /// <summary>
-    /// Cleanup
-    /// </summary>
+    /// Cleanup all windows and hooks
     void Shutdown();
 
 private:
-    HWND m_hwnd = nullptr;
+    // ── State ───────────────────────────────────────────────────────────────
+    HWND m_hwnd    = nullptr;
     bool m_visible = false;
-    int m_opacity = 30; // Default 30% transparency (more opaque)
-    COLORREF m_bgColor = RGB(40, 40, 45); // Dark blue-gray default
-    COLORREF m_textColor = RGB(255, 255, 255); // White text default
 
-    // Menu items configuration
-    // Using simple Unicode symbols that render correctly in GDI
+    int      m_opacity  = 30;
+    COLORREF m_bgColor  = RGB(32, 32, 36);
+    COLORREF m_textColor = RGB(255, 255, 255);
+
+    // Recommended section items (visibility controlled by Dashboard)
     MenuItem m_menuItems[7] = {
-        {L"Control Panel", L"▶", true},
-        {L"Device Manager", L"▶", true},
-        {L"Installed Apps", L"▶", true},
-        {L"Documents", L"▶", true},
-        {L"Pictures", L"▶", true},
-        {L"Videos", L"▶", true},
-        {L"Recent Files", L"▶", true}
+        {L"Control Panel",  L"", true,  nullptr, 0},
+        {L"Device Manager", L"", true,  nullptr, 0},
+        {L"Installed Apps", L"", true,  nullptr, 0},
+        {L"Documents",      L"", true,  nullptr, 0},
+        {L"Pictures",       L"", true,  nullptr, 0},
+        {L"Videos",         L"", true,  nullptr, 0},
+        {L"Recent Files",   L"", true,  nullptr, 0}
     };
 
-    // Custom menu names (persisted in JSON)
-    std::wstring m_customMenuNames[7];  // Custom names for main menu items
-    std::map<int, std::map<int, std::wstring>> m_customSubmenuNames;  // [mainIndex][subIndex] = custom name
-    std::wstring m_customTitle;  // Custom title for Start Menu
+    // Persisted custom names for recommended items
+    std::wstring m_customMenuNames[7];
+    std::wstring m_customTitle;
 
-    // Hover/interaction tracking
-    int m_hoveredItemIndex = -1;  // Currently hovered item (-1 = none)
-    bool m_trackingMouse = false;  // Mouse tracking active
-    UINT_PTR m_hoverTimer = 0;  // Timer for hover delay before showing flyout
+    // Hover state
+    int  m_hoveredPinnedIndex      = -1;
+    int  m_hoveredRecommendedIndex = -1;
+    bool m_hoveredPower            = false;
+    bool m_trackingMouse           = false;
 
-    // Flyout submenu window
-    HWND m_hwndFlyout = nullptr;
-    bool m_flyoutVisible = false;
-    int m_flyoutForItemIndex = -1;  // Which main item the flyout is for
-    int m_hoveredSubmenuIndex = -1;  // Hovered item in flyout (-1 = none)
-    bool m_trackingMouseFlyout = false;
-
-    // Window dimensions
-    static constexpr int WIDTH = 300;
+    // ── Layout constants ────────────────────────────────────────────────────
+    static constexpr int WIDTH  = 580;
     static constexpr int HEIGHT = 700;
-    static constexpr int FLYOUT_WIDTH = 250;
-    static constexpr int FLYOUT_ITEM_HEIGHT = 30;
 
-    // Window class names
-    static constexpr wchar_t WINDOW_CLASS[] = L"CrystalFrame_StartMenu";
-    static constexpr wchar_t FLYOUT_CLASS[] = L"CrystalFrame_StartMenuFlyout";
+    static constexpr int MARGIN          = 20;
+
+    // Search box
+    static constexpr int SEARCH_Y        = 16;
+    static constexpr int SEARCH_H        = 46;
+
+    // "Pinned" header row
+    static constexpr int PINNED_HEADER_Y = 80;
+
+    // Pinned apps grid
+    static constexpr int PINNED_GRID_Y   = 114;
+    static constexpr int PINNED_COLS     = 3;
+    static constexpr int PINNED_ROWS     = 3;
+    static constexpr int PINNED_COUNT    = PINNED_COLS * PINNED_ROWS;   // 9
+    static constexpr int PINNED_CELL_W   = (WIDTH - 2 * MARGIN) / PINNED_COLS; // 180
+    static constexpr int PINNED_CELL_H   = 88;
+    static constexpr int PINNED_ICON_SZ  = 44;
+    static constexpr int PINNED_GRID_END = PINNED_GRID_Y + PINNED_ROWS * PINNED_CELL_H; // 378
+
+    // "Recommended" header row
+    static constexpr int REC_HEADER_Y    = PINNED_GRID_END + 12;   // 390
+    // Recommended items list
+    static constexpr int REC_START_Y     = REC_HEADER_Y + 34;      // 424
+    static constexpr int REC_ITEM_H      = 42;
+
+    // Bottom bar
+    static constexpr int BOTTOM_BAR_Y    = HEIGHT - 60;            // 640
+    static constexpr int POWER_BTN_R     = 16;   // radius of power button circle
+
+    // ── Window class names ──────────────────────────────────────────────────
+    static constexpr wchar_t WINDOW_CLASS[]      = L"CrystalFrame_StartMenu";
     static constexpr wchar_t EDIT_DIALOG_CLASS[] = L"CrystalFrame_EditDialog";
 
-    // Window procedure
-    static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-    static LRESULT CALLBACK EditDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    // ── Static pinned apps data ─────────────────────────────────────────────
+    static const PinnedItem s_pinnedItems[PINNED_COUNT];
 
-    // Instance method for handling messages
+    // ── Win32 plumbing ──────────────────────────────────────────────────────
+    static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     LRESULT HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam);
 
-    // Create the window
     bool CreateMenuWindow();
-
-    // Apply transparency effect
     void ApplyTransparency();
 
-    // Paint the window
+    // ── Painting ────────────────────────────────────────────────────────────
     void Paint();
+    void PaintSearchBox(HDC hdc, const RECT& cr);
+    void PaintPinnedSection(HDC hdc, const RECT& cr);
+    void PaintRecommendedSection(HDC hdc, const RECT& cr);
+    void PaintBottomBar(HDC hdc, const RECT& cr);
 
-    // Helper methods for interaction
-    int GetItemAtPoint(POINT pt);  // Returns item index at point, or -1
-    void ExecuteMenuItem(int index);  // Execute action for item
-    RECT GetItemRect(int index);  // Get screen rect for item
-    COLORREF CalculateHoverColor();  // Calculate hover color based on background
-    void ShowEditDialog(int itemIndex, bool isSubmenu, int submenuIndex);  // Show edit dialog for item
-    void LoadCustomNames();  // Load custom names from JSON
-    void SaveCustomNames();  // Save custom names to JSON
-    const wchar_t* GetMenuItemName(int index);  // Get name (custom or default)
-    const wchar_t* GetSubmenuItemName(int mainIndex, int subIndex);  // Get submenu name
-    const wchar_t* GetTitle();  // Get custom or default title
-    void ShowTitleEditDialog();  // Edit title specifically
+    // Draw a colored rounded icon square with a short label inside
+    void DrawIconSquare(HDC hdc, int cx, int cy, int sz,
+                        COLORREF bgColor, const wchar_t* label,
+                        COLORREF textColor = RGB(255, 255, 255));
 
-    // Flyout methods
-    bool CreateFlyoutWindow();  // Create flyout window
-    void ShowFlyout(int itemIndex);  // Show flyout for item
-    void HideFlyout();  // Hide flyout
-    void ApplyFlyoutTransparency();  // Apply transparency to flyout
-    void PaintFlyout();  // Paint flyout content
-    int GetSubmenuItemAtPoint(POINT pt);  // Returns submenu index at point in flyout
-    void ExecuteSubmenuItem(int mainIndex, int subIndex);  // Execute submenu action
-    RECT GetSubmenuItemRect(int index);  // Get rect for submenu item
+    // Draw a subtle horizontal separator line
+    void DrawSeparator(HDC hdc, int y, int x1, int x2);
 
-    // Window procedures
-    static LRESULT CALLBACK FlyoutWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-    LRESULT HandleFlyoutMessage(UINT msg, WPARAM wParam, LPARAM lParam);
+    // ── Hit testing ─────────────────────────────────────────────────────────
+    int  GetPinnedItemAtPoint(POINT pt);        // -1 if none
+    int  GetRecommendedItemAtPoint(POINT pt);   // -1 if none
+    bool IsOverPowerButton(POINT pt);
+
+    // ── Execution ───────────────────────────────────────────────────────────
+    void ExecutePinnedItem(int index);
+    void ExecuteRecommendedItem(int index);
+
+    // ── Color helpers ────────────────────────────────────────────────────────
+    COLORREF CalculateHoverColor();
+    COLORREF CalculateSubtleColor();   // slightly lighter/darker than bg
+    COLORREF CalculateBorderColor();   // subtle border
+
+    // ── Name helpers ─────────────────────────────────────────────────────────
+    const wchar_t* GetMenuItemName(int index);
+    const wchar_t* GetTitle();
+
+    // ── Persistence ──────────────────────────────────────────────────────────
+    void LoadCustomNames();
+    void SaveCustomNames();
+
+    // ── Power menu (Sleep / Shut down / Restart popup) ───────────────────────
+    void ShowPowerMenu();
+
+    // ── Edit dialog (rename recommended item) ────────────────────────────────
+    void ShowEditDialog(int itemIndex);
+    static LRESULT CALLBACK EditDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 };
 
 } // namespace CrystalFrame

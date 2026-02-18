@@ -1,87 +1,37 @@
 #include "StartMenuWindow.h"
 #include "Diagnostics.h"
-#include "Renderer.h" // For SetWindowCompositionAttribute
+#include "Renderer.h" // For ACCENT_POLICY / WINDOWCOMPOSITIONATTRIBDATA
 #include <dwmapi.h>
-#include <windowsx.h> // For GET_X_LPARAM, GET_Y_LPARAM
-#include <shellapi.h> // For ShellExecuteW
-#include <shlobj.h> // For SHGetKnownFolderPath
+#include <windowsx.h>
+#include <shellapi.h>
+#include <shlobj.h>
 #include <fstream>
 #include <sstream>
+#include <string>
+
+#include <powrprof.h>
 
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "powrprof.lib")
 
 namespace CrystalFrame {
 
-// Submenu content definitions (Windows 7 style)
-static SubMenuItem g_controlPanelSubmenu[] = {
-    {L"System", L"control system"},
-    {L"Network and Sharing Center", L"control /name Microsoft.NetworkAndSharingCenter"},
-    {L"Power Options", L"control powercfg.cpl"},
-    {L"Personalization", L"control desk.cpl"},
-    {L"Devices and Printers", L"control printers"}
+// ── Pinned apps (3 × 3 grid) ────────────────────────────────────────────────
+const PinnedItem StartMenuWindow::s_pinnedItems[StartMenuWindow::PINNED_COUNT] = {
+    { L"Settings",       L"Set",  L"ms-settings:",     RGB(  0, 103, 192) },
+    { L"File Explorer",  L"Exp",  L"explorer.exe",     RGB(255, 185,   0) },
+    { L"Edge",           L"Edge", L"msedge.exe",       RGB(  0, 120, 215) },
+    { L"Calculator",     L"Calc", L"calc.exe",         RGB( 16, 110, 190) },
+    { L"Notepad",        L"Note", L"notepad.exe",      RGB( 40, 160,  40) },
+    { L"Task Manager",   L"Task", L"taskmgr.exe",      RGB(196,  43,  28) },
+    { L"Control Panel",  L"CP",   L"control",          RGB(  0, 150, 130) },
+    { L"Command Prompt", L"CMD",  L"cmd.exe",          RGB( 12,  12,  12) },
+    { L"Snipping Tool",  L"Snip", L"snippingtool.exe", RGB(118,   0, 197) },
 };
 
-static SubMenuItem g_deviceManagerSubmenu[] = {
-    {L"Device Manager", L"devmgmt.msc"},
-    {L"Disk Management", L"diskmgmt.msc"},
-    {L"Computer Management", L"compmgmt.msc"}
-};
-
-static SubMenuItem g_installedAppsSubmenu[] = {
-    {L"Programs and Features", L"appwiz.cpl"},
-    {L"Default Programs", L"control /name Microsoft.DefaultPrograms"},
-    {L"Add Features", L"optionalfeatures"}
-};
-
-static SubMenuItem g_documentsSubmenu[] = {
-    {L"Documents", L"shell:Personal"},
-    {L"Downloads", L"shell:Downloads"},
-    {L"Desktop", L"shell:Desktop"}
-};
-
-static SubMenuItem g_picturesSubmenu[] = {
-    {L"Pictures", L"shell:My Pictures"},
-    {L"Screenshots", L"shell:Screenshots"},
-    {L"Camera Roll", L"shell:Camera Roll"}
-};
-
-static SubMenuItem g_videosSubmenu[] = {
-    {L"Videos", L"shell:My Video"},
-    {L"Recorded TV", L"shell:RecordedTVLibrary"}
-};
-
-static SubMenuItem g_recentSubmenu[] = {
-    {L"Recent Files", L"shell:Recent"},
-    {L"Frequent Places", L"shell:Frequent"}
-};
-
-StartMenuWindow::StartMenuWindow()
-    : m_opacity(30) // Start with 30% opacity (more opaque, easier to see)
-{
-    // Initialize submenu pointers
-    m_menuItems[0].submenuItems = g_controlPanelSubmenu;
-    m_menuItems[0].submenuCount = _countof(g_controlPanelSubmenu);
-
-    m_menuItems[1].submenuItems = g_deviceManagerSubmenu;
-    m_menuItems[1].submenuCount = _countof(g_deviceManagerSubmenu);
-
-    m_menuItems[2].submenuItems = g_installedAppsSubmenu;
-    m_menuItems[2].submenuCount = _countof(g_installedAppsSubmenu);
-
-    m_menuItems[3].submenuItems = g_documentsSubmenu;
-    m_menuItems[3].submenuCount = _countof(g_documentsSubmenu);
-
-    m_menuItems[4].submenuItems = g_picturesSubmenu;
-    m_menuItems[4].submenuCount = _countof(g_picturesSubmenu);
-
-    m_menuItems[5].submenuItems = g_videosSubmenu;
-    m_menuItems[5].submenuCount = _countof(g_videosSubmenu);
-
-    m_menuItems[6].submenuItems = g_recentSubmenu;
-    m_menuItems[6].submenuCount = _countof(g_recentSubmenu);
-
-    // Load custom menu names from JSON
+// ── Constructor / Destructor ─────────────────────────────────────────────────
+StartMenuWindow::StartMenuWindow() {
     LoadCustomNames();
 }
 
@@ -89,56 +39,40 @@ StartMenuWindow::~StartMenuWindow() {
     Shutdown();
 }
 
+// ── Initialization ───────────────────────────────────────────────────────────
 bool StartMenuWindow::Initialize() {
-    CF_LOG(Info, "StartMenuWindow::Initialize");
+    CF_LOG(Info, "StartMenuWindow::Initialize (Win11 layout)");
 
     // Register main window class
-    WNDCLASSEXW wc = {};
-    wc.cbSize = sizeof(WNDCLASSEXW);
-    wc.lpfnWndProc = WindowProc;
-    wc.hInstance = GetModuleHandle(NULL);
+    WNDCLASSEXW wc   = {};
+    wc.cbSize        = sizeof(WNDCLASSEXW);
+    wc.lpfnWndProc   = WindowProc;
+    wc.hInstance     = GetModuleHandle(NULL);
     wc.lpszClassName = WINDOW_CLASS;
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
 
     if (!RegisterClassExW(&wc)) {
-        DWORD error = GetLastError();
-        if (error != ERROR_CLASS_ALREADY_EXISTS) {
-            CF_LOG(Error, "Failed to register window class: " << error);
+        DWORD err = GetLastError();
+        if (err != ERROR_CLASS_ALREADY_EXISTS) {
+            CF_LOG(Error, "Failed to register window class: " << err);
             return false;
         }
     }
 
-    // Register flyout window class
-    WNDCLASSEXW flyoutWc = {};
-    flyoutWc.cbSize = sizeof(WNDCLASSEXW);
-    flyoutWc.lpfnWndProc = FlyoutWindowProc;
-    flyoutWc.hInstance = GetModuleHandle(NULL);
-    flyoutWc.lpszClassName = FLYOUT_CLASS;
-    flyoutWc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    flyoutWc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
-
-    if (!RegisterClassExW(&flyoutWc)) {
-        DWORD error = GetLastError();
-        if (error != ERROR_CLASS_ALREADY_EXISTS) {
-            CF_LOG(Error, "Failed to register flyout window class: " << error);
-            return false;
-        }
-    }
-
-    // Register edit dialog window class
-    WNDCLASSEXW editWc = {};
-    editWc.cbSize = sizeof(WNDCLASSEXW);
-    editWc.lpfnWndProc = EditDialogProc;
-    editWc.hInstance = GetModuleHandle(NULL);
+    // Register edit-dialog class
+    WNDCLASSEXW editWc   = {};
+    editWc.cbSize        = sizeof(WNDCLASSEXW);
+    editWc.lpfnWndProc   = EditDialogProc;
+    editWc.hInstance     = GetModuleHandle(NULL);
     editWc.lpszClassName = EDIT_DIALOG_CLASS;
     editWc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-    editWc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    editWc.hCursor       = LoadCursor(NULL, IDC_ARROW);
 
     if (!RegisterClassExW(&editWc)) {
-        DWORD error = GetLastError();
-        if (error != ERROR_CLASS_ALREADY_EXISTS) {
-            CF_LOG(Error, "Failed to register edit dialog class: " << error);
+        DWORD err = GetLastError();
+        if (err != ERROR_CLASS_ALREADY_EXISTS) {
+            CF_LOG(Error, "Failed to register edit dialog class: " << err);
             return false;
         }
     }
@@ -148,41 +82,26 @@ bool StartMenuWindow::Initialize() {
 }
 
 void StartMenuWindow::Shutdown() {
-    HideFlyout();
-
-    if (m_hoverTimer) {
-        KillTimer(m_hwnd, m_hoverTimer);
-        m_hoverTimer = 0;
-    }
-
-    if (m_hwndFlyout) {
-        DestroyWindow(m_hwndFlyout);
-        m_hwndFlyout = nullptr;
-    }
-
     if (m_hwnd) {
         DestroyWindow(m_hwnd);
         m_hwnd = nullptr;
     }
+    m_visible = false;
 }
 
+// ── Window creation ──────────────────────────────────────────────────────────
 bool StartMenuWindow::CreateMenuWindow() {
-    if (m_hwnd) {
-        return true; // Already created
-    }
+    if (m_hwnd) return true;
 
-    // Create layered window for transparency
-    // NOTE: NO WS_EX_TRANSPARENT - we want to receive mouse events!
     m_hwnd = CreateWindowExW(
         WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
         WINDOW_CLASS,
         L"CrystalFrame Start Menu",
-        WS_POPUP, // Popup window (no title bar)
+        WS_POPUP,
         0, 0, WIDTH, HEIGHT,
-        NULL,
-        NULL,
+        NULL, NULL,
         GetModuleHandle(NULL),
-        this // Pass 'this' pointer for WindowProc
+        this
     );
 
     if (!m_hwnd) {
@@ -190,112 +109,92 @@ bool StartMenuWindow::CreateMenuWindow() {
         return false;
     }
 
-    // Initialize layered window attributes for proper transparency
-    if (!SetLayeredWindowAttributes(m_hwnd, 0, 255, LWA_ALPHA)) {
-        CF_LOG(Warning, "Failed to set layered window attributes: " << GetLastError());
-    }
+    SetLayeredWindowAttributes(m_hwnd, 0, 255, LWA_ALPHA);
 
-    // Apply rounded corners (Windows 11 style) using DWM
-    DWM_WINDOW_CORNER_PREFERENCE cornerPref = DWMWCP_ROUND;
+    // Windows 11 rounded corners via DWM
+    DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_ROUND;
     DwmSetWindowAttribute(m_hwnd, DWMWA_WINDOW_CORNER_PREFERENCE,
-                          &cornerPref, sizeof(cornerPref));
+                          &corner, sizeof(corner));
 
-    CF_LOG(Info, "Start Menu window created - HWND: 0x" << std::hex << reinterpret_cast<uintptr_t>(m_hwnd) << std::dec);
+    CF_LOG(Info, "Start Menu window created (Win11 style) HWND=0x"
+                 << std::hex << reinterpret_cast<uintptr_t>(m_hwnd) << std::dec);
     return true;
 }
 
-void StartMenuWindow::Show(int x, int y) {
-    CF_LOG(Info, "StartMenuWindow::Show at (" << x << ", " << y << ")");
+// ── Show / Hide ──────────────────────────────────────────────────────────────
+void StartMenuWindow::Show(int /*x*/, int /*y*/) {
+    CF_LOG(Info, "StartMenuWindow::Show");
 
-    if (!m_hwnd && !CreateMenuWindow()) {
-        return;
-    }
+    if (!m_hwnd && !CreateMenuWindow()) return;
 
-    // Get precise taskbar position
-    HWND hwndTaskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
-    RECT taskbarRect = {};
-    int menuY = y;
+    // Position: 1 px above taskbar top edge
+    HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
+    RECT tbRect  = {};
+    int  menuY   = 0;
 
-    if (hwndTaskbar && GetWindowRect(hwndTaskbar, &taskbarRect)) {
-        // Position menu 1px above taskbar's top edge
-        menuY = taskbarRect.top - HEIGHT - 1;
-        CF_LOG(Info, "Taskbar top edge: " << taskbarRect.top << ", menu Y: " << menuY);
+    if (taskbar && GetWindowRect(taskbar, &tbRect)) {
+        menuY = tbRect.top - HEIGHT - 1;
     } else {
-        // Fallback to old logic
-        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-        if (y > screenHeight - 100) {
-            menuY = y - HEIGHT;
-        }
+        menuY = GetSystemMetrics(SM_CYSCREEN) - HEIGHT - 48;
     }
-
-    // Ensure menu stays on screen
     if (menuY < 0) menuY = 0;
 
-    // Position 5px from left edge of monitor
-    int menuX = 5;
-
-    // Ensure menu doesn't go off right edge
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    if (menuX + WIDTH > screenWidth) {
-        menuX = screenWidth - WIDTH;
-    }
+    // Center horizontally on primary monitor (Win11 style)
+    int screenW = GetSystemMetrics(SM_CXSCREEN);
+    int menuX   = (screenW - WIDTH) / 2;
+    if (menuX < 0) menuX = 0;
 
     SetWindowPos(m_hwnd, HWND_TOPMOST, menuX, menuY, WIDTH, HEIGHT,
                  SWP_SHOWWINDOW | SWP_NOACTIVATE);
-
     ApplyTransparency();
     ShowWindow(m_hwnd, SW_SHOWNOACTIVATE);
     UpdateWindow(m_hwnd);
-
     m_visible = true;
-    CF_LOG(Info, "Start Menu window shown at (" << menuX << ", " << menuY << ")");
+
+    CF_LOG(Info, "Start Menu shown at (" << menuX << ", " << menuY << ")");
 }
 
 void StartMenuWindow::Hide() {
     if (m_hwnd && m_visible) {
-        CF_LOG(Info, "StartMenuWindow::Hide");
-        HideFlyout();
-        if (m_hoverTimer) {
-            KillTimer(m_hwnd, m_hoverTimer);
-            m_hoverTimer = 0;
-        }
         ShowWindow(m_hwnd, SW_HIDE);
-        m_visible = false;
+        m_visible                 = false;
+        m_hoveredPinnedIndex      = -1;
+        m_hoveredRecommendedIndex = -1;
+        m_hoveredPower            = false;
+        CF_LOG(Info, "StartMenuWindow::Hide");
     }
 }
 
 RECT StartMenuWindow::GetWindowBounds() const {
-    RECT bounds = {};
-    if (m_hwnd && m_visible && IsWindow(m_hwnd)) {
-        GetWindowRect(m_hwnd, &bounds);
-    }
-    return bounds;
+    RECT r = {};
+    if (m_hwnd && m_visible && IsWindow(m_hwnd))
+        GetWindowRect(m_hwnd, &r);
+    return r;
 }
 
+// ── Appearance setters ───────────────────────────────────────────────────────
 void StartMenuWindow::SetOpacity(int opacity) {
     m_opacity = opacity;
-    if (m_visible) {
-        ApplyTransparency();
-    }
+    if (m_visible) ApplyTransparency();
 }
 
 void StartMenuWindow::SetBackgroundColor(COLORREF color) {
     m_bgColor = color;
     if (m_visible) {
-        ApplyTransparency();
-        InvalidateRect(m_hwnd, NULL, TRUE);
+        ApplyTransparency();          // sync DWM accent/tint with new color
+        InvalidateRect(m_hwnd, NULL, FALSE);
     }
 }
 
 void StartMenuWindow::SetTextColor(COLORREF color) {
     m_textColor = color;
-    if (m_visible) {
-        InvalidateRect(m_hwnd, NULL, TRUE);
-    }
+    if (m_visible) InvalidateRect(m_hwnd, NULL, FALSE);
 }
 
-void StartMenuWindow::SetMenuItems(bool controlPanel, bool deviceManager, bool installedApps,
-                                    bool documents, bool pictures, bool videos, bool recentFiles) {
+void StartMenuWindow::SetMenuItems(bool controlPanel, bool deviceManager,
+                                   bool installedApps, bool documents,
+                                   bool pictures,     bool videos,
+                                   bool recentFiles) {
     m_menuItems[0].visible = controlPanel;
     m_menuItems[1].visible = deviceManager;
     m_menuItems[2].visible = installedApps;
@@ -303,1235 +202,762 @@ void StartMenuWindow::SetMenuItems(bool controlPanel, bool deviceManager, bool i
     m_menuItems[4].visible = pictures;
     m_menuItems[5].visible = videos;
     m_menuItems[6].visible = recentFiles;
-
-    if (m_visible) {
-        InvalidateRect(m_hwnd, NULL, TRUE);
-    }
+    if (m_visible) InvalidateRect(m_hwnd, NULL, FALSE);
 }
 
+// ── Transparency ─────────────────────────────────────────────────────────────
 void StartMenuWindow::ApplyTransparency() {
     if (!m_hwnd) return;
 
-    // Use SetWindowCompositionAttribute - same as taskbar transparency
-    using SetWindowCompositionAttributeFunc = BOOL(WINAPI*)(HWND, WINDOWCOMPOSITIONATTRIBDATA*);
-
-    HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    using SetWCAFunc = BOOL(WINAPI*)(HWND, WINDOWCOMPOSITIONATTRIBDATA*);
+    HMODULE user32  = GetModuleHandleW(L"user32.dll");
     if (!user32) return;
 
-    auto setWindowCompositionAttribute =
-        reinterpret_cast<SetWindowCompositionAttributeFunc>(
-            GetProcAddress(user32, "SetWindowCompositionAttribute"));
+    auto setWCA = reinterpret_cast<SetWCAFunc>(
+        GetProcAddress(user32, "SetWindowCompositionAttribute"));
+    if (!setWCA) return;
 
-    if (!setWindowCompositionAttribute) {
-        CF_LOG(Warning, "SetWindowCompositionAttribute not available");
-        return;
-    }
-
-    // Calculate alpha: 0% opacity = 255 alpha (opaque), 100% opacity = 0 alpha (transparent)
     BYTE alpha = static_cast<BYTE>(((100 - m_opacity) * 255) / 100);
 
-    ACCENT_POLICY accent = {};
-    accent.AccentState = ACCENT_ENABLE_TRANSPARENTGRADIENT;
-    accent.AccentFlags = 2;
-    accent.GradientColor = (alpha << 24) | (m_bgColor & 0x00FFFFFF);
-    accent.AnimationId = 0;
+    // GradientColor is ABGR
+    ACCENT_POLICY accent    = {};
+    accent.AccentState      = ACCENT_ENABLE_TRANSPARENTGRADIENT;
+    accent.AccentFlags      = 2;
+    accent.GradientColor    = (static_cast<DWORD>(alpha) << 24)
+                            | (static_cast<DWORD>(GetBValue(m_bgColor)) << 16)
+                            | (static_cast<DWORD>(GetGValue(m_bgColor)) <<  8)
+                            |  static_cast<DWORD>(GetRValue(m_bgColor));
 
     WINDOWCOMPOSITIONATTRIBDATA data = {};
-    data.Attrib = WCA_ACCENT_POLICY;
-    data.pvData = &accent;
-    data.cbData = sizeof(accent);
+    data.Attrib  = WCA_ACCENT_POLICY;
+    data.pvData  = &accent;
+    data.cbData  = sizeof(accent);
 
-    setWindowCompositionAttribute(m_hwnd, &data);
-
-    CF_LOG(Debug, "Start Menu transparency applied - opacity=" << m_opacity << "%, alpha=" << (int)alpha);
+    setWCA(m_hwnd, &data);
 }
 
+// ── Color helpers ─────────────────────────────────────────────────────────────
+COLORREF StartMenuWindow::CalculateHoverColor() {
+    int r   = GetRValue(m_bgColor);
+    int g   = GetGValue(m_bgColor);
+    int b   = GetBValue(m_bgColor);
+    int lum = (r * 299 + g * 587 + b * 114) / 1000;
+    int d   = (lum < 128) ? 38 : -38;
+    return RGB(max(0, min(255, r + d)),
+               max(0, min(255, g + d)),
+               max(0, min(255, b + d)));
+}
+
+COLORREF StartMenuWindow::CalculateSubtleColor() {
+    int r   = GetRValue(m_bgColor);
+    int g   = GetGValue(m_bgColor);
+    int b   = GetBValue(m_bgColor);
+    int lum = (r * 299 + g * 587 + b * 114) / 1000;
+    int d   = (lum < 128) ? 16 : -16;
+    return RGB(max(0, min(255, r + d)),
+               max(0, min(255, g + d)),
+               max(0, min(255, b + d)));
+}
+
+COLORREF StartMenuWindow::CalculateBorderColor() {
+    int r   = GetRValue(m_bgColor);
+    int g   = GetGValue(m_bgColor);
+    int b   = GetBValue(m_bgColor);
+    int lum = (r * 299 + g * 587 + b * 114) / 1000;
+    int d   = (lum < 128) ? 55 : -55;
+    return RGB(max(0, min(255, r + d)),
+               max(0, min(255, g + d)),
+               max(0, min(255, b + d)));
+}
+
+// ── DrawIconSquare ────────────────────────────────────────────────────────────
+void StartMenuWindow::DrawIconSquare(HDC hdc, int cx, int cy, int sz,
+                                     COLORREF bgColor, const wchar_t* label,
+                                     COLORREF textColor) {
+    int half = sz / 2;
+    int x1 = cx - half, y1 = cy - half;
+    int x2 = cx + half, y2 = cy + half;
+
+    HBRUSH icoBr  = CreateSolidBrush(bgColor);
+    HPEN   noPen  = (HPEN)GetStockObject(NULL_PEN);
+    HBRUSH oldBr  = (HBRUSH)SelectObject(hdc, icoBr);
+    HPEN   oldPen = (HPEN)SelectObject(hdc, noPen);
+    RoundRect(hdc, x1, y1, x2, y2, 10, 10);
+    SelectObject(hdc, oldBr);
+    SelectObject(hdc, oldPen);
+    DeleteObject(icoBr);
+
+    if (label && label[0]) {
+        HFONT font = CreateFontW(
+            14, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        HFONT oldFont = (HFONT)SelectObject(hdc, font);
+        ::SetTextColor(hdc, textColor);
+        SetBkMode(hdc, TRANSPARENT);
+        RECT tr = { x1, y1, x2, y2 };
+        DrawTextW(hdc, label, -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, oldFont);
+        DeleteObject(font);
+    }
+}
+
+// ── DrawSeparator ─────────────────────────────────────────────────────────────
+void StartMenuWindow::DrawSeparator(HDC hdc, int y, int x1, int x2) {
+    HPEN pen    = CreatePen(PS_SOLID, 1, CalculateBorderColor());
+    HPEN oldPen = (HPEN)SelectObject(hdc, pen);
+    MoveToEx(hdc, x1, y, NULL);
+    LineTo(hdc, x2, y);
+    SelectObject(hdc, oldPen);
+    DeleteObject(pen);
+}
+
+// ── PaintSearchBox ────────────────────────────────────────────────────────────
+void StartMenuWindow::PaintSearchBox(HDC hdc, const RECT& cr) {
+    int bx1 = MARGIN, by1 = SEARCH_Y;
+    int bx2 = cr.right - MARGIN, by2 = SEARCH_Y + SEARCH_H;
+
+    // Box background
+    HBRUSH srBr  = CreateSolidBrush(CalculateSubtleColor());
+    HPEN   srPen = CreatePen(PS_SOLID, 1, CalculateBorderColor());
+    HBRUSH oldBr = (HBRUSH)SelectObject(hdc, srBr);
+    HPEN   oldPn = (HPEN)SelectObject(hdc, srPen);
+    RoundRect(hdc, bx1, by1, bx2, by2, 8, 8);
+    SelectObject(hdc, oldBr);
+    SelectObject(hdc, oldPn);
+    DeleteObject(srBr);
+    DeleteObject(srPen);
+
+    // Magnifier icon — drawn as circle + angled line
+    int icoX = bx1 + 22, icoY = (by1 + by2) / 2, icoR = 7;
+    HPEN mgPen = CreatePen(PS_SOLID, 2, RGB(155, 155, 165));
+    HPEN oldP2 = (HPEN)SelectObject(hdc, mgPen);
+    HBRUSH nb  = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    Ellipse(hdc, icoX - icoR, icoY - icoR, icoX + icoR, icoY + icoR);
+    MoveToEx(hdc, icoX + icoR - 2, icoY + icoR - 2, NULL);
+    LineTo(hdc, icoX + icoR + 4, icoY + icoR + 4);
+    SelectObject(hdc, oldP2);
+    SelectObject(hdc, nb);
+    DeleteObject(mgPen);
+
+    // Placeholder text
+    HFONT ph = CreateFontW(15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    HFONT oldF = (HFONT)SelectObject(hdc, ph);
+    ::SetTextColor(hdc, RGB(135, 135, 145));
+    SetBkMode(hdc, TRANSPARENT);
+    RECT tr = { bx1 + 42, by1, bx2 - 10, by2 };
+    DrawTextW(hdc, L"Search for apps, settings, and documents",
+              -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    SelectObject(hdc, oldF);
+    DeleteObject(ph);
+}
+
+// ── PaintPinnedSection ────────────────────────────────────────────────────────
+void StartMenuWindow::PaintPinnedSection(HDC hdc, const RECT& cr) {
+    SetBkMode(hdc, TRANSPARENT);
+
+    HFONT hdrFont = CreateFontW(15, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    HFONT lblFont = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+
+    // "Pinned" header
+    HFONT oldF = (HFONT)SelectObject(hdc, hdrFont);
+    ::SetTextColor(hdc, m_textColor);
+    RECT hdrL = { MARGIN, PINNED_HEADER_Y, cr.right / 2, PINNED_HEADER_Y + 22 };
+    DrawTextW(hdc, L"Pinned", -1, &hdrL, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    // "All apps ›" — right side
+    ::SetTextColor(hdc, RGB(130, 155, 200));
+    RECT hdrR = { cr.right / 2, PINNED_HEADER_Y,
+                  cr.right - MARGIN, PINNED_HEADER_Y + 22 };
+    DrawTextW(hdc, L"All apps  \u203a", -1, &hdrR,
+              DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+
+    // Grid items
+    for (int i = 0; i < PINNED_COUNT; ++i) {
+        int col   = i % PINNED_COLS;
+        int row   = i / PINNED_COLS;
+        int cellX = MARGIN + col * PINNED_CELL_W;
+        int cellY = PINNED_GRID_Y + row * PINNED_CELL_H;
+        int cx    = cellX + PINNED_CELL_W / 2;
+        int cy    = cellY + PINNED_ICON_SZ / 2 + 8;
+
+        // Hover highlight
+        if (i == m_hoveredPinnedIndex) {
+            HBRUSH hBr  = CreateSolidBrush(CalculateHoverColor());
+            HPEN   noPn = (HPEN)GetStockObject(NULL_PEN);
+            HBRUSH ob   = (HBRUSH)SelectObject(hdc, hBr);
+            HPEN   op   = (HPEN)SelectObject(hdc, noPn);
+            RoundRect(hdc, cellX + 4, cellY + 4,
+                      cellX + PINNED_CELL_W - 4, cellY + PINNED_CELL_H - 4,
+                      10, 10);
+            SelectObject(hdc, ob);
+            SelectObject(hdc, op);
+            DeleteObject(hBr);
+        }
+
+        // Icon
+        DrawIconSquare(hdc, cx, cy, PINNED_ICON_SZ,
+                       s_pinnedItems[i].iconColor,
+                       s_pinnedItems[i].shortName);
+
+        // App name
+        SelectObject(hdc, lblFont);
+        ::SetTextColor(hdc, m_textColor);
+        int labelY = cellY + PINNED_ICON_SZ + 16;
+        RECT nr = { cellX + 4, labelY,
+                    cellX + PINNED_CELL_W - 4, labelY + 18 };
+        DrawTextW(hdc, s_pinnedItems[i].name, -1, &nr,
+                  DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    }
+
+    SelectObject(hdc, oldF);
+    DeleteObject(hdrFont);
+    DeleteObject(lblFont);
+
+    // Divider below grid
+    DrawSeparator(hdc, PINNED_GRID_END + 6, MARGIN, cr.right - MARGIN);
+}
+
+// ── PaintRecommendedSection ───────────────────────────────────────────────────
+void StartMenuWindow::PaintRecommendedSection(HDC hdc, const RECT& cr) {
+    SetBkMode(hdc, TRANSPARENT);
+
+    HFONT hdrFont = CreateFontW(15, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    HFONT itmFont = CreateFontW(15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+
+    // "Recommended" header
+    HFONT oldF = (HFONT)SelectObject(hdc, hdrFont);
+    ::SetTextColor(hdc, m_textColor);
+    RECT hl = { MARGIN, REC_HEADER_Y, cr.right / 2, REC_HEADER_Y + 22 };
+    DrawTextW(hdc, L"Recommended", -1, &hl, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    ::SetTextColor(hdc, RGB(130, 155, 200));
+    RECT hr = { cr.right / 2, REC_HEADER_Y,
+                cr.right - MARGIN, REC_HEADER_Y + 22 };
+    DrawTextW(hdc, L"More  \u203a", -1, &hr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+
+    // Two-column layout, up to 4 visible items
+    static const COLORREF recColors[7] = {
+        RGB(  0, 120, 215), RGB(  0, 150, 130), RGB( 70, 130, 180),
+        RGB(200, 100,  20), RGB(100, 180,  50), RGB(180,  50, 100),
+        RGB(150, 100, 200)
+    };
+
+    int colW   = (cr.right - 2 * MARGIN) / 2;
+    int visIdx = 0;
+
+    for (int i = 0; i < 7 && visIdx < 4; ++i) {
+        if (!m_menuItems[i].visible) continue;
+
+        int col   = visIdx % 2;
+        int row   = visIdx / 2;
+        int itemX = MARGIN + col * colW;
+        int itemY = REC_START_Y + row * REC_ITEM_H;
+
+        // Hover highlight
+        if (i == m_hoveredRecommendedIndex) {
+            HBRUSH hBr  = CreateSolidBrush(CalculateHoverColor());
+            HPEN   noPn = (HPEN)GetStockObject(NULL_PEN);
+            HBRUSH ob   = (HBRUSH)SelectObject(hdc, hBr);
+            HPEN   op   = (HPEN)SelectObject(hdc, noPn);
+            RoundRect(hdc, itemX + 2, itemY + 2,
+                      itemX + colW - 2, itemY + REC_ITEM_H - 2,
+                      8, 8);
+            SelectObject(hdc, ob);
+            SelectObject(hdc, op);
+            DeleteObject(hBr);
+        }
+
+        // Small icon square
+        int iconCX = itemX + 20;
+        int iconCY = itemY + REC_ITEM_H / 2;
+        DrawIconSquare(hdc, iconCX, iconCY, 24, recColors[i], L"");
+
+        // Label
+        SelectObject(hdc, itmFont);
+        ::SetTextColor(hdc, m_textColor);
+        RECT nr = { itemX + 36, itemY,
+                    itemX + colW - 6, itemY + REC_ITEM_H };
+        DrawTextW(hdc, GetMenuItemName(i), -1, &nr,
+                  DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+
+        ++visIdx;
+    }
+
+    SelectObject(hdc, oldF);
+    DeleteObject(hdrFont);
+    DeleteObject(itmFont);
+
+    // Divider above bottom bar
+    DrawSeparator(hdc, BOTTOM_BAR_Y - 1, MARGIN, cr.right - MARGIN);
+}
+
+// ── PaintBottomBar ────────────────────────────────────────────────────────────
+void StartMenuWindow::PaintBottomBar(HDC hdc, const RECT& cr) {
+    SetBkMode(hdc, TRANSPARENT);
+
+    // Slightly different background
+    HBRUSH bbBr = CreateSolidBrush(CalculateSubtleColor());
+    RECT   bbR  = { 0, BOTTOM_BAR_Y, cr.right, cr.bottom };
+    FillRect(hdc, &bbR, bbBr);
+    DeleteObject(bbBr);
+
+    int barCY = BOTTOM_BAR_Y + (cr.bottom - BOTTOM_BAR_Y) / 2;
+
+    // ── Avatar circle ──
+    int avCX = MARGIN + 18, avR = 16;
+    HBRUSH avBr  = CreateSolidBrush(RGB(0, 103, 192));
+    HPEN   noPen = (HPEN)GetStockObject(NULL_PEN);
+    HBRUSH oldBr = (HBRUSH)SelectObject(hdc, avBr);
+    HPEN   oldPn = (HPEN)SelectObject(hdc, noPen);
+    Ellipse(hdc, avCX - avR, barCY - avR, avCX + avR, barCY + avR);
+    SelectObject(hdc, oldBr);
+    SelectObject(hdc, oldPn);
+    DeleteObject(avBr);
+
+    HFONT initF = CreateFontW(14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    HFONT oldF = (HFONT)SelectObject(hdc, initF);
+    ::SetTextColor(hdc, RGB(255, 255, 255));
+    RECT avTR = { avCX - avR, barCY - avR, avCX + avR, barCY + avR };
+    DrawTextW(hdc, L"U", -1, &avTR, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    // ── "User" label ──
+    HFONT nmF = CreateFontW(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    SelectObject(hdc, nmF);
+    ::SetTextColor(hdc, m_textColor);
+    RECT nmR = { avCX + avR + 8, BOTTOM_BAR_Y, cr.right / 2, cr.bottom };
+    DrawTextW(hdc, L"User", -1, &nmR, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    // ── Power button ──
+    int pwrCX = cr.right - MARGIN - POWER_BTN_R;
+    int pwrCY = barCY;
+
+    // Hover background ring
+    if (m_hoveredPower) {
+        HBRUSH hBr  = CreateSolidBrush(CalculateHoverColor());
+        HBRUSH ob2  = (HBRUSH)SelectObject(hdc, hBr);
+        HPEN   op2  = (HPEN)SelectObject(hdc, noPen);
+        Ellipse(hdc, pwrCX - POWER_BTN_R - 4, pwrCY - POWER_BTN_R - 4,
+                     pwrCX + POWER_BTN_R + 4, pwrCY + POWER_BTN_R + 4);
+        SelectObject(hdc, ob2);
+        SelectObject(hdc, op2);
+        DeleteObject(hBr);
+    }
+
+    // Power symbol: open arc at top + vertical tick
+    COLORREF pwrCol = m_hoveredPower ? RGB(255, 255, 255) : RGB(175, 175, 185);
+    HPEN pwrPen  = CreatePen(PS_SOLID, 2, pwrCol);
+    HPEN oldPen2 = (HPEN)SelectObject(hdc, pwrPen);
+    HBRUSH nb2   = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    int ar = POWER_BTN_R - 4;
+    // Arc from ~315° to ~225° going clockwise (gap at top)
+    Arc(hdc,
+        pwrCX - ar, pwrCY - ar, pwrCX + ar, pwrCY + ar,
+        pwrCX - ar + 3, pwrCY - ar,    // start point (upper-left)
+        pwrCX + ar - 3, pwrCY - ar);   // end point   (upper-right)
+    // Vertical line (power tick)
+    MoveToEx(hdc, pwrCX, pwrCY - ar + 1, NULL);
+    LineTo  (hdc, pwrCX, pwrCY - 1);
+
+    SelectObject(hdc, oldPen2);
+    SelectObject(hdc, oldF);
+    DeleteObject(pwrPen);
+    DeleteObject(initF);
+    DeleteObject(nmF);
+    (void)nb2;
+}
+
+// ── Paint (master) ───────────────────────────────────────────────────────────
 void StartMenuWindow::Paint() {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(m_hwnd, &ps);
 
-    // Get client rect
-    RECT rect;
-    GetClientRect(m_hwnd, &rect);
+    RECT cr;
+    GetClientRect(m_hwnd, &cr);
 
-    // Fill with background color (transparency is handled by composition)
-    HBRUSH brush = CreateSolidBrush(m_bgColor);
-    FillRect(hdc, &rect, brush);
-    DeleteObject(brush);
+    // Background
+    HBRUSH bg = CreateSolidBrush(m_bgColor);
+    FillRect(hdc, &cr, bg);
+    DeleteObject(bg);
 
-    // Draw a border for visibility
-    HPEN borderPen = CreatePen(PS_SOLID, 2, RGB(100, 100, 255));
-    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
-    HBRUSH nullBrush = (HBRUSH)GetStockObject(NULL_BRUSH);
-    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, nullBrush);
-    Rectangle(hdc, 1, 1, rect.right - 1, rect.bottom - 1);
-    SelectObject(hdc, oldPen);
-    SelectObject(hdc, oldBrush);
-    DeleteObject(borderPen);
+    // Outer border
+    HPEN  bdrPen = CreatePen(PS_SOLID, 1, CalculateBorderColor());
+    HPEN  oldPn  = (HPEN)SelectObject(hdc, bdrPen);
+    HBRUSH nb    = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    RoundRect(hdc, 0, 0, cr.right, cr.bottom, 12, 12);
+    SelectObject(hdc, oldPn);
+    SelectObject(hdc, nb);
+    DeleteObject(bdrPen);
 
-    // Draw placeholder text with configured color
-    ::SetTextColor(hdc, m_textColor);
-    SetBkMode(hdc, TRANSPARENT);
-
-    HFONT font = CreateFontW(
-        32, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
-        L"Segoe UI"
-    );
-
-    HFONT oldFont = (HFONT)SelectObject(hdc, font);
-
-    // Title
-    RECT titleRect = rect;
-    titleRect.top = 20;
-    titleRect.bottom = 70;
-    DrawTextW(hdc, GetTitle(), -1, &titleRect,
-              DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-    // Draw menu items
-    HFONT itemFont = CreateFontW(
-        20, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
-        L"Segoe UI"
-    );
-
-    SelectObject(hdc, itemFont);
-    ::SetTextColor(hdc, m_textColor);
-
-    int yPos = 100;
-    const int itemHeight = 45;
-    const int leftMargin = 30;
-
-    for (int i = 0; i < 7; i++) {
-        if (m_menuItems[i].visible) {
-            RECT itemRect;
-            itemRect.left = leftMargin;
-            itemRect.top = yPos;
-            itemRect.right = rect.right - leftMargin;
-            itemRect.bottom = yPos + itemHeight;
-
-            // Draw hover highlight with rounded corners
-            if (i == m_hoveredItemIndex) {
-                HBRUSH hoverBrush = CreateSolidBrush(CalculateHoverColor());
-                HBRUSH oldHoverBrush = (HBRUSH)SelectObject(hdc, hoverBrush);
-                HPEN nullHoverPen = (HPEN)GetStockObject(NULL_PEN);
-                HPEN oldHoverPen = (HPEN)SelectObject(hdc, nullHoverPen);
-
-                // Rounded rectangle (5px corner radius)
-                RoundRect(hdc, itemRect.left, itemRect.top, itemRect.right, itemRect.bottom,
-                          5, 5);
-
-                SelectObject(hdc, oldHoverPen);
-                SelectObject(hdc, oldHoverBrush);
-                DeleteObject(hoverBrush);
-            }
-
-            // Draw item name (custom or default)
-            DrawTextW(hdc, GetMenuItemName(i), -1, &itemRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-            yPos += itemHeight;
-        }
-    }
-
-    // Cleanup fonts
-    SelectObject(hdc, oldFont);
-    DeleteObject(font);
-    DeleteObject(itemFont);
+    PaintSearchBox(hdc, cr);
+    PaintPinnedSection(hdc, cr);
+    PaintRecommendedSection(hdc, cr);
+    PaintBottomBar(hdc, cr);
 
     EndPaint(m_hwnd, &ps);
 }
 
-int StartMenuWindow::GetItemAtPoint(POINT pt) {
-    // Convert to client coordinates
-    POINT clientPt = pt;
-
-    RECT clientRect;
-    GetClientRect(m_hwnd, &clientRect);
-
-    const int itemHeight = 45;
-    const int leftMargin = 30;
-    int yPos = 100;
-
-    for (int i = 0; i < 7; i++) {
-        if (m_menuItems[i].visible) {
-            RECT itemRect;
-            itemRect.left = leftMargin;
-            itemRect.top = yPos;
-            itemRect.right = clientRect.right - leftMargin;
-            itemRect.bottom = yPos + itemHeight;
-
-            if (PtInRect(&itemRect, clientPt)) {
-                return i;
-            }
-
-            yPos += itemHeight;
-        }
+// ── Hit testing ───────────────────────────────────────────────────────────────
+int StartMenuWindow::GetPinnedItemAtPoint(POINT pt) {
+    for (int i = 0; i < PINNED_COUNT; ++i) {
+        int col   = i % PINNED_COLS;
+        int row   = i / PINNED_COLS;
+        int cellX = MARGIN + col * PINNED_CELL_W;
+        int cellY = PINNED_GRID_Y + row * PINNED_CELL_H;
+        RECT r = { cellX + 4, cellY + 4,
+                   cellX + PINNED_CELL_W - 4,
+                   cellY + PINNED_CELL_H - 4 };
+        if (PtInRect(&r, pt)) return i;
     }
-
-    return -1; // No item at this point
+    return -1;
 }
 
-void StartMenuWindow::ExecuteMenuItem(int index) {
-    if (index < 0 || index >= 7 || !m_menuItems[index].visible) {
-        return;
+int StartMenuWindow::GetRecommendedItemAtPoint(POINT pt) {
+    RECT cr;
+    GetClientRect(m_hwnd, &cr);
+    int colW   = (cr.right - 2 * MARGIN) / 2;
+    int visIdx = 0;
+    for (int i = 0; i < 7 && visIdx < 4; ++i) {
+        if (!m_menuItems[i].visible) continue;
+        int col   = visIdx % 2;
+        int row   = visIdx / 2;
+        int itemX = MARGIN + col * colW;
+        int itemY = REC_START_Y + row * REC_ITEM_H;
+        RECT r = { itemX + 2, itemY + 2,
+                   itemX + colW - 2, itemY + REC_ITEM_H - 2 };
+        if (PtInRect(&r, pt)) return i;
+        ++visIdx;
     }
+    return -1;
+}
 
-    CF_LOG(Info, "Executing menu item index: " << index);
+bool StartMenuWindow::IsOverPowerButton(POINT pt) {
+    RECT cr;
+    GetClientRect(m_hwnd, &cr);
+    int pwrCX = cr.right - MARGIN - POWER_BTN_R;
+    int barCY = BOTTOM_BAR_Y + (cr.bottom - BOTTOM_BAR_Y) / 2;
+    int dx = pt.x - pwrCX, dy = pt.y - barCY;
+    return (dx * dx + dy * dy) <= (POWER_BTN_R + 6) * (POWER_BTN_R + 6);
+}
 
-    // Execute shell command based on item
+// ── Execution ─────────────────────────────────────────────────────────────────
+void StartMenuWindow::ExecutePinnedItem(int index) {
+    if (index < 0 || index >= PINNED_COUNT) return;
+    CF_LOG(Info, "ExecutePinnedItem: " << index);
+    ShellExecuteW(NULL, L"open", s_pinnedItems[index].command, NULL, NULL, SW_SHOW);
+    Hide();
+}
+
+void StartMenuWindow::ExecuteRecommendedItem(int index) {
+    if (index < 0 || index >= 7 || !m_menuItems[index].visible) return;
+    CF_LOG(Info, "ExecuteRecommendedItem: " << index);
+    Hide();
     switch (index) {
-        case 0: // Control Panel
-            ShellExecuteW(NULL, L"open", L"control", NULL, NULL, SW_SHOW);
+        case 0: ShellExecuteW(NULL, L"open",    L"control",               NULL, NULL, SW_SHOW); break;
+        case 1: ShellExecuteW(NULL, L"open",    L"devmgmt.msc",           NULL, NULL, SW_SHOW); break;
+        case 2: ShellExecuteW(NULL, L"open",    L"ms-settings:appsfeatures", NULL, NULL, SW_SHOW); break;
+        case 3: ShellExecuteW(NULL, L"explore", L"shell:Personal",        NULL, NULL, SW_SHOW); break;
+        case 4: ShellExecuteW(NULL, L"explore", L"shell:My Pictures",     NULL, NULL, SW_SHOW); break;
+        case 5: ShellExecuteW(NULL, L"explore", L"shell:My Video",        NULL, NULL, SW_SHOW); break;
+        case 6: ShellExecuteW(NULL, L"explore", L"shell:Recent",          NULL, NULL, SW_SHOW); break;
+    }
+}
+
+// ── Power menu ────────────────────────────────────────────────────────────────
+void StartMenuWindow::ShowPowerMenu() {
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return;
+
+    AppendMenuW(menu, MF_STRING, 1, L"Sleep");
+    AppendMenuW(menu, MF_STRING, 2, L"Shut down");
+    AppendMenuW(menu, MF_STRING, 3, L"Restart");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, 4, L"Cancel");
+
+    // Show menu near the power button (bottom-right corner of the Start Menu)
+    RECT wr = {};
+    GetWindowRect(m_hwnd, &wr);
+    int x = wr.right  - MARGIN - POWER_BTN_R * 2;
+    int y = wr.bottom - 62;
+
+    // Menu must be shown in the foreground window context
+    SetForegroundWindow(m_hwnd);
+    int cmd = TrackPopupMenu(menu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN | TPM_RETURNCMD,
+                             x, y, 0, m_hwnd, nullptr);
+    DestroyMenu(menu);
+
+    if (cmd == 4 || cmd == 0) return;  // Cancel or dismissed
+
+    Hide();
+
+    switch (cmd) {
+        case 1:  // Sleep
+            SetSuspendState(FALSE, FALSE, FALSE);
             break;
-        case 1: // Device Manager
-            ShellExecuteW(NULL, L"open", L"devmgmt.msc", NULL, NULL, SW_SHOW);
+        case 2:  // Shut down
+            ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
             break;
-        case 2: // Installed Apps
-            ShellExecuteW(NULL, L"open", L"ms-settings:appsfeatures", NULL, NULL, SW_SHOW);
-            break;
-        case 3: // Documents
-            ShellExecuteW(NULL, L"explore", L"shell:Personal", NULL, NULL, SW_SHOW);
-            break;
-        case 4: // Pictures
-            ShellExecuteW(NULL, L"explore", L"shell:My Pictures", NULL, NULL, SW_SHOW);
-            break;
-        case 5: // Videos
-            ShellExecuteW(NULL, L"explore", L"shell:My Video", NULL, NULL, SW_SHOW);
-            break;
-        case 6: // Recent Files
-            ShellExecuteW(NULL, L"explore", L"shell:Recent", NULL, NULL, SW_SHOW);
+        case 3:  // Restart
+            ExitWindowsEx(EWX_REBOOT | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
             break;
     }
 }
 
-RECT StartMenuWindow::GetItemRect(int index) {
-    RECT rect = {};
-    if (index < 0 || index >= 7) {
-        return rect;
-    }
-
-    RECT clientRect;
-    GetClientRect(m_hwnd, &clientRect);
-
-    const int itemHeight = 45;
-    const int leftMargin = 30;
-    int yPos = 100;
-
-    // Find the position accounting for hidden items
-    for (int i = 0; i < 7; i++) {
-        if (m_menuItems[i].visible) {
-            if (i == index) {
-                rect.left = leftMargin;
-                rect.top = yPos;
-                rect.right = clientRect.right - leftMargin;
-                rect.bottom = yPos + itemHeight;
-                break;
-            }
-            yPos += itemHeight;
-        }
-    }
-
-    return rect;
-}
-
-LRESULT CALLBACK StartMenuWindow::WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    StartMenuWindow* window = nullptr;
-
+// ── Window procedure ──────────────────────────────────────────────────────────
+LRESULT CALLBACK StartMenuWindow::WindowProc(HWND hwnd, UINT msg,
+                                              WPARAM wParam, LPARAM lParam) {
+    StartMenuWindow* win = nullptr;
     if (msg == WM_CREATE) {
-        CREATESTRUCT* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
-        window = reinterpret_cast<StartMenuWindow*>(cs->lpCreateParams);
-        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(window));
+        auto* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
+        win = reinterpret_cast<StartMenuWindow*>(cs->lpCreateParams);
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(win));
     } else {
-        window = reinterpret_cast<StartMenuWindow*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+        win = reinterpret_cast<StartMenuWindow*>(
+                  GetWindowLongPtr(hwnd, GWLP_USERDATA));
     }
-
-    if (window) {
-        return window->HandleMessage(msg, wParam, lParam);
-    }
-
+    if (win) return win->HandleMessage(msg, wParam, lParam);
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
 LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
-        case WM_PAINT:
-            Paint();
-            return 0;
 
-        case WM_MOUSEMOVE: {
-            // Track mouse for hover effects
-            if (!m_trackingMouse) {
-                TRACKMOUSEEVENT tme = {};
-                tme.cbSize = sizeof(tme);
-                tme.dwFlags = TME_LEAVE;
-                tme.hwndTrack = m_hwnd;
-                TrackMouseEvent(&tme);
-                m_trackingMouse = true;
-            }
+    case WM_PAINT:
+        Paint();
+        return 0;
 
-            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-            int itemIndex = GetItemAtPoint(pt);
-
-            if (itemIndex != m_hoveredItemIndex) {
-                m_hoveredItemIndex = itemIndex;
-                InvalidateRect(m_hwnd, NULL, FALSE); // Repaint for highlight
-
-                // Kill existing hover timer
-                if (m_hoverTimer) {
-                    KillTimer(m_hwnd, m_hoverTimer);
-                    m_hoverTimer = 0;
-                }
-
-                // If hovering over an item, start timer to show flyout
-                if (itemIndex >= 0 && m_menuItems[itemIndex].submenuCount > 0) {
-                    m_hoverTimer = SetTimer(m_hwnd, 1, 300, NULL); // 300ms delay (Windows 7 style)
-                    CF_LOG(Debug, "Hover timer started for item: " << itemIndex);
-                } else {
-                    // Hide flyout if moving to non-item area
-                    HideFlyout();
-                }
-            }
-            return 0;
+    case WM_MOUSEMOVE: {
+        if (!m_trackingMouse) {
+            TRACKMOUSEEVENT tme = {};
+            tme.cbSize    = sizeof(tme);
+            tme.dwFlags   = TME_LEAVE;
+            tme.hwndTrack = m_hwnd;
+            TrackMouseEvent(&tme);
+            m_trackingMouse = true;
         }
-
-        case WM_TIMER: {
-            if (wParam == 1 && m_hoverTimer) {
-                // Timer fired - show flyout for hovered item
-                KillTimer(m_hwnd, m_hoverTimer);
-                m_hoverTimer = 0;
-
-                if (m_hoveredItemIndex >= 0) {
-                    ShowFlyout(m_hoveredItemIndex);
-                }
-            }
-            return 0;
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        int np = GetPinnedItemAtPoint(pt);
+        int nr = GetRecommendedItemAtPoint(pt);
+        bool npwr = IsOverPowerButton(pt);
+        if (np != m_hoveredPinnedIndex ||
+            nr != m_hoveredRecommendedIndex ||
+            npwr != m_hoveredPower) {
+            m_hoveredPinnedIndex      = np;
+            m_hoveredRecommendedIndex = nr;
+            m_hoveredPower            = npwr;
+            InvalidateRect(m_hwnd, NULL, FALSE);
         }
+        return 0;
+    }
 
-        case WM_MOUSELEAVE: {
-            m_trackingMouse = false;
+    case WM_MOUSELEAVE:
+        m_trackingMouse           = false;
+        m_hoveredPinnedIndex      = -1;
+        m_hoveredRecommendedIndex = -1;
+        m_hoveredPower            = false;
+        InvalidateRect(m_hwnd, NULL, FALSE);
+        return 0;
 
-            // Kill hover timer
-            if (m_hoverTimer) {
-                KillTimer(m_hwnd, m_hoverTimer);
-                m_hoverTimer = 0;
-            }
-
-            // Check if mouse is entering flyout window
-            POINT cursorPos;
-            GetCursorPos(&cursorPos);
-
-            bool isOverFlyout = false;
-            if (m_hwndFlyout && m_flyoutVisible) {
-                RECT flyoutRect;
-                GetWindowRect(m_hwndFlyout, &flyoutRect);
-                isOverFlyout = PtInRect(&flyoutRect, cursorPos);
-            }
-
-            // Only clear hover if not moving to flyout
-            if (!isOverFlyout && m_hoveredItemIndex != -1) {
-                m_hoveredItemIndex = -1;
-                InvalidateRect(m_hwnd, NULL, FALSE);
-            }
-
-            // Don't hide flyout - let it stay visible so user can move to it
-            return 0;
+    case WM_LBUTTONDOWN: {
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        int p = GetPinnedItemAtPoint(pt);
+        if (p >= 0) { ExecutePinnedItem(p); return 0; }
+        int r = GetRecommendedItemAtPoint(pt);
+        if (r >= 0) { ExecuteRecommendedItem(r); return 0; }
+        if (IsOverPowerButton(pt)) {
+            ShowPowerMenu();
         }
+        return 0;
+    }
 
-        case WM_LBUTTONDOWN: {
-            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-            int itemIndex = GetItemAtPoint(pt);
+    case WM_RBUTTONDOWN: {
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        int r = GetRecommendedItemAtPoint(pt);
+        if (r >= 0) ShowEditDialog(r);
+        return 0;
+    }
 
-            if (itemIndex >= 0) {
-                CF_LOG(Info, "Clicked on item index: " << itemIndex);
-                ExecuteMenuItem(itemIndex);
-                Hide(); // Close menu after click
-            }
-            return 0;
-        }
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) Hide();
+        return 0;
 
-        case WM_RBUTTONDOWN: {
-            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-
-            // Check if click is on title area (top 70px)
-            if (pt.y >= 20 && pt.y <= 70) {
-                CF_LOG(Info, "Right-clicked on title");
-                ShowTitleEditDialog();
-                return 0;
-            }
-
-            // Otherwise check menu items
-            int itemIndex = GetItemAtPoint(pt);
-            if (itemIndex >= 0) {
-                CF_LOG(Info, "Right-clicked on item index: " << itemIndex);
-                ShowEditDialog(itemIndex, false, -1);
-            }
-            return 0;
-        }
-
-        case WM_KEYDOWN:
-            if (wParam == VK_ESCAPE) {
-                CF_LOG(Debug, "ESC pressed - closing Start Menu");
-                Hide();
-            }
-            return 0;
-
-        case WM_DESTROY:
-            return 0;
-
-        default:
-            return DefWindowProc(m_hwnd, msg, wParam, lParam);
+    default:
+        return DefWindowProc(m_hwnd, msg, wParam, lParam);
     }
 }
 
-bool StartMenuWindow::CreateFlyoutWindow() {
-    if (m_hwndFlyout) {
-        return true; // Already created
-    }
-
-    // Create layered flyout window
-    m_hwndFlyout = CreateWindowExW(
-        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
-        FLYOUT_CLASS,
-        L"CrystalFrame Flyout",
-        WS_POPUP,
-        0, 0, FLYOUT_WIDTH, 100, // Height will be adjusted based on content
-        NULL,
-        NULL,
-        GetModuleHandle(NULL),
-        this
-    );
-
-    if (!m_hwndFlyout) {
-        CF_LOG(Error, "Failed to create flyout window: " << GetLastError());
-        return false;
-    }
-
-    // Initialize layered window attributes
-    if (!SetLayeredWindowAttributes(m_hwndFlyout, 0, 255, LWA_ALPHA)) {
-        CF_LOG(Warning, "Failed to set flyout layered window attributes: " << GetLastError());
-    }
-
-    // Apply rounded corners to flyout window
-    DWM_WINDOW_CORNER_PREFERENCE flyoutCornerPref = DWMWCP_ROUND;
-    DwmSetWindowAttribute(m_hwndFlyout, DWMWA_WINDOW_CORNER_PREFERENCE,
-                          &flyoutCornerPref, sizeof(flyoutCornerPref));
-
-    CF_LOG(Info, "Flyout window created");
-    return true;
-}
-
-void StartMenuWindow::ShowFlyout(int itemIndex) {
-    if (itemIndex < 0 || itemIndex >= 7 || !m_menuItems[itemIndex].visible) {
-        return;
-    }
-
-    if (m_menuItems[itemIndex].submenuCount == 0) {
-        return; // No submenu for this item
-    }
-
-    CF_LOG(Info, "Showing flyout for item: " << itemIndex);
-
-    // Create flyout window if needed
-    if (!m_hwndFlyout && !CreateFlyoutWindow()) {
-        return;
-    }
-
-    m_flyoutForItemIndex = itemIndex;
-
-    // Get item rect in screen coordinates
-    RECT itemRect = GetItemRect(itemIndex);
-    POINT topLeft = {itemRect.left, itemRect.top};
-    POINT bottomRight = {itemRect.right, itemRect.bottom};
-    ClientToScreen(m_hwnd, &topLeft);
-    ClientToScreen(m_hwnd, &bottomRight);
-
-    // Position flyout directly at the edge of the item (no gap)
-    int flyoutX = bottomRight.x;
-    int flyoutY = topLeft.y;
-
-    // Calculate flyout height based on submenu count
-    int flyoutHeight = m_menuItems[itemIndex].submenuCount * FLYOUT_ITEM_HEIGHT + 10; // 10px padding
-
-    // Ensure flyout stays on screen
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-
-    if (flyoutX + FLYOUT_WIDTH > screenWidth) {
-        flyoutX = topLeft.x - FLYOUT_WIDTH; // Show on left instead (no gap)
-    }
-
-    if (flyoutY + flyoutHeight > screenHeight) {
-        flyoutY = screenHeight - flyoutHeight;
-    }
-
-    // Position and show flyout
-    SetWindowPos(m_hwndFlyout, HWND_TOPMOST, flyoutX, flyoutY, FLYOUT_WIDTH, flyoutHeight,
-                 SWP_SHOWWINDOW | SWP_NOACTIVATE);
-
-    // Apply transparency (same as main menu)
-    ApplyFlyoutTransparency();
-
-    ShowWindow(m_hwndFlyout, SW_SHOWNOACTIVATE);
-    UpdateWindow(m_hwndFlyout);
-
-    m_flyoutVisible = true;
-    m_hoveredSubmenuIndex = -1;
-}
-
-void StartMenuWindow::HideFlyout() {
-    if (m_hwndFlyout && m_flyoutVisible) {
-        CF_LOG(Debug, "Hiding flyout");
-        ShowWindow(m_hwndFlyout, SW_HIDE);
-        m_flyoutVisible = false;
-        m_flyoutForItemIndex = -1;
-        m_hoveredSubmenuIndex = -1;
-        m_trackingMouseFlyout = false;
-    }
-}
-
-void StartMenuWindow::ApplyFlyoutTransparency() {
-    if (!m_hwndFlyout) return;
-
-    using SetWindowCompositionAttributeFunc = BOOL(WINAPI*)(HWND, WINDOWCOMPOSITIONATTRIBDATA*);
-
-    HMODULE user32 = GetModuleHandleW(L"user32.dll");
-    if (!user32) return;
-
-    auto setWindowCompositionAttribute =
-        reinterpret_cast<SetWindowCompositionAttributeFunc>(
-            GetProcAddress(user32, "SetWindowCompositionAttribute"));
-
-    if (!setWindowCompositionAttribute) return;
-
-    BYTE alpha = static_cast<BYTE>(((100 - m_opacity) * 255) / 100);
-
-    ACCENT_POLICY accent = {};
-    accent.AccentState = ACCENT_ENABLE_TRANSPARENTGRADIENT;
-    accent.AccentFlags = 2;
-    accent.GradientColor = (alpha << 24) | (m_bgColor & 0x00FFFFFF);
-    accent.AnimationId = 0;
-
-    WINDOWCOMPOSITIONATTRIBDATA data = {};
-    data.Attrib = WCA_ACCENT_POLICY;
-    data.pvData = &accent;
-    data.cbData = sizeof(accent);
-
-    setWindowCompositionAttribute(m_hwndFlyout, &data);
-}
-
-void StartMenuWindow::PaintFlyout() {
-    PAINTSTRUCT ps;
-    HDC hdc = BeginPaint(m_hwndFlyout, &ps);
-
-    // Get client rect
-    RECT rect;
-    GetClientRect(m_hwndFlyout, &rect);
-
-    // Fill with background color
-    HBRUSH brush = CreateSolidBrush(m_bgColor);
-    FillRect(hdc, &rect, brush);
-    DeleteObject(brush);
-
-    // Draw border
-    HPEN borderPen = CreatePen(PS_SOLID, 1, RGB(100, 100, 255));
-    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
-    HBRUSH nullBrush = (HBRUSH)GetStockObject(NULL_BRUSH);
-    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, nullBrush);
-    Rectangle(hdc, 0, 0, rect.right, rect.bottom);
-    SelectObject(hdc, oldPen);
-    SelectObject(hdc, oldBrush);
-    DeleteObject(borderPen);
-
-    // Draw submenu items
-    if (m_flyoutForItemIndex >= 0 && m_flyoutForItemIndex < 7) {
-        HFONT itemFont = CreateFontW(
-            18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
-            L"Segoe UI"
-        );
-
-        HFONT oldFont = (HFONT)SelectObject(hdc, itemFont);
-        ::SetTextColor(hdc, m_textColor);
-        SetBkMode(hdc, TRANSPARENT);
-
-        int yPos = 5;
-        MenuItem& mainItem = m_menuItems[m_flyoutForItemIndex];
-
-        for (int i = 0; i < mainItem.submenuCount; i++) {
-            RECT itemRect;
-            itemRect.left = 5;
-            itemRect.top = yPos;
-            itemRect.right = rect.right - 5;
-            itemRect.bottom = yPos + FLYOUT_ITEM_HEIGHT;
-
-            // Draw hover highlight with rounded corners
-            if (i == m_hoveredSubmenuIndex) {
-                HBRUSH hoverBrush = CreateSolidBrush(CalculateHoverColor());
-                HBRUSH oldHoverBrush = (HBRUSH)SelectObject(hdc, hoverBrush);
-                HPEN nullHoverPen = (HPEN)GetStockObject(NULL_PEN);
-                HPEN oldHoverPen = (HPEN)SelectObject(hdc, nullHoverPen);
-
-                RoundRect(hdc, itemRect.left, itemRect.top, itemRect.right, itemRect.bottom,
-                          5, 5);
-
-                SelectObject(hdc, oldHoverPen);
-                SelectObject(hdc, oldHoverBrush);
-                DeleteObject(hoverBrush);
-            }
-
-            // Draw item text (custom or default)
-            DrawTextW(hdc, GetSubmenuItemName(m_flyoutForItemIndex, i), -1, &itemRect,
-                     DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-            yPos += FLYOUT_ITEM_HEIGHT;
-        }
-
-        SelectObject(hdc, oldFont);
-        DeleteObject(itemFont);
-    }
-
-    EndPaint(m_hwndFlyout, &ps);
-}
-
-int StartMenuWindow::GetSubmenuItemAtPoint(POINT pt) {
-    if (m_flyoutForItemIndex < 0 || m_flyoutForItemIndex >= 7) {
-        return -1;
-    }
-
-    RECT clientRect;
-    GetClientRect(m_hwndFlyout, &clientRect);
-
-    int yPos = 5;
-    MenuItem& mainItem = m_menuItems[m_flyoutForItemIndex];
-
-    for (int i = 0; i < mainItem.submenuCount; i++) {
-        RECT itemRect;
-        itemRect.left = 5;
-        itemRect.top = yPos;
-        itemRect.right = clientRect.right - 5;
-        itemRect.bottom = yPos + FLYOUT_ITEM_HEIGHT;
-
-        if (PtInRect(&itemRect, pt)) {
-            return i;
-        }
-
-        yPos += FLYOUT_ITEM_HEIGHT;
-    }
-
-    return -1;
-}
-
-void StartMenuWindow::ExecuteSubmenuItem(int mainIndex, int subIndex) {
-    if (mainIndex < 0 || mainIndex >= 7 || !m_menuItems[mainIndex].visible) {
-        return;
-    }
-
-    MenuItem& mainItem = m_menuItems[mainIndex];
-    if (subIndex < 0 || subIndex >= mainItem.submenuCount) {
-        return;
-    }
-
-    CF_LOG(Info, "Executing submenu item: " << mainIndex << "," << subIndex);
-
-    // Execute the command
-    const wchar_t* command = mainItem.submenuItems[subIndex].command;
-
-    // Parse command - check if it starts with "shell:" for special folders
-    if (wcsstr(command, L"shell:") == command) {
-        ShellExecuteW(NULL, L"explore", command, NULL, NULL, SW_SHOW);
-    } else if (wcsstr(command, L"control") == command) {
-        ShellExecuteW(NULL, L"open", command, NULL, NULL, SW_SHOW);
-    } else {
-        // Default: try to open/run it
-        ShellExecuteW(NULL, L"open", command, NULL, NULL, SW_SHOW);
-    }
-}
-
-RECT StartMenuWindow::GetSubmenuItemRect(int index) {
-    RECT rect = {};
-    if (m_flyoutForItemIndex < 0 || m_flyoutForItemIndex >= 7) {
-        return rect;
-    }
-
-    MenuItem& mainItem = m_menuItems[m_flyoutForItemIndex];
-    if (index < 0 || index >= mainItem.submenuCount) {
-        return rect;
-    }
-
-    RECT clientRect;
-    GetClientRect(m_hwndFlyout, &clientRect);
-
-    rect.left = 5;
-    rect.top = 5 + (index * FLYOUT_ITEM_HEIGHT);
-    rect.right = clientRect.right - 5;
-    rect.bottom = rect.top + FLYOUT_ITEM_HEIGHT;
-
-    return rect;
-}
-
-LRESULT CALLBACK StartMenuWindow::FlyoutWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    StartMenuWindow* window = nullptr;
-
-    if (msg == WM_CREATE) {
-        CREATESTRUCT* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
-        window = reinterpret_cast<StartMenuWindow*>(cs->lpCreateParams);
-        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(window));
-    } else {
-        window = reinterpret_cast<StartMenuWindow*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-    }
-
-    if (window) {
-        return window->HandleFlyoutMessage(msg, wParam, lParam);
-    }
-
-    return DefWindowProc(hwnd, msg, wParam, lParam);
-}
-
-LRESULT StartMenuWindow::HandleFlyoutMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
-    switch (msg) {
-        case WM_PAINT:
-            PaintFlyout();
-            return 0;
-
-        case WM_MOUSEMOVE: {
-            if (!m_trackingMouseFlyout) {
-                TRACKMOUSEEVENT tme = {};
-                tme.cbSize = sizeof(tme);
-                tme.dwFlags = TME_LEAVE;
-                tme.hwndTrack = m_hwndFlyout;
-                TrackMouseEvent(&tme);
-                m_trackingMouseFlyout = true;
-            }
-
-            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-            int itemIndex = GetSubmenuItemAtPoint(pt);
-
-            if (itemIndex != m_hoveredSubmenuIndex) {
-                m_hoveredSubmenuIndex = itemIndex;
-                InvalidateRect(m_hwndFlyout, NULL, FALSE);
-            }
-            return 0;
-        }
-
-        case WM_MOUSELEAVE: {
-            m_trackingMouseFlyout = false;
-
-            // Check if mouse is entering main menu window
-            POINT cursorPos;
-            GetCursorPos(&cursorPos);
-
-            bool isOverMainMenu = false;
-            if (m_hwnd && m_visible) {
-                RECT mainRect;
-                GetWindowRect(m_hwnd, &mainRect);
-                isOverMainMenu = PtInRect(&mainRect, cursorPos);
-            }
-
-            // Clear submenu hover
-            if (m_hoveredSubmenuIndex != -1) {
-                m_hoveredSubmenuIndex = -1;
-                InvalidateRect(m_hwndFlyout, NULL, FALSE);
-            }
-
-            // Hide flyout only if mouse is not over main menu
-            if (!isOverMainMenu) {
-                HideFlyout();
-            }
-
-            return 0;
-        }
-
-        case WM_LBUTTONDOWN: {
-            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-            int itemIndex = GetSubmenuItemAtPoint(pt);
-
-            if (itemIndex >= 0) {
-                CF_LOG(Info, "Clicked submenu item: " << itemIndex);
-                ExecuteSubmenuItem(m_flyoutForItemIndex, itemIndex);
-                Hide(); // Close entire menu after click
-            }
-            return 0;
-        }
-
-        case WM_RBUTTONDOWN: {
-            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-            int itemIndex = GetSubmenuItemAtPoint(pt);
-
-            if (itemIndex >= 0) {
-                CF_LOG(Info, "Right-clicked submenu item: " << itemIndex);
-                ShowEditDialog(m_flyoutForItemIndex, true, itemIndex);
-            }
-            return 0;
-        }
-
-        default:
-            return DefWindowProc(m_hwndFlyout, msg, wParam, lParam);
-    }
-}
-
-COLORREF StartMenuWindow::CalculateHoverColor() {
-    // Extract RGB components from background color
-    int r = GetRValue(m_bgColor);
-    int g = GetGValue(m_bgColor);
-    int b = GetBValue(m_bgColor);
-
-    // Calculate brightness
-    int brightness = (r + g + b) / 3;
-
-    // If dark background, make hover lighter; if light background, make hover darker
-    int adjustment = (brightness < 128) ? 40 : -40;
-
-    // Apply adjustment and clamp to 0-255
-    r = max(0, min(255, r + adjustment));
-    g = max(0, min(255, g + adjustment));
-    b = max(0, min(255, b + adjustment));
-
-    return RGB(r, g, b);
-}
-
+// ── Name helpers ──────────────────────────────────────────────────────────────
 const wchar_t* StartMenuWindow::GetMenuItemName(int index) {
-    if (index < 0 || index >= 7) {
-        return L"";
-    }
-
-    // Return custom name if set, otherwise default
-    if (!m_customMenuNames[index].empty()) {
+    if (index >= 0 && index < 7 && !m_customMenuNames[index].empty())
         return m_customMenuNames[index].c_str();
-    }
-
     return m_menuItems[index].name;
 }
 
-const wchar_t* StartMenuWindow::GetSubmenuItemName(int mainIndex, int subIndex) {
-    if (mainIndex < 0 || mainIndex >= 7) {
-        return L"";
-    }
-
-    // Check for custom submenu name
-    auto mainIt = m_customSubmenuNames.find(mainIndex);
-    if (mainIt != m_customSubmenuNames.end()) {
-        auto subIt = mainIt->second.find(subIndex);
-        if (subIt != mainIt->second.end() && !subIt->second.empty()) {
-            return subIt->second.c_str();
-        }
-    }
-
-    // Return default name
-    MenuItem& mainItem = m_menuItems[mainIndex];
-    if (subIndex >= 0 && subIndex < mainItem.submenuCount) {
-        return mainItem.submenuItems[subIndex].name;
-    }
-
-    return L"";
-}
-
-void StartMenuWindow::ShowEditDialog(int itemIndex, bool isSubmenu, int submenuIndex) {
-    CF_LOG(Info, "ShowEditDialog called - itemIndex=" << itemIndex << ", isSubmenu=" << isSubmenu << ", submenuIndex=" << submenuIndex);
-
-    wchar_t buffer[256] = {};
-
-    // Get current name
-    if (isSubmenu) {
-        wcscpy_s(buffer, GetSubmenuItemName(itemIndex, submenuIndex));
-    } else {
-        wcscpy_s(buffer, GetMenuItemName(itemIndex));
-    }
-
-    CF_LOG(Info, "Current name retrieved, length: " << wcslen(buffer));
-
-    // Store context in dialog data structure
-    struct EditContext {
-        wchar_t buffer[256];
-        bool confirmed;
-        int itemIndex;
-        bool isSubmenu;
-        int submenuIndex;
-        StartMenuWindow* pThis;
-    };
-
-    EditContext context = {};
-    wcscpy_s(context.buffer, buffer);
-    context.confirmed = false;
-    context.itemIndex = itemIndex;
-    context.isSubmenu = isSubmenu;
-    context.submenuIndex = submenuIndex;
-    context.pThis = this;
-
-    // Create modal dialog window with proper class
-    CF_LOG(Info, "Creating edit dialog window...");
-    HWND hwndDialog = CreateWindowExW(
-        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
-        EDIT_DIALOG_CLASS,
-        L"Edit Menu Item",
-        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-        0, 0, 400, 150,
-        m_hwnd,
-        NULL,
-        GetModuleHandle(NULL),
-        &context
-    );
-
-    if (!hwndDialog) {
-        CF_LOG(Error, "Failed to create edit dialog: " << GetLastError());
-        return;
-    }
-
-    CF_LOG(Info, "Edit dialog window created successfully - HWND: " << hwndDialog);
-
-    // Center dialog on screen
-    RECT dialogRect;
-    GetWindowRect(hwndDialog, &dialogRect);
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    int x = (screenWidth - (dialogRect.right - dialogRect.left)) / 2;
-    int y = (screenHeight - (dialogRect.bottom - dialogRect.top)) / 2;
-    SetWindowPos(hwndDialog, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-
-    // Create label
-    CreateWindowExW(
-        0, L"STATIC", L"Enter new name:",
-        WS_CHILD | WS_VISIBLE,
-        10, 10, 380, 20,
-        hwndDialog, NULL, GetModuleHandle(NULL), NULL
-    );
-
-    // Create edit control
-    HWND hwndEdit = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"EDIT", buffer,
-        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL,
-        10, 35, 380, 25,
-        hwndDialog, (HMENU)1001, GetModuleHandle(NULL), NULL
-    );
-
-    // Create OK button
-    CreateWindowExW(
-        0, L"BUTTON", L"OK",
-        WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-        200, 80, 90, 30,
-        hwndDialog, (HMENU)IDOK, GetModuleHandle(NULL), NULL
-    );
-
-    // Create Cancel button
-    CreateWindowExW(
-        0, L"BUTTON", L"Cancel",
-        WS_CHILD | WS_VISIBLE,
-        300, 80, 90, 30,
-        hwndDialog, (HMENU)IDCANCEL, GetModuleHandle(NULL), NULL
-    );
-
-    // Set focus to edit control
-    SetFocus(hwndEdit);
-    SendMessageW(hwndEdit, EM_SETSEL, 0, -1);
-
-    // Enable dialog (modal)
-    EnableWindow(m_hwnd, FALSE);
-    if (m_hwndFlyout) EnableWindow(m_hwndFlyout, FALSE);
-
-    // Message loop for modal dialog
-    MSG msg;
-    while (IsWindow(hwndDialog) && GetMessageW(&msg, NULL, 0, 0)) {
-        if (!IsWindow(hwndDialog)) break;
-
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-    }
-
-    // Re-enable parent windows
-    EnableWindow(m_hwnd, TRUE);
-    if (m_hwndFlyout) EnableWindow(m_hwndFlyout, TRUE);
-    SetForegroundWindow(m_hwnd);
-
-    // Cleanup window if still exists
-    if (IsWindow(hwndDialog)) {
-        DestroyWindow(hwndDialog);
-    }
-
-    // Use the local context variable directly (it's still valid!)
-    if (context.confirmed && wcslen(context.buffer) > 0) {
-        if (isSubmenu) {
-            m_customSubmenuNames[itemIndex][submenuIndex] = context.buffer;
-        } else {
-            m_customMenuNames[itemIndex] = context.buffer;
-        }
-
-        SaveCustomNames();
-
-        CF_LOG(Info, "Menu item renamed successfully - changes saved to JSON, will appear on next open");
-    }
-}
-
 const wchar_t* StartMenuWindow::GetTitle() {
-    if (!m_customTitle.empty()) {
-        return m_customTitle.c_str();
-    }
-    return L"CrystalFrame Start Menu";
+    if (!m_customTitle.empty()) return m_customTitle.c_str();
+    return L"CrystalFrame";
 }
 
-void StartMenuWindow::ShowTitleEditDialog() {
-    wchar_t buffer[256] = {};
-    wcscpy_s(buffer, GetTitle());
-
-    struct EditContext {
-        wchar_t buffer[256];
-        bool confirmed;
-        int itemIndex;
-        bool isSubmenu;
-        int submenuIndex;
-        StartMenuWindow* pThis;
-    };
-
-    EditContext context = {};
-    wcscpy_s(context.buffer, buffer);
-    context.confirmed = false;
-    context.pThis = this;
-
-    // Create dialog (same logic as ShowEditDialog but for title)
-    HWND hwndDialog = CreateWindowExW(
-        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
-        EDIT_DIALOG_CLASS,
-        L"Edit Start Menu Title",
-        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-        0, 0, 400, 150,
-        m_hwnd, NULL, GetModuleHandle(NULL), &context
-    );
-
-    if (!hwndDialog) return;
-
-    // Center, create controls (same as ShowEditDialog)
-    RECT dialogRect;
-    GetWindowRect(hwndDialog, &dialogRect);
-    int x = (GetSystemMetrics(SM_CXSCREEN) - (dialogRect.right - dialogRect.left)) / 2;
-    int y = (GetSystemMetrics(SM_CYSCREEN) - (dialogRect.bottom - dialogRect.top)) / 2;
-    SetWindowPos(hwndDialog, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-
-    CreateWindowExW(0, L"STATIC", L"Enter new title:",
-                    WS_CHILD | WS_VISIBLE, 10, 10, 380, 20,
-                    hwndDialog, NULL, GetModuleHandle(NULL), NULL);
-
-    HWND hwndEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", buffer,
-                                     WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL,
-                                     10, 35, 380, 25,
-                                     hwndDialog, (HMENU)1001, GetModuleHandle(NULL), NULL);
-
-    CreateWindowExW(0, L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                    200, 80, 90, 30, hwndDialog, (HMENU)IDOK, GetModuleHandle(NULL), NULL);
-
-    CreateWindowExW(0, L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE,
-                    300, 80, 90, 30, hwndDialog, (HMENU)IDCANCEL, GetModuleHandle(NULL), NULL);
-
-    SetFocus(hwndEdit);
-    SendMessageW(hwndEdit, EM_SETSEL, 0, -1);
-
-    EnableWindow(m_hwnd, FALSE);
-    if (m_hwndFlyout) EnableWindow(m_hwndFlyout, FALSE);
-
-    MSG msg;
-    while (IsWindow(hwndDialog) && GetMessageW(&msg, NULL, 0, 0)) {
-        if (!IsWindow(hwndDialog)) break;
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-    }
-
-    EnableWindow(m_hwnd, TRUE);
-    if (m_hwndFlyout) EnableWindow(m_hwndFlyout, TRUE);
-
-    // Cleanup window if still exists
-    if (IsWindow(hwndDialog)) {
-        DestroyWindow(hwndDialog);
-    }
-
-    // Use the local context variable directly
-    if (context.confirmed && wcslen(context.buffer) > 0) {
-        m_customTitle = context.buffer;
-        SaveCustomNames();
-
-        CF_LOG(Info, "Start Menu title renamed - saved to JSON, will appear on next open");
-    }
-}
-
+// ── Persistence ───────────────────────────────────────────────────────────────
 void StartMenuWindow::LoadCustomNames() {
-    // Get AppData\Local\CrystalFrame path
-    PWSTR localAppDataPath = nullptr;
-    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &localAppDataPath))) {
-        CF_LOG(Warning, "Failed to get LocalAppData path");
-        return;
-    }
+    PWSTR lap = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
+    std::wstring path = std::wstring(lap) + L"\\CrystalFrame\\menu_names.json";
+    CoTaskMemFree(lap);
 
-    std::wstring configPath = localAppDataPath;
-    CoTaskMemFree(localAppDataPath);
+    std::wifstream f(path);
+    if (!f.is_open()) return;
 
-    configPath += L"\\CrystalFrame\\menu_names.json";
-
-    // Read JSON file
-    std::wifstream file(configPath);
-    if (!file.is_open()) {
-        CF_LOG(Info, "No custom menu names file found (first run)");
-        return;
-    }
-
-    // Simple JSON parsing (manual for now)
     std::wstring line;
-
-    while (std::getline(file, line)) {
-        // Simple parsing: look for "menu_X": "Name"
-        size_t menuPos = line.find(L"\"menu_");
-        if (menuPos != std::wstring::npos) {
-            int index = line[menuPos + 6] - L'0';  // Extract index
-            size_t colonPos = line.find(L':', menuPos);
-            size_t firstQuote = line.find(L'\"', colonPos);
-            size_t secondQuote = line.find(L'\"', firstQuote + 1);
-
-            if (index >= 0 && index < 7 && firstQuote != std::wstring::npos && secondQuote != std::wstring::npos) {
-                m_customMenuNames[index] = line.substr(firstQuote + 1, secondQuote - firstQuote - 1);
-            }
+    while (std::getline(f, line)) {
+        // "menu_X": "Name"
+        size_t pos = line.find(L"\"menu_");
+        if (pos != std::wstring::npos) {
+            int idx   = line[pos + 6] - L'0';
+            size_t c  = line.find(L':', pos);
+            size_t q1 = line.find(L'\"', c);
+            size_t q2 = line.find(L'\"', q1 + 1);
+            if (idx >= 0 && idx < 7 && q1 != std::wstring::npos)
+                m_customMenuNames[idx] = line.substr(q1 + 1, q2 - q1 - 1);
         }
-
-        // Look for submenu entries: "submenu_X_Y": "Name"
-        size_t submenuPos = line.find(L"\"submenu_");
-        if (submenuPos != std::wstring::npos) {
-            int mainIdx = line[submenuPos + 9] - L'0';
-            int subIdx = line[submenuPos + 11] - L'0';
-
-            size_t colonPos = line.find(L':', submenuPos);
-            size_t firstQuote = line.find(L'\"', colonPos);
-            size_t secondQuote = line.find(L'\"', firstQuote + 1);
-
-            if (mainIdx >= 0 && mainIdx < 7 && firstQuote != std::wstring::npos && secondQuote != std::wstring::npos) {
-                m_customSubmenuNames[mainIdx][subIdx] = line.substr(firstQuote + 1, secondQuote - firstQuote - 1);
-            }
-        }
-
-        // Look for custom title: "title": "Name"
-        size_t titlePos = line.find(L"\"title\"");
-        if (titlePos != std::wstring::npos) {
-            size_t colonPos = line.find(L':', titlePos);
-            size_t firstQuote = line.find(L'\"', colonPos);
-            size_t secondQuote = line.find(L'\"', firstQuote + 1);
-
-            if (firstQuote != std::wstring::npos && secondQuote != std::wstring::npos) {
-                m_customTitle = line.substr(firstQuote + 1, secondQuote - firstQuote - 1);
-            }
+        // "title": "Name"
+        size_t tp = line.find(L"\"title\"");
+        if (tp != std::wstring::npos) {
+            size_t c  = line.find(L':', tp);
+            size_t q1 = line.find(L'\"', c);
+            size_t q2 = line.find(L'\"', q1 + 1);
+            if (q1 != std::wstring::npos)
+                m_customTitle = line.substr(q1 + 1, q2 - q1 - 1);
         }
     }
-
-    file.close();
-    CF_LOG(Info, "Custom menu names loaded from JSON");
 }
 
 void StartMenuWindow::SaveCustomNames() {
-    // Get AppData\Local\CrystalFrame path
-    PWSTR localAppDataPath = nullptr;
-    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &localAppDataPath))) {
-        CF_LOG(Error, "Failed to get LocalAppData path for saving");
-        return;
-    }
+    PWSTR lap = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
+    std::wstring dir = std::wstring(lap) + L"\\CrystalFrame";
+    CoTaskMemFree(lap);
+    CreateDirectoryW(dir.c_str(), NULL);
 
-    std::wstring configDir = localAppDataPath;
-    CoTaskMemFree(localAppDataPath);
+    std::wofstream f(dir + L"\\menu_names.json");
+    if (!f.is_open()) return;
 
-    configDir += L"\\CrystalFrame";
-
-    // Ensure directory exists
-    CreateDirectoryW(configDir.c_str(), NULL);
-
-    std::wstring configPath = configDir + L"\\menu_names.json";
-
-    // Write JSON file
-    std::wofstream file(configPath);
-    if (!file.is_open()) {
-        CF_LOG(Error, "Failed to open menu names file for writing");
-        return;
-    }
-
-    file << L"{\n";
-
-    // Write main menu names
-    bool firstEntry = true;
-    for (int i = 0; i < 7; i++) {
-        if (!m_customMenuNames[i].empty()) {
-            if (!firstEntry) file << L",\n";
-            file << L"  \"menu_" << i << L"\": \"" << m_customMenuNames[i] << L"\"";
-            firstEntry = false;
-        }
-    }
-
-    // Write submenu names
-    for (const auto& mainPair : m_customSubmenuNames) {
-        for (const auto& subPair : mainPair.second) {
-            if (!subPair.second.empty()) {
-                if (!firstEntry) file << L",\n";
-                file << L"  \"submenu_" << mainPair.first << L"_" << subPair.first << L"\": \"" << subPair.second << L"\"";
-                firstEntry = false;
-            }
-        }
-    }
-
-    // Write custom title if set
-    if (!m_customTitle.empty()) {
-        if (!firstEntry) file << L",\n";
-        file << L"  \"title\": \"" << m_customTitle << L"\"";
-        firstEntry = false;
-    }
-
-    file << L"\n}\n";
-    file.close();
-
-    CF_LOG(Info, "Custom menu names saved to JSON");
+    f << L"{\n";
+    for (int i = 0; i < 7; ++i)
+        if (!m_customMenuNames[i].empty())
+            f << L"  \"menu_" << i << L"\": \"" << m_customMenuNames[i] << L"\",\n";
+    if (!m_customTitle.empty())
+        f << L"  \"title\": \"" << m_customTitle << L"\"\n";
+    f << L"}\n";
 }
 
-LRESULT CALLBACK StartMenuWindow::EditDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    switch (msg) {
-        case WM_CREATE: {
-            // Store context pointer in window data
-            CREATESTRUCT* cs = (CREATESTRUCT*)lParam;
-            SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)cs->lpCreateParams);
-            return 0;
-        }
+// ── Edit dialog (rename recommended item) ────────────────────────────────────
+struct EditDialogData {
+    StartMenuWindow* window;
+    int              itemIndex;
+    HWND             editCtrl;
+};
 
-        case WM_COMMAND: {
-            if (LOWORD(wParam) == IDOK) {
-                // Get edit control text
-                HWND hwndEdit = GetDlgItem(hwnd, 1001);
-                void* pData = (void*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+void StartMenuWindow::ShowEditDialog(int itemIndex) {
+    if (itemIndex < 0 || itemIndex >= 7) return;
 
-                if (pData && hwndEdit) {
-                    struct EditContext {
-                        wchar_t buffer[256];
-                        bool confirmed;
-                        int itemIndex;
-                        bool isSubmenu;
-                        int submenuIndex;
-                        StartMenuWindow* pThis;
-                    };
+    auto* data = new EditDialogData{ this, itemIndex, nullptr };
+    int dlgW = 360, dlgH = 140;
+    int sx   = GetSystemMetrics(SM_CXSCREEN);
+    int sy   = GetSystemMetrics(SM_CYSCREEN);
 
-                    EditContext* pContext = (EditContext*)pData;
-                    GetWindowTextW(hwndEdit, pContext->buffer, 256);
-                    pContext->confirmed = true;
+    HWND dlg = CreateWindowExW(
+        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+        EDIT_DIALOG_CLASS, L"Rename item",
+        WS_POPUP | WS_CAPTION | WS_SYSMENU,
+        (sx - dlgW) / 2, (sy - dlgH) / 2,
+        dlgW, dlgH,
+        m_hwnd, NULL, GetModuleHandle(NULL), data);
 
-                    CF_LOG(Info, "Edit dialog OK - text retrieved, confirmed=true");
-                }
-
-                DestroyWindow(hwnd);
-                // No PostQuitMessage - the modal loop exits when IsWindow(hwndDialog) becomes false
-                return 0;
+    if (dlg) {
+        ShowWindow(dlg, SW_SHOW);
+        UpdateWindow(dlg);
+        MSG msg;
+        while (IsWindow(dlg) && GetMessage(&msg, NULL, 0, 0)) {
+            if (!IsDialogMessage(dlg, &msg)) {
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
             }
-            else if (LOWORD(wParam) == IDCANCEL || LOWORD(wParam) == IDCLOSE) {
-                DestroyWindow(hwnd);
-                return 0;
-            }
-            break;
         }
+    }
+    delete data;
+}
 
-        case WM_CLOSE:
-            DestroyWindow(hwnd);
-            return 0;
+LRESULT CALLBACK StartMenuWindow::EditDialogProc(HWND hwnd, UINT msg,
+                                                  WPARAM wParam, LPARAM lParam) {
+    EditDialogData* data = nullptr;
+    if (msg == WM_CREATE) {
+        auto* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
+        data = reinterpret_cast<EditDialogData*>(cs->lpCreateParams);
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(data));
 
-        case WM_DESTROY:
-            return 0;
+        data->editCtrl = CreateWindowExW(
+            WS_EX_CLIENTEDGE, L"EDIT", L"",
+            WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+            10, 40, 330, 24, hwnd, (HMENU)1,
+            GetModuleHandle(NULL), NULL);
+
+        // Pre-fill current name
+        int idx            = data->itemIndex;
+        const wchar_t* cur = (!data->window->m_customMenuNames[idx].empty())
+            ? data->window->m_customMenuNames[idx].c_str()
+            : data->window->m_menuItems[idx].name;
+        SetWindowTextW(data->editCtrl, cur);
+
+        CreateWindowExW(0, L"BUTTON", L"OK",
+            WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+            110, 80, 80, 28, hwnd, (HMENU)2, GetModuleHandle(NULL), NULL);
+        CreateWindowExW(0, L"BUTTON", L"Cancel",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            210, 80, 80, 28, hwnd, (HMENU)3, GetModuleHandle(NULL), NULL);
+        return 0;
     }
 
+    data = reinterpret_cast<EditDialogData*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+
+    switch (msg) {
+    case WM_COMMAND:
+        if (LOWORD(wParam) == 2 && data) {   // OK
+            wchar_t buf[256] = {};
+            GetWindowTextW(data->editCtrl, buf, 255);
+            data->window->m_customMenuNames[data->itemIndex] = buf;
+            data->window->SaveCustomNames();
+            if (data->window->m_hwnd)
+                InvalidateRect(data->window->m_hwnd, NULL, FALSE);
+            DestroyWindow(hwnd);
+        } else if (LOWORD(wParam) == 3) {    // Cancel
+            DestroyWindow(hwnd);
+        }
+        return 0;
+
+    case WM_DESTROY:
+        // Do NOT call PostQuitMessage here — this is a child dialog, not the
+        // main window.  PostQuitMessage would inject WM_QUIT into the shared
+        // message queue and cause the host application to exit unexpectedly
+        // after the dialog closes.  The ShowEditDialog() loop already
+        // terminates when IsWindow(dlg) becomes FALSE, so no quit signal
+        // is needed.
+        return 0;
+    }
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
