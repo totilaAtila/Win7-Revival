@@ -155,27 +155,21 @@ void StartMenuWindow::Show(int x, int y) {
         bool tbBottom = tbRect.bottom >= screenH - 4;
         bool tbTop    = tbRect.top    <= 4 && tbRect.bottom < screenH / 2;
         bool tbLeft   = tbRect.left   <= 4 && tbRect.right  < screenW / 2;
-        // tbRight: everything else
 
         if (tbBottom) {
-            // Taskbar at bottom — menu opens above it, left-aligned to Start button
             menuX = sbLeft;
             menuY = tbRect.top - HEIGHT - 1;
         } else if (tbTop) {
-            // Taskbar at top — menu opens below it
             menuX = sbLeft;
             menuY = tbRect.bottom + 1;
         } else if (tbLeft) {
-            // Taskbar on left — menu opens to its right, top-aligned to Start button
             menuX = tbRect.right + 1;
             menuY = sbTop;
         } else {
-            // Taskbar on right — menu opens to its left
             menuX = tbRect.left - WIDTH - 1;
             menuY = sbTop;
         }
     } else {
-        // No taskbar found — fallback: bottom-left corner
         menuX = 0;
         menuY = screenH - HEIGHT - 48;
     }
@@ -352,6 +346,48 @@ void StartMenuWindow::DrawSeparator(HDC hdc, int y, int x1, int x2) {
     DeleteObject(pen);
 }
 
+// ── PaintSearchBox ────────────────────────────────────────────────────────────
+void StartMenuWindow::PaintSearchBox(HDC hdc, const RECT& cr) {
+    int bx1 = MARGIN, by1 = SEARCH_Y;
+    int bx2 = cr.right - MARGIN, by2 = SEARCH_Y + SEARCH_H;
+
+    // Box background
+    HBRUSH srBr  = CreateSolidBrush(CalculateSubtleColor());
+    HPEN   srPen = CreatePen(PS_SOLID, 1, CalculateBorderColor());
+    HBRUSH oldBr = (HBRUSH)SelectObject(hdc, srBr);
+    HPEN   oldPn = (HPEN)SelectObject(hdc, srPen);
+    RoundRect(hdc, bx1, by1, bx2, by2, 8, 8);
+    SelectObject(hdc, oldBr);
+    SelectObject(hdc, oldPn);
+    DeleteObject(srBr);
+    DeleteObject(srPen);
+
+    // Magnifier icon — drawn as circle + angled line
+    int icoX = bx1 + 22, icoY = (by1 + by2) / 2, icoR = 7;
+    HPEN mgPen = CreatePen(PS_SOLID, 2, RGB(155, 155, 165));
+    HPEN oldP2 = (HPEN)SelectObject(hdc, mgPen);
+    HBRUSH nb  = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    Ellipse(hdc, icoX - icoR, icoY - icoR, icoX + icoR, icoY + icoR);
+    MoveToEx(hdc, icoX + icoR - 2, icoY + icoR - 2, NULL);
+    LineTo(hdc, icoX + icoR + 4, icoY + icoR + 4);
+    SelectObject(hdc, oldP2);
+    SelectObject(hdc, nb);
+    DeleteObject(mgPen);
+
+    // Placeholder text
+    HFONT ph = CreateFontW(15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    HFONT oldF = (HFONT)SelectObject(hdc, ph);
+    ::SetTextColor(hdc, RGB(135, 135, 145));
+    SetBkMode(hdc, TRANSPARENT);
+    RECT tr = { bx1 + 42, by1, bx2 - 10, by2 };
+    DrawTextW(hdc, L"Search for apps, settings, and documents",
+              -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    SelectObject(hdc, oldF);
+    DeleteObject(ph);
+}
+
 // ── PaintPinnedSection ────────────────────────────────────────────────────────
 void StartMenuWindow::PaintPinnedSection(HDC hdc, const RECT& cr) {
     SetBkMode(hdc, TRANSPARENT);
@@ -444,7 +480,7 @@ void StartMenuWindow::PaintRecommendedSection(HDC hdc, const RECT& cr) {
                 cr.right - MARGIN, REC_HEADER_Y + 22 };
     DrawTextW(hdc, L"More  \u203a", -1, &hr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
 
-    // Two-column layout, all 7 visible items
+    // Two-column layout, up to 4 visible items
     static const COLORREF recColors[7] = {
         RGB(  0, 120, 215), RGB(  0, 150, 130), RGB( 70, 130, 180),
         RGB(200, 100,  20), RGB(100, 180,  50), RGB(180,  50, 100),
@@ -454,7 +490,7 @@ void StartMenuWindow::PaintRecommendedSection(HDC hdc, const RECT& cr) {
     int colW   = (cr.right - 2 * MARGIN) / 2;
     int visIdx = 0;
 
-    for (int i = 0; i < 7 && visIdx < 7; ++i) {
+    for (int i = 0; i < 7 && visIdx < 4; ++i) {
         if (!m_menuItems[i].visible) continue;
 
         int col   = visIdx % 2;
@@ -511,19 +547,6 @@ void StartMenuWindow::PaintBottomBar(HDC hdc, const RECT& cr) {
     DeleteObject(bbBr);
 
     int barCY = BOTTOM_BAR_Y + (cr.bottom - BOTTOM_BAR_Y) / 2;
-
-    // ── User area hover highlight ──
-    if (m_hoveredUser) {
-        HBRUSH hBr  = CreateSolidBrush(CalculateHoverColor());
-        HPEN   noPn = (HPEN)GetStockObject(NULL_PEN);
-        HBRUSH ob   = (HBRUSH)SelectObject(hdc, hBr);
-        HPEN   op   = (HPEN)SelectObject(hdc, noPn);
-        RoundRect(hdc, MARGIN - 4, BOTTOM_BAR_Y + 4,
-                  WIDTH / 2, cr.bottom - 4, 8, 8);
-        SelectObject(hdc, ob);
-        SelectObject(hdc, op);
-        DeleteObject(hBr);
-    }
 
     // ── Avatar circle ──
     int avCX = MARGIN + 18, avR = 16;
@@ -614,6 +637,7 @@ void StartMenuWindow::Paint() {
     SelectObject(hdc, nb);
     DeleteObject(bdrPen);
 
+    PaintSearchBox(hdc, cr);
     PaintPinnedSection(hdc, cr);
     PaintRecommendedSection(hdc, cr);
     PaintBottomBar(hdc, cr);
@@ -641,7 +665,7 @@ int StartMenuWindow::GetRecommendedItemAtPoint(POINT pt) {
     GetClientRect(m_hwnd, &cr);
     int colW   = (cr.right - 2 * MARGIN) / 2;
     int visIdx = 0;
-    for (int i = 0; i < 7 && visIdx < 7; ++i) {
+    for (int i = 0; i < 7 && visIdx < 4; ++i) {
         if (!m_menuItems[i].visible) continue;
         int col   = visIdx % 2;
         int row   = visIdx / 2;
@@ -662,14 +686,6 @@ bool StartMenuWindow::IsOverPowerButton(POINT pt) {
     int barCY = BOTTOM_BAR_Y + (cr.bottom - BOTTOM_BAR_Y) / 2;
     int dx = pt.x - pwrCX, dy = pt.y - barCY;
     return (dx * dx + dy * dy) <= (POWER_BTN_R + 6) * (POWER_BTN_R + 6);
-}
-
-bool StartMenuWindow::IsOverUserArea(POINT pt) {
-    // Avatar circle center: (MARGIN + 18, barCY), r=16
-    // "User" label extends to WIDTH/2
-    // Hit zone: left half of bottom bar
-    if (pt.y < BOTTOM_BAR_Y) return false;
-    return pt.x >= MARGIN && pt.x <= WIDTH / 2;
 }
 
 // ── Execution ─────────────────────────────────────────────────────────────────
@@ -770,16 +786,13 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
         int np = GetPinnedItemAtPoint(pt);
         int nr = GetRecommendedItemAtPoint(pt);
-        bool npwr  = IsOverPowerButton(pt);
-        bool nusr  = IsOverUserArea(pt);
+        bool npwr = IsOverPowerButton(pt);
         if (np != m_hoveredPinnedIndex ||
             nr != m_hoveredRecommendedIndex ||
-            npwr != m_hoveredPower ||
-            nusr != m_hoveredUser) {
+            npwr != m_hoveredPower) {
             m_hoveredPinnedIndex      = np;
             m_hoveredRecommendedIndex = nr;
             m_hoveredPower            = npwr;
-            m_hoveredUser             = nusr;
             InvalidateRect(m_hwnd, NULL, FALSE);
         }
         return 0;
@@ -790,7 +803,6 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         m_hoveredPinnedIndex      = -1;
         m_hoveredRecommendedIndex = -1;
         m_hoveredPower            = false;
-        m_hoveredUser             = false;
         InvalidateRect(m_hwnd, NULL, FALSE);
         return 0;
 
@@ -800,10 +812,8 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         if (p >= 0) { ExecutePinnedItem(p); return 0; }
         int r = GetRecommendedItemAtPoint(pt);
         if (r >= 0) { ExecuteRecommendedItem(r); return 0; }
-        if (IsOverPowerButton(pt)) { ShowPowerMenu(); return 0; }
-        if (IsOverUserArea(pt)) {
-            Hide();
-            ShellExecuteW(NULL, L"open", L"ms-settings:accounts", NULL, NULL, SW_SHOW);
+        if (IsOverPowerButton(pt)) {
+            ShowPowerMenu();
         }
         return 0;
     }
