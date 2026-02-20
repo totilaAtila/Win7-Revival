@@ -37,7 +37,7 @@ struct PinnedItem {
 
 /// <summary>
 /// Custom Start Menu window — Windows 11-style layout
-/// Sections: Search box | Pinned grid (3x3) | Recommended list | Bottom bar
+/// Sections: Pinned grid (3x3) | Recommended list | Bottom bar
 /// </summary>
 class StartMenuWindow {
 public:
@@ -102,6 +102,7 @@ private:
     int  m_hoveredPinnedIndex      = -1;
     int  m_hoveredRecommendedIndex = -1;
     bool m_hoveredPower            = false;
+    bool m_hoveredUser             = false;
     bool m_trackingMouse           = false;
 
     // ── Layout constants ────────────────────────────────────────────────────
@@ -110,15 +111,11 @@ private:
 
     static constexpr int MARGIN          = 20;
 
-    // Search box
-    static constexpr int SEARCH_Y        = 16;
-    static constexpr int SEARCH_H        = 46;
-
     // "Pinned" header row
-    static constexpr int PINNED_HEADER_Y = 80;
+    static constexpr int PINNED_HEADER_Y = 14;
 
     // Pinned apps grid
-    static constexpr int PINNED_GRID_Y   = 114;
+    static constexpr int PINNED_GRID_Y   = 48;
     static constexpr int PINNED_COLS     = 3;
     static constexpr int PINNED_ROWS     = 3;
     static constexpr int PINNED_COUNT    = PINNED_COLS * PINNED_ROWS;   // 9
@@ -153,7 +150,6 @@ private:
 
     // ── Painting ────────────────────────────────────────────────────────────
     void Paint();
-    void PaintSearchBox(HDC hdc, const RECT& cr);
     void PaintPinnedSection(HDC hdc, const RECT& cr);
     void PaintRecommendedSection(HDC hdc, const RECT& cr);
     void PaintBottomBar(HDC hdc, const RECT& cr);
@@ -170,6 +166,7 @@ private:
     int  GetPinnedItemAtPoint(POINT pt);        // -1 if none
     int  GetRecommendedItemAtPoint(POINT pt);   // -1 if none
     bool IsOverPowerButton(POINT pt);
+    bool IsOverUserArea(POINT pt);
 
     // ── Execution ───────────────────────────────────────────────────────────
     void ExecutePinnedItem(int index);
