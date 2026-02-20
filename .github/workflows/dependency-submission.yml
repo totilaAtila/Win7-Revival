@@ -1,0 +1,28 @@
+name: Automatic Dependency Submission (NuGet)
+
+on:
+  push:
+    branches: [ main, claude/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  submit-nuget:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required for submitting dependency snapshot
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore NuGet packages
+        run: dotnet restore Dashboard/CrystalFrame.Dashboard.csproj
+
+      - name: Submit NuGet dependency snapshot
+        uses: advanced-security/nuget-dependency-submission-action@v1
+        with:
+          solution-path: Dashboard/CrystalFrame.Dashboard.csproj
