@@ -122,27 +122,67 @@ bool StartMenuWindow::CreateMenuWindow() {
 }
 
 // ── Show / Hide ──────────────────────────────────────────────────────────────
-void StartMenuWindow::Show(int /*x*/, int /*y*/) {
+void StartMenuWindow::Show(int x, int y) {
     CF_LOG(Info, "StartMenuWindow::Show");
 
     if (!m_hwnd && !CreateMenuWindow()) return;
 
-    // Position: 1 px above taskbar top edge
+    int screenW = GetSystemMetrics(SM_CXSCREEN);
+    int screenH = GetSystemMetrics(SM_CYSCREEN);
+
+    // Locate taskbar and detect its orientation
     HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
     RECT tbRect  = {};
-    int  menuY   = 0;
+    bool hasTb   = taskbar && GetWindowRect(taskbar, &tbRect);
 
-    if (taskbar && GetWindowRect(taskbar, &tbRect)) {
-        menuY = tbRect.top - HEIGHT - 1;
-    } else {
-        menuY = GetSystemMetrics(SM_CYSCREEN) - HEIGHT - 48;
+    // Detect Start button position (best-effort; fallback to hint x/y from hook)
+    int sbLeft = x, sbTop = y;
+    if (taskbar) {
+        HWND sb = FindWindowExW(taskbar, nullptr, L"Start", nullptr);
+        if (!sb) sb = FindWindowExW(taskbar, nullptr, L"TrayButton", nullptr);
+        if (sb) {
+            RECT sbRect = {};
+            if (GetWindowRect(sb, &sbRect)) {
+                sbLeft = sbRect.left;
+                sbTop  = sbRect.top;
+            }
+        }
     }
-    if (menuY < 0) menuY = 0;
 
-    // Center horizontally on primary monitor (Win11 style)
-    int screenW = GetSystemMetrics(SM_CXSCREEN);
-    int menuX   = (screenW - WIDTH) / 2;
-    if (menuX < 0) menuX = 0;
+    int menuX, menuY;
+
+    if (hasTb) {
+        bool tbBottom = tbRect.bottom >= screenH - 4;
+        bool tbTop    = tbRect.top    <= 4 && tbRect.bottom < screenH / 2;
+        bool tbLeft   = tbRect.left   <= 4 && tbRect.right  < screenW / 2;
+        // tbRight: everything else
+
+        if (tbBottom) {
+            // Taskbar at bottom — menu opens above it, left-aligned to Start button
+            menuX = sbLeft;
+            menuY = tbRect.top - HEIGHT - 1;
+        } else if (tbTop) {
+            // Taskbar at top — menu opens below it
+            menuX = sbLeft;
+            menuY = tbRect.bottom + 1;
+        } else if (tbLeft) {
+            // Taskbar on left — menu opens to its right, top-aligned to Start button
+            menuX = tbRect.right + 1;
+            menuY = sbTop;
+        } else {
+            // Taskbar on right — menu opens to its left
+            menuX = tbRect.left - WIDTH - 1;
+            menuY = sbTop;
+        }
+    } else {
+        // No taskbar found — fallback: bottom-left corner
+        menuX = 0;
+        menuY = screenH - HEIGHT - 48;
+    }
+
+    // Clamp so menu never goes off-screen
+    menuX = max(0, min(menuX, screenW - WIDTH));
+    menuY = max(0, min(menuY, screenH - HEIGHT));
 
     SetWindowPos(m_hwnd, HWND_TOPMOST, menuX, menuY, WIDTH, HEIGHT,
                  SWP_SHOWWINDOW | SWP_NOACTIVATE);
