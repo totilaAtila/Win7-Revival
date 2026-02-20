@@ -1,0 +1,96 @@
+name: Automatic Dependency Submission (NuGet)
+
+on:
+  push:
+    branches: [ main, claude/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  submit-nuget:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required for submitting dependency snapshot
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore NuGet packages
+        run: dotnet restore Dashboard/CrystalFrame.Dashboard.csproj
+
+      - name: List NuGet packages (JSON)
+        id: list
+        run: |
+          dotnet list Dashboard/CrystalFrame.Dashboard.csproj package \
+            --include-transitive --format json > /tmp/packages.json
+          cat /tmp/packages.json
+
+      - name: Submit dependency snapshot
+        uses: actions/github-script@v7
+        env:
+          PACKAGES_JSON: /tmp/packages.json
+        with:
+          script: |
+            const fs   = require('fs');
+            const raw  = JSON.parse(fs.readFileSync(process.env.PACKAGES_JSON, 'utf8'));
+
+            const resolved = {};
+            for (const project of (raw.projects ?? [])) {
+              for (const fw of (project.frameworks ?? [])) {
+                for (const pkg of (fw.topLevelPackages ?? [])) {
+                  const name = pkg.id;
+                  const ver  = pkg.resolvedVersion ?? pkg.requestedVersion ?? '';
+                  resolved[name] = {
+                    package_url:  `pkg:nuget/${name}@${ver}`,
+                    relationship: 'direct'
+                  };
+                }
+                for (const pkg of (fw.transitivePackages ?? [])) {
+                  const name = pkg.id;
+                  const ver  = pkg.resolvedVersion ?? '';
+                  if (!resolved[name]) {
+                    resolved[name] = {
+                      package_url:  `pkg:nuget/${name}@${ver}`,
+                      relationship: 'indirect'
+                    };
+                  }
+                }
+              }
+            }
+
+            const snapshot = {
+              version: 0,
+              sha:      context.sha,
+              ref:      context.ref,
+              job: {
+                correlator: 'submit-nuget',
+                id:         String(context.runId)
+              },
+              detector: {
+                name:    'dotnet-list-package',
+                version: '1.0.0',
+                url:     'https://github.com/' + context.repo.owner + '/' + context.repo.repo
+              },
+              scanned: new Date().toISOString(),
+              manifests: {
+                'Dashboard/CrystalFrame.Dashboard.csproj': {
+                  name:     'Dashboard/CrystalFrame.Dashboard.csproj',
+                  resolved: resolved
+                }
+              }
+            };
+
+            await github.request(
+              'POST /repos/{owner}/{repo}/dependency-graph/snapshots',
+              {
+                owner:    context.repo.owner,
+                repo:     context.repo.repo,
+                headers:  { 'X-GitHub-Api-Version': '2022-11-28' },
+                ...snapshot
+              }
+            );
+            core.info(`Submitted ${Object.keys(resolved).length} packages.`);
