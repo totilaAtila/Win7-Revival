@@ -122,8 +122,14 @@ Files: `Core/AllProgramsEnumerator.h/.cpp`
 - `MenuNode` struct: display name, isFolder flag, resolved target, args, folderPath, children.
 - `ResolveShortcutTarget()`: resolves `.lnk` via `IShellLinkW`/`IPersistFile`; `.url` via INI parse.
 - `BuildAllProgramsTree()`: merges FOLDERID_CommonPrograms + FOLDERID_Programs; recursive; sorted.
+  Self-manages COM (`CoInitializeEx/COINIT_APARTMENTTHREADED`); tolerates `RPC_E_CHANGED_MODE`;
+  `CoUninitialize()` called only when the function was the one to initialise COM.
 - `ole32.lib` linked for `CoCreateInstance`.
-- Integrated as `m_programTree` (cached at `StartMenuWindow::Initialize()`); not yet rendered.
+- Integrated as `m_programTree` (cached at `StartMenuWindow::Initialize()`, before HWND creation);
+  not yet rendered.
+- **2026-02-21 fix:** tree build moved from `CreateMenuWindow()` to `Initialize()` to match WORKLOG
+  and to decouple the COM/FS-heavy scan from window creation.  COM guard added to
+  `BuildAllProgramsTree()` so callers need no external `CoInitializeEx`.
 
 ### Existing plan document (applies to current Win11-style menu)
 File: `PLAN.md`
@@ -214,7 +220,8 @@ DoD:
    - Files: `Core/StartMenuWindow.h`, `Core/StartMenuWindow.cpp`.
 4) 🔧 **All Programs enumerator** *(foundation DONE 2026-02-21 — branch `claude/win11-start-menu-redesign-T0m6X`)*:
    - `Core/AllProgramsEnumerator.h/.cpp` created: `MenuNode`, `ResolveShortcutTarget`, `BuildAllProgramsTree`.
-   - Tree pre-cached in `StartMenuWindow::m_programTree` at `Initialize()`.
+   - Tree pre-cached in `StartMenuWindow::m_programTree` at `Initialize()` (before HWND creation).
+   - `BuildAllProgramsTree()` self-manages COM; no external `CoInitializeEx` required by callers.
    - **Next**: Phase S2 UI — detect "All Programs" click → render `m_programTree` in left column; hover submenus.
 5) **Keyboard navigation skeleton**:
    - ESC closes

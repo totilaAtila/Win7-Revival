@@ -118,6 +118,14 @@ bool StartMenuWindow::Initialize() {
         }
     }
 
+    // Phase S2 foundation: pre-cache All Programs tree.
+    // Done here (not in CreateMenuWindow) because:
+    //   • Initialize() is called before HWND creation, so the heavy COM/FS
+    //     scan does not delay first window paint.
+    //   • BuildAllProgramsTree() self-manages COM; no HWND needed.
+    m_programTree = BuildAllProgramsTree();
+    CF_LOG(Info, "All Programs tree cached: " << m_programTree.size() << " top-level nodes");
+
     CF_LOG(Info, "StartMenuWindow initialized successfully");
     return true;
 }
@@ -159,11 +167,6 @@ bool StartMenuWindow::CreateMenuWindow() {
 
     CF_LOG(Info, "Start Menu window created HWND=0x"
                  << std::hex << reinterpret_cast<uintptr_t>(m_hwnd) << std::dec);
-
-    // Phase S2 foundation: pre-cache All Programs tree.
-    // No UI rendering yet — Phase S2 will consume m_programTree to build the
-    // "All Programs" left-column view and nested submenus.
-    m_programTree = BuildAllProgramsTree();
 
     return true;
 }

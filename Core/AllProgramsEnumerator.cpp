@@ -184,6 +184,28 @@ static void MergeTree(std::vector<MenuNode>& base, std::vector<MenuNode>&& overl
 // ── BuildAllProgramsTree ──────────────────────────────────────────────────────
 
 std::vector<MenuNode> BuildAllProgramsTree() {
+    // Ensure COM is initialised on this thread so that IShellLinkW can be
+    // created for every .lnk we encounter.  We tolerate:
+    //   S_OK              — we initialised it; we must CoUninitialize() later.
+    //   S_FALSE           — already initialised in the same apartment; leave it.
+    //   RPC_E_CHANGED_MODE — another apartment type is active; CoCreateInstance
+    //                        still works for in-process servers, so proceed.
+    // Any other failure means COM is unusable on this thread — bail out.
+    HRESULT hrCom    = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    bool    weInited = (hrCom == S_OK);
+
+    if (FAILED(hrCom) && hrCom != RPC_E_CHANGED_MODE) {
+        CF_LOG(Warning, "BuildAllProgramsTree: CoInitializeEx failed hr=0x"
+               << std::hex << hrCom << " — aborting tree build");
+        return {};
+    }
+
+    // RAII guard: uninitialise only if we were the one to initialise.
+    struct ComGuard {
+        bool active;
+        ~ComGuard() { if (active) CoUninitialize(); }
+    } comGuard{ weInited };
+
     std::vector<MenuNode> tree;
 
     // 1. Common programs (%ProgramData%\Microsoft\Windows\Start Menu\Programs)
