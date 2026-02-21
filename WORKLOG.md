@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-02-21 (session 5)
+Last updated: 2026-02-21 (session 6)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -20,7 +20,7 @@ Taskbar overlay is considered finished for the current scope:
 - Tray + autostart behavior supported (starts hidden in tray when launched via autostart flag).
 Reference: README.md (Done section) + TESTING.md (M1/M2/M4 test cases).
 
-### ✅ Start Menu: DONE (S1+S2+S3 complete — merged 2026-02-21)
+### ✅ Start Menu: DONE (S1+S2+S3+S4+S5 complete — PR #48 pending merge, 2026-02-21)
 Current Start Menu implementation:
 - **Phase S1 #3 DONE (2026-02-21):** Win7 two-column layout established. Right column functional via `SHGetKnownFolderPath` (Documents, Pictures, Music, Downloads) and shell target for the virtual Computer folder (`shell:MyComputerFolder`); remaining applets use `ShellExecuteW` (Control Panel, Devices & Printers, Default Programs, Help and Support).
   `Win7RightItem` struct introduced; hover/click handlers wired; separator drawn between
@@ -120,9 +120,9 @@ File: `Core/StartMenuHook.cpp`
 Files: `Core/StartMenuWindow.h/.cpp`
 - Window class: `CrystalFrame_StartMenu`
 - Custom Win32 painting (GDI) and hit testing.
-- Layout: **Win7 two-column** (580 × 700 px):
-  - `DIVIDER_X = 330` separates left (programs) from right (shell links).
-  - Left column: Programs list (vertical) | "All Programs / Back" row | Search box | Bottom bar.
+- Layout: **Win7 two-column** (400 × 535 px — updated S5.2):
+  - `DIVIDER_X = 248` separates left (248 px) from right (152 px).
+  - Left column: Programs list (vertical) | "All Programs / Back" row | Bottom bar. *(search box removed S4.1)*
   - Right column: Username header + `Win7RightItem` list (folders + separator + applets).
 - Left-column view mode (`LeftViewMode` enum):
   - `Programs` — vertical list of 6 pinned apps (icon + name rows) + "All Programs ›" row.
@@ -133,7 +133,7 @@ Files: `Core/StartMenuWindow.h/.cpp`
   - `shell:MyComputerFolder` shell target for Computer (virtual folder — no filesystem path).
   - `ShellExecuteW` for shell applets (control, CLSID shell links, ms-settings:, HelpPane.exe).
   - `ShellExecuteW` for All Programs shortcuts (resolved target + args from MenuNode).
-  - Hover/click wired for all 10 right-column entries, programs list, AP list, AP row, power button.
+  - Hover/click wired for all 10 right-column entries, programs list, AP list, AP row, Shut down + arrow buttons.
 - Username displayed in right-column header (from `GetEnvironmentVariableW("USERNAME")` / `GetUserNameW` fallback).
 - ESC key: in AllPrograms view → navigate back one level / to Programs; in Programs view → Hide.
 
@@ -281,6 +281,110 @@ DoD:
   `inTransitGap = (pt.x >= DIVIDER_X - MARGIN) && (pt.x < DIVIDER_X)` și submenu-ul
   NU este închis cât timp mouse-ul traversează această zonă.
 - Fișier: `Core/StartMenuWindow.cpp` (WM_MOUSEMOVE hover-timer block).
+
+**S4.3b — Fix submenu close la hover diagonal (2026-02-21, PR #48)**
+- **Bug**: la mișcarea diagonală dinspre folder spre submenu, cursorul trecea peste
+  rânduri de folder adiacente. Codul apela `CloseSubMenu()` **imediat** la orice folder
+  diferit (`else if (nAp != m_hoverCandidate)` → `if (m_subMenuOpen) CloseSubMenu()`).
+- **Fix 1**: eliminat `CloseSubMenu()` imediat din ramura "folder diferit". Submenu-ul
+  se schimbă doar când timer-ul de 400ms expiră (mouse-ul s-a stabilit pe folderul nou).
+  Dacă mouse-ul ajunge la submenu înainte de 400ms, timer-ul e anulat — submenu-ul original
+  rămâne deschis.
+- **Fix 2**: când mouse-ul intră în panoul submenu (`IsOverSubMenu`), orice timer pending
+  pentru un folder diferit este anulat imediat → previne schimbarea submenu-ului după
+  ce utilizatorul a ajuns deja la itemii copil.
+- Fișier: `Core/StartMenuWindow.cpp` (WM_MOUSEMOVE + IsOverSubMenu branch).
+
+#### S5 — Proporții Win7 + Buton Shutdown (2026-02-21, PR #48)
+
+**S5.1 — Lățime panou drept corectată + buton Win7 Shut down**
+- `WIDTH` 580 → 450 → 400 (iterativ); panoul drept: 282px → 152px (~corect față de Win7).
+- `HEIGHT` 700 → 460 → 535 (iterativ; +75px ≈ 2 cm la 96 DPI).
+- `DIVIDER_X` 298 → 248 (panoul stâng îngustat cu ~50px ≈ 7 caractere Segoe UI).
+- Buton Power Win11 (cerc) eliminat. Înlocuit cu:
+  - `[Shut down]` (88px) + `[▼]` (18px) aliniate dreapta în bottom bar.
+  - Clic pe `Shut down` → `ExitWindowsEx(EWX_SHUTDOWN)` direct.
+  - Clic pe `▼` → `ShowPowerMenu()`: Switch User / Log Off / Lock / Restart / Sleep / Hibernate / Shut down.
+  - Hover independent pe fiecare buton (`m_hoveredShutdown` / `m_hoveredArrow`).
+  - `IsOverShutdownButton(pt)` / `IsOverArrowButton(pt)` înlocuiesc `IsOverPowerButton(pt)`.
+  - Glif săgeată: font Marlett, caracter `"6"` (▼ standard Win32).
+- Fișiere: `Core/StartMenuWindow.h` (constante + membri noi), `Core/StartMenuWindow.cpp`.
+
+**S5.2 — Iconițe sistem (întrebare utilizator — plan viitor)**
+- Iconițele colorate actuale (Win11-style `DrawIconSquare`) pot fi înlocuite cu iconițe reale
+  extrase din sistem via `SHGetFileInfoW` (SHGFI_ICON) sau `SHGetStockIconInfo`.
+- **Nu există piedici tehnice sau de resurse** — shell-ul caching-ează, `DrawIconEx` e rapid.
+- **Complexitate**: aplicații UWP (Settings, Edge, Calculator) nu au `.exe` clasic;
+  necesită parsarea shortcut-urilor `.lnk` din Start Menu sau `IPackageManager` COM.
+  DPI: necesită `SHGetImageList(SHIL_EXTRALARGE)` la scări > 100%.
+- **Plan**: la `Initialize()`, resolve path exe per PinnedItem → `SHGetFileInfoW` → stochează
+  `HICON m_pinnedIcons[PROG_COUNT]`; `PaintProgramsList` folosește `DrawIconEx`;
+  `Shutdown()` apelează `DestroyIcon` per icon. Sprint separat.
+
+---
+
+### Phase S6 — Iconițe reale din sistem (plan detaliat)
+
+**Obiectiv**: înlocuiește pătratele colorate `DrawIconSquare` cu iconițele reale ale aplicațiilor,
+extrase din sistemul de operare (shell/teme), exact cum arată în Windows 7 Start Menu.
+
+#### S6.1 — Iconițe pentru aplicații pinned (PinnedItem)
+
+Fiecare `PinnedItem` are un `target` (cale exe sau shell target). Planul:
+
+1. **`Initialize()`** — după ce `m_programTree` este populat, pentru fiecare `PinnedItem`:
+   ```
+   SHFILEINFOW sfi = {};
+   SHGetFileInfoW(item.target, 0, &sfi, sizeof(sfi),
+                  SHGFI_ICON | SHGFI_LARGEICON);   // 32×32
+   m_pinnedIcons[i] = sfi.hIcon;  // NULL dacă eșuează — fallback la DrawIconSquare
+   ```
+2. **`HICON m_pinnedIcons[PROG_COUNT]`** — array nou în `.h`, inițializat `{}` (NULL).
+3. **`PaintProgramsList()`** — dacă `m_pinnedIcons[i] != NULL`:
+   ```
+   DrawIconEx(hdc, iconX, iconY, m_pinnedIcons[i], 32, 32, 0, NULL, DI_NORMAL);
+   ```
+   Altfel → fallback existent `DrawIconSquare`.
+4. **`Shutdown()`** — `DestroyIcon(m_pinnedIcons[i])` pentru fiecare non-NULL.
+
+#### S6.2 — Aplicații UWP (Settings, Edge, Calculator)
+
+Aplicațiile UWP nu au `.exe` accesibil direct. Soluție:
+- Shortcut-urile `.lnk` din `%AppData%\Microsoft\Windows\Start Menu\Programs` sau
+  `%ProgramData%\...` conțin iconița embeddată sau un AppUserModelId.
+- `SHGetFileInfoW` pe fișierul `.lnk` returnează iconița corectă (shell o rezolvă).
+- **Plan**: în `PinnedItem`, stochează fie calea `.exe` fie calea `.lnk`;
+  `SHGetFileInfoW` funcționează pe ambele.
+
+#### S6.3 — DPI scaling
+
+- La 100% (96 DPI): `SHGFI_LARGEICON` = 32×32 ✓
+- La 125%+: necesită `SHGetImageList(SHIL_EXTRALARGE, IID_IImageList, ...)` + `IImageList::GetIcon(idx, ILD_NORMAL, &hIcon)`.
+- **Plan simplificat**: folosim `SHGFI_LARGEICON` (32px) și scalăm manual în `DrawIconEx`
+  la `PROG_ICON_SZ` (deja există această constantă). La DPI > 100%, iconița poate apărea
+  ușor neclară — acceptabil pentru sprint 1; sprint 2 adaugă `SHIL_EXTRALARGE`.
+
+#### S6.4 — Iconițe pentru panoul drept (Win7RightItem)
+
+Similar cu S6.1, dar pentru itemii din coloana dreaptă (Documents, Computer, etc.):
+- `SHGetFileInfoW` pe KNOWNFOLDERID path (din `SHGetKnownFolderPath`) pentru foldere.
+- `SHGetStockIconInfo(SIID_FOLDER, SHGFI_ICON | SHGFI_SMALLICON, &sii)` pentru iconița standard folder.
+- Afișat în `PaintWin7RightColumn` la stânga textului (16×16).
+
+#### S6.5 — Iconițe pentru All Programs list
+
+- Fiecare `MenuNode` din `AllProgramsEnumerator` are `target` (cale `.lnk` sau folder).
+- Folderele: `SHGetStockIconInfo(SIID_FOLDER, ...)`.
+- Shortcut-urile: `SHGetFileInfoW(node.lnkPath, ...)` pe fișierul `.lnk` original.
+- Caching: `MenuNode` stochează `HICON` extras la `BuildAllProgramsTree()`.
+- `DestroyIcon` la `NavigateBack` → pop / `Hide()` → full clear.
+
+#### Ordine implementare recomandată:
+1. **S6.1** (pinned apps) — impact vizual imediat, simplu
+2. **S6.4** (right column) — 16px icons, simplu
+3. **S6.5** (All Programs) — mai complex (caching per node)
+4. **S6.2** (UWP edge cases) — testare pe fiecare app pinnat
+5. **S6.3** (DPI) — ultimul, testat la 125%+
 
 ---
 
