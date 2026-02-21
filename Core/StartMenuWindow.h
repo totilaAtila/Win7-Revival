@@ -172,16 +172,16 @@ private:
 
 
     // ── Layout constants (Windows 7 style) ──────────────────────────────────
-    static constexpr int WIDTH  = 450;
-    static constexpr int HEIGHT = 460;
+    static constexpr int WIDTH  = 400;   // 450 - 50 (left panel narrowed ~7 chars)
+    static constexpr int HEIGHT = 535;   // 460 + 75 (~2 cm taller at 96 DPI)
     static constexpr int MARGIN = 12;
 
     // ── Win7 two-column divider ─────────────────────────────────────────────
     // Left column  : x ∈ [0, DIVIDER_X)
     // Divider line : x == DIVIDER_X
     // Right column : x ∈ (DIVIDER_X, WIDTH)
-    // Left ≈ right + 5 mm (20 px at 96 DPI): left=298, right=278.
-    static constexpr int DIVIDER_X  = 298;
+    // Left panel 248px, right panel 152px.
+    static constexpr int DIVIDER_X  = 248;   // was 298; narrowed ~50px (~7 chars)
     static constexpr int RC_X       = DIVIDER_X + 4;   // right col content left edge
 
     // Right column row metrics
