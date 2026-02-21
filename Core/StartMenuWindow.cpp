@@ -16,6 +16,7 @@
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "powrprof.lib")
+#pragma comment(lib, "advapi32.lib")
 
 namespace CrystalFrame {
 
@@ -1301,6 +1302,37 @@ void StartMenuWindow::ExecuteSubMenuItem(int visualIdx) {
     }
 }
 
+// ── Power helpers ─────────────────────────────────────────────────────────────
+// Enable SE_SHUTDOWN_NAME privilege in the current process token.
+// Required for ExitWindowsEx(EWX_SHUTDOWN|EWX_REBOOT) to succeed on standard
+// user accounts. The privilege is present but disabled by default; we just
+// enable it. Returns true on success (shutdown API will work).
+static bool EnableShutdownPrivilege() {
+    HANDLE hToken = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(),
+                          TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
+        return false;
+
+    LUID luid = {};
+    if (!LookupPrivilegeValueW(nullptr, SE_SHUTDOWN_NAME, &luid)) {
+        CloseHandle(hToken);
+        return false;
+    }
+
+    TOKEN_PRIVILEGES tp = {};
+    tp.PrivilegeCount           = 1;
+    tp.Privileges[0].Luid       = luid;
+    tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+
+    BOOL ok = AdjustTokenPrivileges(hToken, FALSE, &tp, 0, nullptr, nullptr);
+    DWORD err = GetLastError();
+    CloseHandle(hToken);
+
+    // AdjustTokenPrivileges returns TRUE even on partial success;
+    // ERROR_NOT_ALL_ASSIGNED means the privilege doesn't exist in the token.
+    return ok && (err != ERROR_NOT_ALL_ASSIGNED);
+}
+
 // ── Power menu ────────────────────────────────────────────────────────────────
 void StartMenuWindow::ShowPowerMenu() {
     HMENU menu = CreatePopupMenu();
@@ -1332,12 +1364,29 @@ void StartMenuWindow::ShowPowerMenu() {
 
     switch (cmd) {
         case 1: LockWorkStation(); break;   // closest to Switch User on modern Windows
-        case 2: ExitWindowsEx(EWX_LOGOFF  | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER); break;
+        case 2:
+            CF_LOG(Info, "Power menu: Log Off");
+            ExitWindowsEx(EWX_LOGOFF | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
+            break;
         case 3: LockWorkStation(); break;
-        case 4: ExitWindowsEx(EWX_REBOOT  | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER); break;
-        case 5: SetSuspendState(FALSE, FALSE, FALSE); break;
-        case 6: SetSuspendState(TRUE,  FALSE, FALSE); break;
-        case 7: ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER); break;
+        case 4:
+            CF_LOG(Info, "Power menu: Restart — enabling SE_SHUTDOWN_NAME");
+            EnableShutdownPrivilege();
+            ExitWindowsEx(EWX_REBOOT | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
+            break;
+        case 5:
+            CF_LOG(Info, "Power menu: Sleep");
+            SetSuspendState(FALSE, FALSE, FALSE);
+            break;
+        case 6:
+            CF_LOG(Info, "Power menu: Hibernate");
+            SetSuspendState(TRUE, FALSE, FALSE);
+            break;
+        case 7:
+            CF_LOG(Info, "Power menu: Shut down — enabling SE_SHUTDOWN_NAME");
+            EnableShutdownPrivilege();
+            ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
+            break;
     }
 }
 
@@ -1526,8 +1575,11 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
 
         // Bottom bar — Shut down button (direct action) and arrow (dropdown)
         if (IsOverShutdownButton(pt)) {
+            CF_LOG(Info, "Shut down button clicked — enabling SE_SHUTDOWN_NAME");
+            EnableShutdownPrivilege();
             Hide();
-            ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
+            if (!ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER))
+                CF_LOG(Warning, "ExitWindowsEx(EWX_SHUTDOWN) failed: " << GetLastError());
             return 0;
         }
         if (IsOverArrowButton(pt)) { ShowPowerMenu(); return 0; }
