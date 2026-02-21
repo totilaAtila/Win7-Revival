@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-02-21
+Last updated: 2026-02-21 (session 3)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -22,11 +22,29 @@ Reference: README.md (Done section) + TESTING.md (M1/M2/M4 test cases).
 
 ### 🚧 Start Menu: IN PROGRESS (Phase S1 — partial)
 Current Start Menu implementation:
-- **Phase S1 #3 DONE (2026-02-21):** Win7 two-column layout established. Right column functional via SHGetKnownFolderPath (Documents, Pictures, Music, Downloads) and shell target for the virtual Computer folder (shell:MyComputerFolder); remaining applets use ShellExecuteW (Control Panel, Devices & Printers, Default Programs, Help and Support).
+- **Phase S1 #3 DONE (2026-02-21):** Win7 two-column layout established. Right column functional via `SHGetKnownFolderPath` (Documents, Pictures, Music, Downloads) and shell target for the virtual Computer folder (`shell:MyComputerFolder`); remaining applets use `ShellExecuteW` (Control Panel, Devices & Printers, Default Programs, Help and Support).
   `Win7RightItem` struct introduced; hover/click handlers wired; separator drawn between
   folder links and system applets. No dead UI remains in the right column.
 - Left column: 2 × 3 pinned grid (6 items, config-driven), search box, recommended section,
   bottom bar with power menu — unchanged from Win11-style baseline; to be aligned in later phases.
+
+- **Codex P2 fix (2026-02-21):** `StartMenuWindow` constructor — `GetEnvironmentVariableW`
+  buffer-length validation corrected. Previously any nonzero return was treated as success;
+  when username ≥ 64 chars the buffer was unterminated and `DrawTextW(...,-1,...)` could
+  overread. Now only `0 < ret < len` is accepted as success; buffer is zeroed before the
+  `GetUserNameW` fallback, which also validates its result before use.
+
+- **Phase S2 foundation DONE (2026-02-21):** New module `Core/AllProgramsEnumerator.h/.cpp`
+  introduced (pure data layer, no UI). Implements:
+  - `ResolveShortcutTarget(path, outTarget, outArgs)` — resolves `.lnk` via `IShellLinkW` /
+    `IPersistFile`, and `.url` via `GetPrivateProfileStringW`; returns false + CF_LOG on failure.
+  - `BuildAllProgramsTree()` — enumerates `FOLDERID_CommonPrograms` + `FOLDERID_Programs`,
+    merges recursively (user-profile wins on same-name conflict), sorts folders-first alpha.
+  - `MenuNode` struct: `name`, `isFolder`, `target`, `args`, `folderPath`, `children`.
+  - Stub in `StartMenuWindow`: `m_programTree` member cached in `Initialize()`; TODO comment
+    placed in `WM_LBUTTONDOWN` for Phase S2 "All Programs" click.
+  - `ole32.lib` added to `CMakeLists.txt` for `CoCreateInstance`.
+
 
 Remaining for Phase S1 DoD:
 - Pixel/layout screenshot validation.
@@ -93,9 +111,19 @@ Files: `Core/StartMenuWindow.h/.cpp`
   - Right column: Username header + `Win7RightItem` list (folders + separator + applets).
 - Executes items via:
   - `SHGetKnownFolderPath` for personal folders (Documents, Pictures, Music, Downloads).
+  - `shell:MyComputerFolder` shell target for Computer (virtual folder — no filesystem path).
   - `ShellExecuteW` for shell applets (control, CLSID shell links, ms-settings:, HelpPane.exe).
   - Hover/click wired for all 10 right-column entries; separators non-clickable.
 - Username displayed in right-column header (from `GetEnvironmentVariableW("USERNAME")` / `GetUserNameW` fallback).
+
+### All Programs data module (Phase S2 foundation)
+Files: `Core/AllProgramsEnumerator.h/.cpp`
+- Pure data/model layer — no GDI, no UI.
+- `MenuNode` struct: display name, isFolder flag, resolved target, args, folderPath, children.
+- `ResolveShortcutTarget()`: resolves `.lnk` via `IShellLinkW`/`IPersistFile`; `.url` via INI parse.
+- `BuildAllProgramsTree()`: merges FOLDERID_CommonPrograms + FOLDERID_Programs; recursive; sorted.
+- `ole32.lib` linked for `CoCreateInstance`.
+- Integrated as `m_programTree` (cached at `StartMenuWindow::Initialize()`); not yet rendered.
 
 ### Existing plan document (applies to current Win11-style menu)
 File: `PLAN.md`
@@ -184,8 +212,10 @@ DoD:
    - `PaintWin7RightColumn()`, `GetRightItemAtPoint()`, `ExecuteRightItem()` implemented.
    - `DIVIDER_X = 330` two-column split established in layout constants.
    - Files: `Core/StartMenuWindow.h`, `Core/StartMenuWindow.cpp`.
-4) **All Programs enumerator**:
-   - Implement folder scan + .lnk resolution strategy; build a tree structure.
+4) 🔧 **All Programs enumerator** *(foundation DONE 2026-02-21 — branch `claude/win11-start-menu-redesign-T0m6X`)*:
+   - `Core/AllProgramsEnumerator.h/.cpp` created: `MenuNode`, `ResolveShortcutTarget`, `BuildAllProgramsTree`.
+   - Tree pre-cached in `StartMenuWindow::m_programTree` at `Initialize()`.
+   - **Next**: Phase S2 UI — detect "All Programs" click → render `m_programTree` in left column; hover submenus.
 5) **Keyboard navigation skeleton**:
    - ESC closes
    - Arrow keys move selection
@@ -207,6 +237,7 @@ DoD:
 ## 8) Where to look in code (entry points)
 - Start trigger & suppression: `Core/StartMenuHook.cpp`
 - Start UI window: `Core/StartMenuWindow.h/.cpp`
+- All Programs data model: `Core/AllProgramsEnumerator.h/.cpp`
 - Old plan (Win11-style menu fixes): `PLAN.md`
 - QA checklist: `TESTING.md`
 

@@ -15,6 +15,7 @@ set(SOURCES
     Renderer.cpp
     StartMenuHook.cpp
     StartMenuWindow.cpp
+    AllProgramsEnumerator.cpp
 )
 
 # Header files (removed IpcBridge.h, added CoreApi.h)
@@ -27,6 +28,7 @@ set(HEADERS
     Renderer.h
     StartMenuHook.h
     StartMenuWindow.h
+    AllProgramsEnumerator.h
 )
 
 # Create shared library (DLL)
@@ -38,6 +40,7 @@ target_link_libraries(CrystalFrame.Core
     user32.lib
     gdi32.lib
     shell32.lib
+    ole32.lib
     advapi32.lib
     dwmapi.lib
 )

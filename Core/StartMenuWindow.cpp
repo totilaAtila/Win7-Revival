@@ -57,13 +57,20 @@ const Win7RightItem StartMenuWindow::s_rightItems[StartMenuWindow::RIGHT_ITEM_CO
 
 // ── Constructor / Destructor ─────────────────────────────────────────────────
 StartMenuWindow::StartMenuWindow() {
-    // Cache the Windows user name for the right-column header
-    DWORD len = static_cast<DWORD>(std::size(m_username));
-    if (!GetEnvironmentVariableW(L"USERNAME", m_username, len) || m_username[0] == L'\0') {
-        // Fallback: try GetUserNameW (requires Advapi32, almost always present)
-        DWORD ul = len;
-        if (!GetUserNameW(m_username, &ul))
-            wcscpy_s(m_username, L"User");
+    // Cache the Windows user name for the right-column header.
+    // GetEnvironmentVariableW returns 0 on failure, or the required buffer size
+    // (>= len) when the buffer is too small — leaving it unterminated.
+    // Only treat the call as a success when 0 < ret < len.
+    {
+        DWORD len = static_cast<DWORD>(std::size(m_username));
+        DWORD ret = GetEnvironmentVariableW(L"USERNAME", m_username, len);
+        if (ret == 0 || ret >= len || m_username[0] == L'\0') {
+            m_username[0] = L'\0';  // guarantee null-termination before fallback
+            // Fallback: try GetUserNameW (requires Advapi32, almost always present)
+            DWORD ul = len;
+            if (!GetUserNameW(m_username, &ul) || m_username[0] == L'\0')
+                wcscpy_s(m_username, L"User");
+        }
     }
 
     LoadCustomNames();
@@ -152,6 +159,12 @@ bool StartMenuWindow::CreateMenuWindow() {
 
     CF_LOG(Info, "Start Menu window created HWND=0x"
                  << std::hex << reinterpret_cast<uintptr_t>(m_hwnd) << std::dec);
+
+    // Phase S2 foundation: pre-cache All Programs tree.
+    // No UI rendering yet — Phase S2 will consume m_programTree to build the
+    // "All Programs" left-column view and nested submenus.
+    m_programTree = BuildAllProgramsTree();
+
     return true;
 }
 
@@ -1013,6 +1026,10 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
 
         // Bottom bar — power button
         if (IsOverPowerButton(pt)) { ShowPowerMenu(); }
+
+        // TODO Phase S2: detect click on "All Programs" label and switch left column
+        // to the All Programs tree view using m_programTree.
+
 
         // Search box — open Windows Search
         {
