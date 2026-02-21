@@ -259,6 +259,29 @@ DoD:
 - `GetRightItemAtPoint`: returns -1 while submenu is open (right column blocked).
 - No global hooks, no separate HWND → no cursor freeze, no input blocking.
 
+#### S4 — Layout & UX polish (2026-02-21, branch `claude/win11-start-menu-redesign-T0m6X`)
+
+**S4.1 — Search box removed from UI (PERMANENT)**
+- `PaintWin7SearchBox` nu mai este apelat din `Paint()`. Box-ul NU va fi readăugat.
+- `AP_ROW_Y` recalculat: `BOTTOM_BAR_Y - AP_ROW_H - 2 = 630` (câștig de ~36px spațiu liber).
+- `AP_MAX_VISIBLE` crește automat: `(630 - 8) / 36 = 17 items` vizibile (față de 16).
+- Constantele `SEARCH_H` / `SEARCH_Y` rămân în `.h` ca referință istorică; NU se pictează.
+- Rațiune: search box nativ Windows există întotdeauna prin Win+S; duplicarea în meniu adăugă zgomot fără valoare.
+
+**S4.2 — Echilibrare lățimi coloane**
+- `DIVIDER_X`: 330 → 298. Rezultat: left=298px, right=278px, diferență=20px≈5mm.
+- Coloana stângă și cea dreaptă sunt acum aproape egale, cu stânga ușor mai lată (≈5mm).
+- `SM_X = DIVIDER_X + 4 = 302` (submenu panel ajustat automat).
+
+**S4.3 — Fix gap hover submenu (folderele din All Programs)**
+- **Bug**: trecând cu mouse-ul de pe un dosar (panoul stâng, max x = DIVIDER_X-MARGIN=286)
+  spre submenu-ul lateral (panoul drept, min x = DIVIDER_X=298), mouse-ul traversa un gap
+  de ~12px în care nici `overFolder` nici `IsOverSubMenu` nu erau `true` → submenu se închidea.
+- **Fix**: în `WM_MOUSEMOVE`, ramura `else` (nici folder, nici submenu): se detectează
+  `inTransitGap = (pt.x >= DIVIDER_X - MARGIN) && (pt.x < DIVIDER_X)` și submenu-ul
+  NU este închis cât timp mouse-ul traversează această zonă.
+- Fișier: `Core/StartMenuWindow.cpp` (WM_MOUSEMOVE hover-timer block).
+
 ---
 
 ## 6) Concrete next steps (pick one per session)

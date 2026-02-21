@@ -866,7 +866,7 @@ void StartMenuWindow::Paint() {
 
     // Left column — "All Programs" / "Back" row + search box (always visible)
     PaintApRow(hdc, cr);
-    PaintWin7SearchBox(hdc, cr);
+    // PaintWin7SearchBox intentionally omitted — search box removed from UI.
 
     // Right column: draw normal links, or overlay with submenu when open
     PaintWin7RightColumn(hdc, cr);
@@ -1353,13 +1353,20 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
                     InvalidateRect(m_hwnd, NULL, FALSE);
                 }
             } else {
-                // Not over a folder and not in submenu — cancel timer; close submenu
+                // Not over a folder and not in submenu.
+                // Keep submenu alive while mouse crosses the gap between the left
+                // panel's item edge (DIVIDER_X - MARGIN) and the submenu panel
+                // (x >= DIVIDER_X). Without this the submenu closes the moment the
+                // cursor leaves the folder row on its way to the child items.
+                bool inTransitGap = m_subMenuOpen
+                                    && (pt.x >= DIVIDER_X - MARGIN)
+                                    && (pt.x <  DIVIDER_X);
                 if (m_hoverTimer && nAp != m_hoverCandidate) {
                     KillTimer(m_hwnd, HOVER_TIMER_ID);
                     m_hoverTimer     = 0;
                     m_hoverCandidate = -1;
                 }
-                if (m_subMenuOpen && !IsOverSubMenu(pt)) {
+                if (m_subMenuOpen && !IsOverSubMenu(pt) && !inTransitGap) {
                     CloseSubMenu();
                 }
             }
@@ -1449,12 +1456,7 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         // Bottom bar — power button
         if (IsOverPowerButton(pt)) { ShowPowerMenu(); return 0; }
 
-        // Search box — open Windows Search
-        {
-            RECT sr = { MARGIN, SEARCH_Y, DIVIDER_X - MARGIN, SEARCH_Y + SEARCH_H };
-            if (PtInRect(&sr, pt))
-                ShellExecuteW(NULL, L"open", L"ms-search:", NULL, NULL, SW_SHOW);
-        }
+        // Search box removed — no click handler.
         return 0;
     }
 

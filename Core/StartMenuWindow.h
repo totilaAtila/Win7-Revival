@@ -179,7 +179,8 @@ private:
     // Left column  : x ∈ [0, DIVIDER_X)
     // Divider line : x == DIVIDER_X
     // Right column : x ∈ (DIVIDER_X, WIDTH)
-    static constexpr int DIVIDER_X  = 330;
+    // Left ≈ right + 5 mm (20 px at 96 DPI): left=298, right=278.
+    static constexpr int DIVIDER_X  = 298;
     static constexpr int RC_X       = DIVIDER_X + 4;   // right col content left edge
 
     // Right column row metrics
@@ -195,13 +196,15 @@ private:
     static constexpr int BOTTOM_BAR_Y    = HEIGHT - BOTTOM_BAR_H;   // 660
     static constexpr int POWER_BTN_R     = 14;   // radius of power button circle
 
-    // ── Search box — bottom of left column, just above bottom bar ───────────
+    // ── Search box — REMOVED (search box hidden per design decision; Windows
+    //    search is still accessible via Win+S; kept as constant for hit-test
+    //    legacy code that may reference it). Do NOT re-add to Paint().
     static constexpr int SEARCH_H        = 34;
     static constexpr int SEARCH_Y        = BOTTOM_BAR_Y - SEARCH_H - 2;  // 624
 
-    // ── "All Programs" / "Back" row — just above search box ─────────────────
+    // ── "All Programs" / "Back" row — just above bottom bar (search removed) ─
     static constexpr int AP_ROW_H        = 28;
-    static constexpr int AP_ROW_Y        = SEARCH_Y - AP_ROW_H - 2;      // 594
+    static constexpr int AP_ROW_Y        = BOTTOM_BAR_Y - AP_ROW_H - 2;  // 630
 
     // ── Programs list — vertical pinned-app rows, fills top of left column ──
     static constexpr int PROG_Y          = 8;
