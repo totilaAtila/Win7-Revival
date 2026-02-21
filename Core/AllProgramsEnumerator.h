@@ -47,10 +47,11 @@ bool ResolveShortcutTarget(const std::wstring& path,
 ///   • Same-name shortcuts: the user-profile version wins.
 ///   • Sort order: folders first (alpha), then shortcuts (alpha), both case-insensitive.
 ///
-/// COM: this function initialises COM on the calling thread if needed
-///      (via CoInitializeEx / COINIT_APARTMENTTHREADED) and uninitialises it
-///      on exit only when it was the one that initialised it.
-///      RPC_E_CHANGED_MODE (another apartment already active) is tolerated.
+/// COM: this function calls CoInitializeEx(COINIT_APARTMENTTHREADED) and
+///      always balances it with CoUninitialize() on exit for any successful
+///      return (S_OK or S_FALSE — both increment the reference count per MSDN).
+///      RPC_E_CHANGED_MODE (different apartment already active) is tolerated
+///      and requires no balancing call.
 /// </summary>
 std::vector<MenuNode> BuildAllProgramsTree();
 
