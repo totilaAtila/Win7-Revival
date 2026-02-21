@@ -43,6 +43,7 @@ target_link_libraries(CrystalFrame.Core
     ole32.lib
     advapi32.lib
     dwmapi.lib
+    dbghelp.lib    # MiniDumpWriteDump (crash handler)
 )
 
 # Compiler options for MSVC

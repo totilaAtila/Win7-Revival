@@ -404,7 +404,7 @@ HWND ShellTargetLocator::FindStartMenuWindow() {
 
             if (wcscmp(actualClass, data->first) == 0) {
                 // Log ALL matches for this class, not just filtered ones
-                CF_LOG(Info, "FOUND MATCH: class=" << WideToUtf8(actualClass)
+                CF_LOG(Debug, "FOUND MATCH: class=" << WideToUtf8(actualClass)
                               << ", title=\"" << WideToUtf8(title) << "\""
                               << ", visible=" << IsWindowVisible(hwnd));
 

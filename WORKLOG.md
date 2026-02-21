@@ -20,7 +20,7 @@ Taskbar overlay is considered finished for the current scope:
 - Tray + autostart behavior supported (starts hidden in tray when launched via autostart flag).
 Reference: README.md (Done section) + TESTING.md (M1/M2/M4 test cases).
 
-### ✅ Start Menu: DONE (S1+S2+S3+S4+S5 complete — PR #48 pending merge, 2026-02-21)
+### ✅ Start Menu: DONE (S1+S2+S3+S4+S5+S6.0 complete — PR #49 open, 2026-02-21)
 Current Start Menu implementation:
 - **Phase S1 #3 DONE (2026-02-21):** Win7 two-column layout established. Right column functional via `SHGetKnownFolderPath` (Documents, Pictures, Music, Downloads) and shell target for the virtual Computer folder (`shell:MyComputerFolder`); remaining applets use `ShellExecuteW` (Control Panel, Devices & Printers, Default Programs, Help and Support).
   `Win7RightItem` struct introduced; hover/click handlers wired; separator drawn between
@@ -320,6 +320,51 @@ DoD:
 - **Plan**: la `Initialize()`, resolve path exe per PinnedItem → `SHGetFileInfoW` → stochează
   `HICON m_pinnedIcons[PROG_COUNT]`; `PaintProgramsList` folosește `DrawIconEx`;
   `Shutdown()` apelează `DestroyIcon` per icon. Sprint separat.
+
+#### S6.0 — Logging reform + crash dump handler (2026-02-21, branch `claude/win11-start-menu-redesign-T0m6X`)
+
+**Context**: utilizatorul a raportat un "crash silențios" la pornire. Investigația logurilor a arătat că
+aplicația face shutdown ordonat (nu crash) după <1 secundă; cauza probabilă: excepție C# în Dashboard
+`InitializeAsync()`. Logul mai arăta și spam masiv: ~27 scrieri/secundă în fișier.
+
+**Investigație:**
+- T5352 (message pump): 3 linii `DEBUG` la fiecare ~110ms → `Renderer::RefreshTransparency()` la fiecare poll.
+- T2316 (monitoring thread): `INFO FOUND MATCH` pentru fiecare fereastră scanată de `EnumWindows`, constant.
+- Ultimele linii din log: `Core API shutdown initiated` → `Core shutdown initiated` → `StartMenuHook::Shutdown`
+  pe thread T11960 (Dashboard UI thread apelând `CoreManager.Shutdown()`). Acesta este **shutdown ordonat**,
+  NU crash C++. "Crash-ul" la pornire este probabil o excepție C# în Dashboard, nu în DLL-ul C++.
+
+**Modificări implementate:**
+
+1. **`Core/Diagnostics.h` — filtrare nivel minim de logare:**
+   - Adăugat `std::atomic<int> m_minLevel{ static_cast<int>(LogLevel::Warning) }` — default: Warning.
+   - Adăugat `SetMinLevel(LogLevel)`, `GetMinLevel()`, `IsEnabled(LogLevel)` în clasa `Logger`.
+   - Macro `CF_LOG` actualizat: verificare lock-free a nivelului ÎNAINTE de `ostringstream` → zero overhead
+     când mesajul este sub prag. Sintaxă: `CF_LOG(Info, "x=" << x)` rămâne identică.
+
+2. **`Core/ShellTargetLocator.cpp` — oprire spam FOUND MATCH:**
+   - `CF_LOG(Info, "FOUND MATCH: class=...")` → `CF_LOG(Debug, "FOUND MATCH: class=...")`
+   - Cu filtrul de Warning (default), această linie nu mai apare în log în condiții normale.
+
+3. **`Core/StartMenuWindow.cpp` — power action logs la Warning:**
+   - Logurile pentru Shut down / Restart / Log off (acțiuni critice) urcate de la `Info` → `Warning`
+     → apar în log chiar și cu filtrul default, pentru audit.
+
+4. **`Core/CoreApi.cpp` — crash dump handler (MiniDumpWriteDump):**
+   - Adăugat `#include <dbghelp.h>` + `#pragma comment(lib, "dbghelp.lib")`.
+   - Global `wchar_t g_crashDumpDir[MAX_PATH]` stocat la `CoreInitialize()`.
+   - Handler `CrashDumpHandler(EXCEPTION_POINTERS* ep)`:
+     - Scrie `%LOCALAPPDATA%\CrystalFrame\crash_YYYYMMDD_HHMMSS.dmp` cu `MiniDumpWithFullMemory`.
+     - Setează `SetMinLevel(Debug)` înainte de a loga — asigură că logul de crash este complet.
+     - Loghează `ExceptionCode` + `ExceptionAddress` + calea fișierului `.dmp` la nivel `Error`.
+     - Returnează `EXCEPTION_CONTINUE_SEARCH` → Windows Error Reporting rulează în continuare.
+   - `SetUnhandledExceptionFilter(CrashDumpHandler)` instalat în `CoreInitialize()`.
+   - Logurile de lifecycle (`=== CoreInitialize ===`, `=== Core ready ===`, shutdown) urcate la `Warning`.
+
+5. **`Core/CMakeLists.txt`:** adăugat `dbghelp.lib` în `target_link_libraries`.
+
+**Rezultat:** log normal (Warning+) va conține doar evenimente semnificative (init, shutdown, erori, power
+actions). La crash real: fișier `.dmp` + log complet (Debug+) generate automat în `%LOCALAPPDATA%\CrystalFrame`.
 
 ---
 

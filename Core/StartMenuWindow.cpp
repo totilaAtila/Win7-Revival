@@ -1365,25 +1365,25 @@ void StartMenuWindow::ShowPowerMenu() {
     switch (cmd) {
         case 1: LockWorkStation(); break;   // closest to Switch User on modern Windows
         case 2:
-            CF_LOG(Info, "Power menu: Log Off");
+            CF_LOG(Warning, "Power menu: Log Off");
             ExitWindowsEx(EWX_LOGOFF | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
             break;
         case 3: LockWorkStation(); break;
         case 4:
-            CF_LOG(Info, "Power menu: Restart — enabling SE_SHUTDOWN_NAME");
+            CF_LOG(Warning, "Power menu: Restart — enabling SE_SHUTDOWN_NAME");
             EnableShutdownPrivilege();
             ExitWindowsEx(EWX_REBOOT | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
             break;
         case 5:
-            CF_LOG(Info, "Power menu: Sleep");
+            CF_LOG(Warning, "Power menu: Sleep");
             SetSuspendState(FALSE, FALSE, FALSE);
             break;
         case 6:
-            CF_LOG(Info, "Power menu: Hibernate");
+            CF_LOG(Warning, "Power menu: Hibernate");
             SetSuspendState(TRUE, FALSE, FALSE);
             break;
         case 7:
-            CF_LOG(Info, "Power menu: Shut down — enabling SE_SHUTDOWN_NAME");
+            CF_LOG(Warning, "Power menu: Shut down — enabling SE_SHUTDOWN_NAME");
             EnableShutdownPrivilege();
             ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
             break;
@@ -1575,7 +1575,7 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
 
         // Bottom bar — Shut down button (direct action) and arrow (dropdown)
         if (IsOverShutdownButton(pt)) {
-            CF_LOG(Info, "Shut down button clicked — enabling SE_SHUTDOWN_NAME");
+            CF_LOG(Warning, "Shut down button clicked — enabling SE_SHUTDOWN_NAME");
             EnableShutdownPrivilege();
             Hide();
             if (!ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER))
