@@ -20,14 +20,11 @@ Taskbar overlay is considered finished for the current scope:
 - Tray + autostart behavior supported (starts hidden in tray when launched via autostart flag).
 Reference: README.md (Done section) + TESTING.md (M1/M2/M4 test cases).
 
-### 🚧 Start Menu: IN PROGRESS (Phase S1 — partial)
+### 🚧 Start Menu: IN PROGRESS (S1+S2 implemented; S3 remaining)
 Current Start Menu implementation:
 - **Phase S1 #3 DONE (2026-02-21):** Win7 two-column layout established. Right column functional via `SHGetKnownFolderPath` (Documents, Pictures, Music, Downloads) and shell target for the virtual Computer folder (`shell:MyComputerFolder`); remaining applets use `ShellExecuteW` (Control Panel, Devices & Printers, Default Programs, Help and Support).
   `Win7RightItem` struct introduced; hover/click handlers wired; separator drawn between
   folder links and system applets. No dead UI remains in the right column.
-- Left column: 2 × 3 pinned grid (6 items, config-driven), search box, recommended section,
-  bottom bar with power menu — unchanged from Win11-style baseline; to be aligned in later phases.
-
 - **Codex P2 fix (2026-02-21):** `StartMenuWindow` constructor — `GetEnvironmentVariableW`
   buffer-length validation corrected. Previously any nonzero return was treated as success;
   when username ≥ 64 chars the buffer was unterminated and `DrawTextW(...,-1,...)` could
