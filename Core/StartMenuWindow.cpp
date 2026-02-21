@@ -1339,14 +1339,21 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
                         InvalidateRect(m_hwnd, NULL, FALSE);
                     }
                 } else if (nAp != m_hoverCandidate) {
-                    // Different folder — cancel old timer, start new one
-                    if (m_subMenuOpen) CloseSubMenu();
+                    // Different folder — start a new switch timer but do NOT close
+                    // the current submenu immediately. The submenu switches only when
+                    // the timer fires (mouse settled on new folder for HOVER_DELAY_MS).
+                    // This lets the user move diagonally from a folder to its submenu
+                    // without the submenu vanishing as the cursor briefly crosses an
+                    // adjacent row.
                     if (m_hoverTimer) KillTimer(m_hwnd, HOVER_TIMER_ID);
                     m_hoverCandidate = nAp;
                     m_hoverTimer     = SetTimer(m_hwnd, HOVER_TIMER_ID, HOVER_DELAY_MS, NULL);
                 }
             } else if (m_subMenuOpen && IsOverSubMenu(pt)) {
-                // Mouse is in the open submenu panel — update submenu hover
+                // Mouse is in the submenu panel — cancel any pending switch timer so
+                // a briefly-passed folder row doesn't hijack the open submenu.
+                if (m_hoverTimer) { KillTimer(m_hwnd, HOVER_TIMER_ID); m_hoverTimer = 0; m_hoverCandidate = -1; }
+                // Update submenu item hover
                 int smHov = GetSubMenuItemAtPoint(pt);
                 if (smHov != m_subMenuHoveredIdx) {
                     m_subMenuHoveredIdx = smHov;
