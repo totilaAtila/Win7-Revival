@@ -155,7 +155,7 @@ Click **Core Engine** toggle → ON to start the overlay engine.
 - System theme (light/dark) support
 - Separate DetailWindow with dynamic sizing
 - System tray icon — minimize to tray; right-click menu (Open / Exit); double-click to restore
-- Custom Win11-style Start Menu (pinned grid, recommended items, search box, user area)
+- Win7-style Start Menu — two-column layout (programs list + system links), All Programs hierarchical tree with folder drill-down, keyboard navigation (Up/Down/Enter/Esc), mouse-wheel scroll, hover-to-open lateral submenus, search box, power menu
 
 ### Planned
 - **Multi-monitor support** — overlay on non-primary displays

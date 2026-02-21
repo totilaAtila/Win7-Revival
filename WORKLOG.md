@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-02-21 (session 4)
+Last updated: 2026-02-21 (session 5)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -20,7 +20,7 @@ Taskbar overlay is considered finished for the current scope:
 - Tray + autostart behavior supported (starts hidden in tray when launched via autostart flag).
 Reference: README.md (Done section) + TESTING.md (M1/M2/M4 test cases).
 
-### 🚧 Start Menu: IN PROGRESS (S1+S2 implemented; S3 remaining)
+### ✅ Start Menu: DONE (S1+S2+S3 complete — merged 2026-02-21)
 Current Start Menu implementation:
 - **Phase S1 #3 DONE (2026-02-21):** Win7 two-column layout established. Right column functional via `SHGetKnownFolderPath` (Documents, Pictures, Music, Downloads) and shell target for the virtual Computer folder (`shell:MyComputerFolder`); remaining applets use `ShellExecuteW` (Control Panel, Devices & Printers, Default Programs, Help and Support).
   `Win7RightItem` struct introduced; hover/click handlers wired; separator drawn between
@@ -59,7 +59,7 @@ Current Start Menu implementation:
     - `LaunchApItem`: folder → drill in; shortcut → `ShellExecuteW` + log on failure.
     - Hover highlights wired for programs list, AP row, and AP item list.
     - `Hide()` resets view to `Programs` and clears nav stack on every close.
-    - AP_MAX_VISIBLE (~16 items) limits display without scroll; "▼ more…" hint shown if truncated.
+    - AP_MAX_VISIBLE (~16 items) limits visible window; mouse-wheel scroll + keyboard auto-scroll added in S3; "▲ scroll…" / "▼ more…" hints shown at boundaries.
   - No dead UI: every visible clickable element has a real action.
 
 Remaining for Phase S1 DoD:
@@ -222,7 +222,7 @@ Deliver:
 - Edge cases: taskbar left/right/top/bottom; multi-monitor later.
 
 DoD:
-- No stuck hooks, no cursor freeze, no "native Start leaks".
+- No stuck hooks, no cursor freeze, no “native Start leaks”.
 - Stress: open/close spam test passes (>= 50 cycles).
 
 #### S3.1 — Keyboard navigation (Up/Down/Enter) — DONE (PR #40, branch `claude/s3-keyboard-nav-T0m6X`)
@@ -233,16 +233,18 @@ DoD:
 - Mouse movement clears keyboard selection (mouse and keyboard modes are mutually exclusive).
 - `NavigateIntoFolder` / `NavigateBack` / `Hide`: reset keyboard selection state.
 - ESC unchanged.
+- **P1 fix (review):** nav keys now routed via `StartMenuHook::ForwardKeyCallback` before the hook can suppress them — fixes VK_UP/VK_DOWN not reaching the menu while hook is active.
+- **P1 fix (review):** `GetApItemAtPoint` returned a clamped visual index (0..AP_MAX_VISIBLE-1) instead of an absolute node index; rewrote to return `m_apScrollOffset + visual_idx`; keyboard nav now covers the full list [0..total-1] with auto-scroll to keep selection in the visible window.
 
 #### S3.2 — All Programs mouse-wheel scroll — DONE (PR #41, branch `claude/s3-ap-scroll-T0m6X`)
-- `m_apScrollOffset`: absolute first-visible-node index; clamped on every paint.
-- `PaintAllProgramsView`: renders `nodes[offset..offset+count-1]`; hover/key selection compared as absolute nodeIdx; blue accent line at top of list when offset > 0; "▼ more…" hint when items remain below.
+- `m_apScrollOffset`: absolute first-visible-node index; clamped each paint (handles list-shrink after NavigateBack).
+- `PaintAllProgramsView`: renders `nodes[offset..offset+count-1]`; hover/key selection compared as absolute nodeIdx; "▲ scroll…" hint at top when offset > 0; "▼ more…" hint at bottom when items remain below.
 - `GetApItemAtPoint`: returns `m_apScrollOffset + visual_idx` (absolute); hover and click use consistent absolute index.
-- `WM_MOUSEWHEEL`: 3 items per wheel notch; clamp `[0, total − AP_MAX_VISIBLE]`; invalidate.
-- WM_KEYDOWN AllPrograms nav updated to use absolute range `[offset, offset+visibleCount−1]`.
+- `WM_MOUSEWHEEL`: 3 items per wheel notch; clamp `[0, total − AP_MAX_VISIBLE]`; active only in AllPrograms view over left column; `InvalidateRect` (no flicker).
+- Keyboard nav unchanged from S3.1: full absolute range `[0, total-1]` with auto-scroll — wheel and keyboard are independent scroll triggers.
 - `NavigateIntoFolder` / `NavigateBack` / `Hide`: reset `m_apScrollOffset = 0`.
 
-#### S3.3 — Hover-to-open submenu lateral (folders in AllPrograms) — IN PROGRESS (branch `claude/s3-hover-submenu-T0m6X`)
+#### S3.3 — Hover-to-open submenu lateral (folders in AllPrograms) — DONE (PR #42, branch `claude/s3-hover-submenu-T0m6X`)
 - `HOVER_TIMER_ID` / `HOVER_DELAY_MS` (400 ms): `SetTimer` on folder hover; killed on unhover/navigation/hide.
 - `m_hoverCandidate`: absolute AP node index pending the 400 ms timer.
 - `m_subMenuOpen` / `m_subMenuNodeIdx` / `m_subMenuHoveredIdx`: state for the lateral submenu panel drawn over the right-column area.
@@ -273,10 +275,10 @@ DoD:
    - `Core/AllProgramsEnumerator.h/.cpp`: `MenuNode`, `ResolveShortcutTarget`, `BuildAllProgramsTree`.
    - `PaintAllProgramsView`, `PaintApRow`, navigation stack, `LaunchApItem` all implemented.
    - ESC navigates back in All Programs view; folder click drills in; shortcut click launches.
-5) 🔧 **Keyboard navigation (arrow keys)** *(partial — ESC done; arrows/Enter/Tab pending)*:
-   - ESC: ✅ done (navigates back or hides).
-   - Arrow up/down move selection in programs list or AP list: **TODO Phase S3**.
-   - Enter launches selected item: **TODO Phase S3**.
+5) ✅ **Keyboard navigation (arrow keys)** *(DONE — PR #40, S3.1)*:
+   - ESC: ✅ navigates back or hides.
+   - VK_UP / VK_DOWN: ✅ move selection in programs list and AP list (full range, auto-scroll).
+   - VK_RETURN: ✅ launches selected item (pinned → ExecutePinnedItem; AP → LaunchApItem).
 6) ✅ **Left column Win7 alignment** *(DONE 2026-02-21)*:
    - Programs list replaced 2×3 pinned grid: vertical rows, icon + name.
    - "All Programs ›" entry added at bottom of list (above search box).
