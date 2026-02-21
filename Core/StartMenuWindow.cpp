@@ -1326,6 +1326,27 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
 
         return 0;
 
+    case WM_MOUSEWHEEL: {
+        // Only scroll in AllPrograms view, over the left column.
+        if (m_viewMode != LeftViewMode::AllPrograms) return 0;
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        ScreenToClient(m_hwnd, &pt);
+        if (pt.x >= DIVIDER_X || pt.y >= AP_ROW_Y) return 0;
+
+        int delta  = GET_WHEEL_DELTA_WPARAM(wParam);
+        int total  = static_cast<int>(CurrentApNodes().size());
+        int maxOff = max(0, total - AP_MAX_VISIBLE);
+        int step   = 3;   // items per wheel notch
+
+        if (delta < 0)
+            m_apScrollOffset = min(m_apScrollOffset + step, maxOff);
+        else
+            m_apScrollOffset = max(m_apScrollOffset - step, 0);
+
+        InvalidateRect(m_hwnd, NULL, FALSE);
+        return 0;
+    }
+
     default:
         return DefWindowProc(m_hwnd, msg, wParam, lParam);
     }
