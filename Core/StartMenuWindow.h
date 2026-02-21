@@ -142,7 +142,8 @@ private:
     bool m_hoveredApRow        = false; // "All Programs" / "Back" row
     int  m_hoveredApIndex      = -1;   // All Programs tree item
     int  m_hoveredRightIndex   = -1;   // Win7 right column hover
-    bool m_hoveredPower        = false;
+    bool m_hoveredShutdown     = false;   // over "Shut down" text button
+    bool m_hoveredArrow        = false;   // over the arrow dropdown button
     bool m_trackingMouse       = false;
 
     // Keyboard selection state (distinct from hover; cleared by mouse movement)
@@ -171,8 +172,8 @@ private:
 
 
     // ── Layout constants (Windows 7 style) ──────────────────────────────────
-    static constexpr int WIDTH  = 580;
-    static constexpr int HEIGHT = 700;
+    static constexpr int WIDTH  = 450;
+    static constexpr int HEIGHT = 460;
     static constexpr int MARGIN = 12;
 
     // ── Win7 two-column divider ─────────────────────────────────────────────
@@ -191,10 +192,13 @@ private:
     // Total entries in s_rightItems (includes separators)
     static constexpr int RIGHT_ITEM_COUNT = 10;
 
-    // ── Bottom bar (power button + user name) ───────────────────────────────
+    // ── Bottom bar (Win7 Shut-down button + arrow dropdown) ─────────────────
     static constexpr int BOTTOM_BAR_H    = 40;
-    static constexpr int BOTTOM_BAR_Y    = HEIGHT - BOTTOM_BAR_H;   // 660
-    static constexpr int POWER_BTN_R     = 14;   // radius of power button circle
+    static constexpr int BOTTOM_BAR_Y    = HEIGHT - BOTTOM_BAR_H;   // 420
+    // "Shut down" rectangular button (Win7 style)
+    static constexpr int SHUT_BTN_W      = 88;   // width of "Shut down" label area
+    static constexpr int SHUT_BTN_H      = 26;   // height of the button
+    static constexpr int SHUT_ARROW_W    = 18;   // width of the arrow dropdown button
 
     // ── Search box — REMOVED (search box hidden per design decision; Windows
     //    search is still accessible via Win+S; kept as constant for hit-test
@@ -269,7 +273,8 @@ private:
     int  GetProgItemAtPoint(POINT pt);      // pinned list; -1 if none
     bool IsOverApRow(POINT pt);             // "All Programs" / "Back" row
     int  GetApItemAtPoint(POINT pt);        // All Programs list item; -1 if none
-    bool IsOverPowerButton(POINT pt);
+    bool IsOverShutdownButton(POINT pt);  // "Shut down" text button
+    bool IsOverArrowButton(POINT pt);     // dropdown arrow button
     int  GetRightItemAtPoint(POINT pt);     // -1 if none / separator
 
     // ── Execution ───────────────────────────────────────────────────────────

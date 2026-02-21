@@ -251,7 +251,8 @@ void StartMenuWindow::Hide() {
         m_hoveredApRow      = false;
         m_hoveredApIndex    = -1;
         m_hoveredRightIndex = -1;
-        m_hoveredPower      = false;
+        m_hoveredShutdown   = false;
+        m_hoveredArrow      = false;
         m_keySelProgIndex   = -1;
         m_keySelApRow       = false;
         m_keySelApIndex     = -1;
@@ -801,39 +802,76 @@ void StartMenuWindow::PaintBottomBar(HDC hdc, const RECT& cr) {
     RECT nmR = { avCX + avR + 6, BOTTOM_BAR_Y, DIVIDER_X - MARGIN, cr.bottom };
     DrawTextW(hdc, m_username, -1, &nmR, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
-    // ── Power button (right side) ──
-    int pwrCX = cr.right - MARGIN - POWER_BTN_R;
-    int pwrCY = barCY;
+    // ── Win7 "Shut down" button + arrow (right side) ────────────────────────
+    // Layout (right-aligned): [MARGIN][Shut down SHUT_BTN_W][1px gap][arrow SHUT_ARROW_W][MARGIN]
+    int btnBot = BOTTOM_BAR_Y + (BOTTOM_BAR_H + SHUT_BTN_H) / 2;
+    int btnTop = btnBot - SHUT_BTN_H;
+    int btnR   = cr.right - MARGIN;
+    int arrL   = btnR - SHUT_ARROW_W;          // arrow left edge
+    int arrR   = btnR;                          // arrow right edge
+    int sdR    = arrL - 1;                      // shut-down button right edge
+    int sdL    = sdR  - SHUT_BTN_W;            // shut-down button left edge
 
-    if (m_hoveredPower) {
-        HBRUSH hBr  = CreateSolidBrush(CalculateHoverColor());
-        HBRUSH ob2  = (HBRUSH)SelectObject(hdc, hBr);
-        HPEN   op2  = (HPEN)SelectObject(hdc, noPen);
-        Ellipse(hdc, pwrCX - POWER_BTN_R - 4, pwrCY - POWER_BTN_R - 4,
-                     pwrCX + POWER_BTN_R + 4, pwrCY + POWER_BTN_R + 4);
-        SelectObject(hdc, ob2);
-        SelectObject(hdc, op2);
-        DeleteObject(hBr);
+    // Helper lambda for button fill colour
+    auto btnFill = [&](bool hov) -> COLORREF {
+        return hov ? RGB(185, 210, 240) : RGB(160, 190, 225);
+    };
+
+    // Draw "Shut down" text button
+    {
+        HBRUSH br = CreateSolidBrush(btnFill(m_hoveredShutdown));
+        RECT   rc = { sdL, btnTop, sdR, btnBot };
+        FillRect(hdc, &rc, br);
+        DeleteObject(br);
+        // Border
+        HPEN  pe = CreatePen(PS_SOLID, 1, RGB(100, 140, 190));
+        HPEN  op = (HPEN)SelectObject(hdc, pe);
+        HBRUSH nb3 = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+        Rectangle(hdc, sdL, btnTop, sdR, btnBot);
+        SelectObject(hdc, op);
+        SelectObject(hdc, nb3);
+        DeleteObject(pe);
+        // Text
+        HFONT  sdF = CreateFontW(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        HFONT  oldSdF = (HFONT)SelectObject(hdc, sdF);
+        ::SetTextColor(hdc, RGB(10, 10, 10));
+        RECT  tr = { sdL, btnTop, sdR, btnBot };
+        DrawTextW(hdc, L"Shut down", -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, oldSdF);
+        DeleteObject(sdF);
     }
 
-    COLORREF pwrCol = m_hoveredPower ? RGB(255, 255, 255) : RGB(175, 175, 185);
-    HPEN pwrPen  = CreatePen(PS_SOLID, 2, pwrCol);
-    HPEN oldPen2 = (HPEN)SelectObject(hdc, pwrPen);
-    HBRUSH nb2   = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
-    int ar = POWER_BTN_R - 3;
-    Arc(hdc,
-        pwrCX - ar, pwrCY - ar, pwrCX + ar, pwrCY + ar,
-        pwrCX - ar + 3, pwrCY - ar,
-        pwrCX + ar - 3, pwrCY - ar);
-    MoveToEx(hdc, pwrCX, pwrCY - ar + 1, NULL);
-    LineTo  (hdc, pwrCX, pwrCY - 1);
+    // Draw arrow dropdown button
+    {
+        HBRUSH br = CreateSolidBrush(btnFill(m_hoveredArrow));
+        RECT   rc = { arrL, btnTop, arrR, btnBot };
+        FillRect(hdc, &rc, br);
+        DeleteObject(br);
+        // Border (share left border with shut-down button)
+        HPEN  pe = CreatePen(PS_SOLID, 1, RGB(100, 140, 190));
+        HPEN  op = (HPEN)SelectObject(hdc, pe);
+        HBRUSH nb4 = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+        Rectangle(hdc, arrL, btnTop, arrR, btnBot);
+        SelectObject(hdc, op);
+        SelectObject(hdc, nb4);
+        DeleteObject(pe);
+        // Arrow glyph (▼) centred
+        HFONT  arF = CreateFontW(10, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Marlett");
+        HFONT  oldArF = (HFONT)SelectObject(hdc, arF);
+        ::SetTextColor(hdc, RGB(10, 10, 10));
+        RECT  tr = { arrL, btnTop, arrR, btnBot };
+        DrawTextW(hdc, L"6", -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, oldArF);
+        DeleteObject(arF);
+    }
 
-    SelectObject(hdc, oldPen2);
     SelectObject(hdc, oldF);
-    DeleteObject(pwrPen);
     DeleteObject(initF);
     DeleteObject(nmF);
-    (void)nb2;
 }
 
 // ── Paint (master) ───────────────────────────────────────────────────────────
@@ -907,13 +945,26 @@ int StartMenuWindow::GetApItemAtPoint(POINT pt) {
     return -1;
 }
 
-bool StartMenuWindow::IsOverPowerButton(POINT pt) {
-    RECT cr;
-    GetClientRect(m_hwnd, &cr);
-    int pwrCX = cr.right - MARGIN - POWER_BTN_R;
-    int barCY = BOTTOM_BAR_Y + BOTTOM_BAR_H / 2;
-    int dx = pt.x - pwrCX, dy = pt.y - barCY;
-    return (dx * dx + dy * dy) <= (POWER_BTN_R + 6) * (POWER_BTN_R + 6);
+bool StartMenuWindow::IsOverShutdownButton(POINT pt) {
+    RECT cr; GetClientRect(m_hwnd, &cr);
+    int btnBot = BOTTOM_BAR_Y + (BOTTOM_BAR_H + SHUT_BTN_H) / 2;
+    int btnTop = btnBot - SHUT_BTN_H;
+    int btnR   = cr.right - MARGIN;
+    int arrL   = btnR - SHUT_ARROW_W;
+    int sdR    = arrL - 1;
+    int sdL    = sdR  - SHUT_BTN_W;
+    RECT r = { sdL, btnTop, sdR, btnBot };
+    return PtInRect(&r, pt) != FALSE;
+}
+
+bool StartMenuWindow::IsOverArrowButton(POINT pt) {
+    RECT cr; GetClientRect(m_hwnd, &cr);
+    int btnBot = BOTTOM_BAR_Y + (BOTTOM_BAR_H + SHUT_BTN_H) / 2;
+    int btnTop = btnBot - SHUT_BTN_H;
+    int btnR   = cr.right - MARGIN;
+    int arrL   = btnR - SHUT_ARROW_W;
+    RECT r = { arrL, btnTop, btnR, btnBot };
+    return PtInRect(&r, pt) != FALSE;
 }
 
 // GetRightItemAtPoint ─────────────────────────────────────────────────────────
@@ -1255,29 +1306,38 @@ void StartMenuWindow::ShowPowerMenu() {
     HMENU menu = CreatePopupMenu();
     if (!menu) return;
 
-    AppendMenuW(menu, MF_STRING, 1, L"Sleep");
-    AppendMenuW(menu, MF_STRING, 2, L"Shut down");
-    AppendMenuW(menu, MF_STRING, 3, L"Restart");
+    // Win7-style dropdown: power actions ordered as in original Start Menu
+    AppendMenuW(menu, MF_STRING, 1, L"Switch User");
+    AppendMenuW(menu, MF_STRING, 2, L"Log Off");
+    AppendMenuW(menu, MF_STRING, 3, L"Lock");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, 4, L"Cancel");
+    AppendMenuW(menu, MF_STRING, 4, L"Restart");
+    AppendMenuW(menu, MF_STRING, 5, L"Sleep");
+    AppendMenuW(menu, MF_STRING, 6, L"Hibernate");
+    AppendMenuW(menu, MF_STRING, 7, L"Shut down");
 
+    // Anchor to the right edge of the arrow button, just above the bottom bar
     RECT wr = {};
     GetWindowRect(m_hwnd, &wr);
-    int x = wr.right  - MARGIN - POWER_BTN_R * 2;
-    int y = wr.bottom - BOTTOM_BAR_H - 4;
+    int x = wr.right - MARGIN;
+    int y = wr.bottom - BOTTOM_BAR_H;
 
     SetForegroundWindow(m_hwnd);
     int cmd = TrackPopupMenu(menu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN | TPM_RETURNCMD,
                              x, y, 0, m_hwnd, nullptr);
     DestroyMenu(menu);
 
-    if (cmd == 4 || cmd == 0) return;
+    if (cmd == 0) return;
     Hide();
 
     switch (cmd) {
-        case 1: SetSuspendState(FALSE, FALSE, FALSE); break;
-        case 2: ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER); break;
-        case 3: ExitWindowsEx(EWX_REBOOT   | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER); break;
+        case 1: LockWorkStation(); break;   // closest to Switch User on modern Windows
+        case 2: ExitWindowsEx(EWX_LOGOFF  | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER); break;
+        case 3: LockWorkStation(); break;
+        case 4: ExitWindowsEx(EWX_REBOOT  | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER); break;
+        case 5: SetSuspendState(FALSE, FALSE, FALSE); break;
+        case 6: SetSuspendState(TRUE,  FALSE, FALSE); break;
+        case 7: ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER); break;
     }
 }
 
@@ -1321,7 +1381,8 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         int  nAp    = (m_viewMode == LeftViewMode::AllPrograms)
                       ? GetApItemAtPoint(pt) : -1;
         int  nrc    = GetRightItemAtPoint(pt);
-        bool npwr   = IsOverPowerButton(pt);
+        bool nshut  = IsOverShutdownButton(pt);
+        bool narrow = IsOverArrowButton(pt);
 
         // ── Hover-timer management (S3.3) ────────────────────────────────────
         if (m_viewMode == LeftViewMode::AllPrograms) {
@@ -1386,17 +1447,19 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         // Mouse movement clears keyboard selection (modes are mutually exclusive)
         bool hadKeySel = (m_keySelProgIndex >= 0 || m_keySelApRow || m_keySelApIndex >= 0);
 
-        if (nProg != m_hoveredProgIndex  ||
-            nApRow != m_hoveredApRow     ||
-            nAp    != m_hoveredApIndex   ||
+        if (nProg  != m_hoveredProgIndex   ||
+            nApRow != m_hoveredApRow      ||
+            nAp    != m_hoveredApIndex    ||
             nrc    != m_hoveredRightIndex ||
-            npwr   != m_hoveredPower     ||
+            nshut  != m_hoveredShutdown   ||
+            narrow != m_hoveredArrow      ||
             hadKeySel) {
             m_hoveredProgIndex  = nProg;
             m_hoveredApRow      = nApRow;
             m_hoveredApIndex    = nAp;
             m_hoveredRightIndex = nrc;
-            m_hoveredPower      = npwr;
+            m_hoveredShutdown   = nshut;
+            m_hoveredArrow      = narrow;
             if (hadKeySel) {
                 m_keySelProgIndex = -1;
                 m_keySelApRow     = false;
@@ -1413,7 +1476,8 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         m_hoveredApRow      = false;
         m_hoveredApIndex    = -1;
         m_hoveredRightIndex = -1;
-        m_hoveredPower      = false;
+        m_hoveredShutdown   = false;
+        m_hoveredArrow      = false;
         if (m_hoverTimer) { KillTimer(m_hwnd, HOVER_TIMER_ID); m_hoverTimer = 0; m_hoverCandidate = -1; }
         if (m_subMenuOpen)  CloseSubMenu();
         else InvalidateRect(m_hwnd, NULL, FALSE);
@@ -1460,8 +1524,13 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
             if (ap >= 0) { LaunchApItem(ap); return 0; }
         }
 
-        // Bottom bar — power button
-        if (IsOverPowerButton(pt)) { ShowPowerMenu(); return 0; }
+        // Bottom bar — Shut down button (direct action) and arrow (dropdown)
+        if (IsOverShutdownButton(pt)) {
+            Hide();
+            ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER);
+            return 0;
+        }
+        if (IsOverArrowButton(pt)) { ShowPowerMenu(); return 0; }
 
         // Search box removed — no click handler.
         return 0;
