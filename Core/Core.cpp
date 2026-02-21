@@ -88,6 +88,15 @@ bool Core::Initialize() {
         return RECT{};
     });
 
+    // Forward nav/dismiss keys (Up/Down/Enter/Esc) to the non-activating Start Menu window.
+    // The window never receives keyboard focus (WS_EX_NOACTIVATE), so we PostMessage from
+    // the low-level hook instead of relying on normal focus-based WM_KEYDOWN delivery.
+    m_startMenuHook->SetForwardKeyCallback([this](UINT vk) {
+        if (m_startMenuWindow && m_startMenuWindow->IsVisible()) {
+            PostMessage(m_startMenuWindow->GetMenuHwnd(), WM_KEYDOWN, vk, 0);
+        }
+    });
+
     // Disabled by default - Dashboard will enable when configured
     m_startMenuHook->SetEnabled(false);
 

@@ -54,6 +54,14 @@ public:
     using GetMenuBoundsCallback = std::function<RECT()>;
     void SetGetMenuBoundsCallback(GetMenuBoundsCallback callback);
 
+    /// <summary>
+    /// Callback to forward a virtual key to the Start Menu window.
+    /// Called for VK_UP, VK_DOWN, VK_RETURN, and VK_ESCAPE when the menu is visible.
+    /// Implementation should PostMessage(menuHwnd, WM_KEYDOWN, vk, 0).
+    /// </summary>
+    using ForwardKeyCallback = std::function<void(UINT vk)>;
+    void SetForwardKeyCallback(ForwardKeyCallback callback);
+
 private:
     bool m_enabled = false;
     HHOOK m_keyboardHook = nullptr;
@@ -62,6 +70,7 @@ private:
     HideMenuCallback m_hideMenuCallback;
     IsMenuVisibleCallback m_isMenuVisibleCallback;
     GetMenuBoundsCallback m_getMenuBoundsCallback;
+    ForwardKeyCallback m_forwardKeyCallback;
     HWND m_startButtonHwnd = nullptr;
 
     // Hook procedures (must be static)

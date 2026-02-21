@@ -76,6 +76,10 @@ void StartMenuHook::SetGetMenuBoundsCallback(GetMenuBoundsCallback callback) {
     m_getMenuBoundsCallback = callback;
 }
 
+void StartMenuHook::SetForwardKeyCallback(ForwardKeyCallback callback) {
+    m_forwardKeyCallback = callback;
+}
+
 void StartMenuHook::FindStartButton() {
     // Find taskbar
     HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
@@ -144,15 +148,20 @@ LRESULT CALLBACK StartMenuHook::KeyboardHookProc(int nCode, WPARAM wParam, LPARA
         }
 
         if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
-            // Check for ESC key when menu is visible
-            if (kbd->vkCode == VK_ESCAPE) {
+            // Navigation / dismiss keys — forward to Start Menu window via PostMessage
+            // so that WM_KEYDOWN reaches HandleMessage even though the window is
+            // non-activating (WS_EX_NOACTIVATE + SW_SHOWNOACTIVATE).
+            if (kbd->vkCode == VK_ESCAPE ||
+                kbd->vkCode == VK_UP     ||
+                kbd->vkCode == VK_DOWN   ||
+                kbd->vkCode == VK_RETURN) {
                 if (s_instance->m_isMenuVisibleCallback && s_instance->m_isMenuVisibleCallback()) {
-                    CF_LOG(Debug, "ESC pressed - hiding Start Menu");
-                    if (s_instance->m_hideMenuCallback) {
-                        s_instance->m_hideMenuCallback();
+                    CF_LOG(Debug, "Nav key 0x" << std::hex << kbd->vkCode << std::dec
+                                  << " forwarded to Start Menu");
+                    if (s_instance->m_forwardKeyCallback) {
+                        s_instance->m_forwardKeyCallback(kbd->vkCode);
                     }
-                    // Suppress ESC key so it doesn't propagate
-                    return 1;
+                    return 1; // Suppress — handled by the menu window
                 }
             }
             // Check for Windows key press (Left or Right)
