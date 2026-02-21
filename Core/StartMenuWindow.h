@@ -142,6 +142,11 @@ private:
     bool m_hoveredPower        = false;
     bool m_trackingMouse       = false;
 
+    // Keyboard selection state (distinct from hover; cleared by mouse movement)
+    int  m_keySelProgIndex     = -1;   // keyboard-focused item in Programs list
+    bool m_keySelApRow         = false; // keyboard focus on "All Programs"/"Back" row
+    int  m_keySelApIndex       = -1;   // keyboard-focused item in AllPrograms list
+
     // Cached Windows login name for the right-column header
     wchar_t m_username[64] = {};
 
@@ -255,8 +260,9 @@ private:
 
     // ── Color helpers ────────────────────────────────────────────────────────
     COLORREF CalculateHoverColor();
-    COLORREF CalculateSubtleColor();   // slightly lighter/darker than bg
-    COLORREF CalculateBorderColor();   // subtle border
+    COLORREF CalculateSubtleColor();      // slightly lighter/darker than bg
+    COLORREF CalculateBorderColor();      // subtle border
+    COLORREF CalculateSelectionColor();   // keyboard-focus accent (fixed blue)
 
     // ── Name helpers ─────────────────────────────────────────────────────────
     const wchar_t* GetMenuItemName(int index);

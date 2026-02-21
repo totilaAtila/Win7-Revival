@@ -222,8 +222,17 @@ Deliver:
 - Edge cases: taskbar left/right/top/bottom; multi-monitor later.
 
 DoD:
-- No stuck hooks, no cursor freeze, no “native Start leaks”.
+- No stuck hooks, no cursor freeze, no "native Start leaks".
 - Stress: open/close spam test passes (>= 50 cycles).
+
+#### S3.1 — Keyboard navigation (Up/Down/Enter) — IN PROGRESS (branch `claude/s3-keyboard-nav-T0m6X`)
+- `m_keySelProgIndex` / `m_keySelApIndex` / `m_keySelApRow`: keyboard-focus state distinct from hover.
+- `CalculateSelectionColor()`: fixed blue accent (RGB 0,96,180) drawn as rect fill — clearly distinct from mouse-hover gray.
+- VK_DOWN / VK_UP: cycle through programs list or AP list; last item → AP row; clamp at boundaries.
+- VK_RETURN: pinned → `ExecutePinnedItem`; AP item → `LaunchApItem`; AP row → toggle view / NavigateBack.
+- Mouse movement clears keyboard selection (mouse and keyboard modes are mutually exclusive).
+- `NavigateIntoFolder` / `NavigateBack` / `Hide`: reset keyboard selection state.
+- ESC unchanged.
 
 ---
 
