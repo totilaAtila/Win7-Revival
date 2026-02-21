@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-02-20
+Last updated: 2026-02-21
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -20,15 +20,23 @@ Taskbar overlay is considered finished for the current scope:
 - Tray + autostart behavior supported (starts hidden in tray when launched via autostart flag).
 Reference: README.md (Done section) + TESTING.md (M1/M2/M4 test cases).
 
-### 🚧 Start Menu: IN PROGRESS (major redesign required)
-Current Start Menu implementation is *not* Windows 7 identical:
-- `Core/StartMenuWindow.*` explicitly describes a Windows 11-style layout (search + pinned grid + recommended + bottom bar).
-- `PLAN.md` documents fixes for anchoring and click handlers in the current design (search + user area + autostart-to-tray).
-New requirement changes the target entirely:
+### 🚧 Start Menu: IN PROGRESS (Phase S1 — partial)
+Current Start Menu implementation:
+- **Phase S1 #3 DONE (2026-02-21):** Win7 two-column layout established. Right column fully
+  functional via `SHGetKnownFolderPath` (Documents, Pictures, Music, Downloads, Computer) and
+  ShellExecuteW (Control Panel, Devices & Printers, Default Programs, Help and Support).
+  `Win7RightItem` struct introduced; hover/click handlers wired; separator drawn between
+  folder links and system applets. No dead UI remains in the right column.
+- Left column: 2 × 3 pinned grid (6 items, config-driven), search box, recommended section,
+  bottom bar with power menu — unchanged from Win11-style baseline; to be aligned in later phases.
+
+Remaining for Phase S1 DoD:
+- Pixel/layout screenshot validation.
+- Left column Win7 alignment (typography, spacing).
+
+New requirement (non-negotiable, §10):
 - **Start Menu must be visually AND functionally identical to Windows 7**
 - **All menus and submenus must be 100% functional** (no placeholders, no fake UI)
-
-This implies the Start Menu UI/interaction model must be redesigned.
 
 ---
 
@@ -81,9 +89,15 @@ File: `Core/StartMenuHook.cpp`
 Files: `Core/StartMenuWindow.h/.cpp`
 - Window class: `CrystalFrame_StartMenu`
 - Custom Win32 painting (GDI) and hit testing.
-- Current layout is Win11-style:
-  - Search box + pinned grid + recommended list + bottom bar
-- Executes items via ShellExecuteW / ms-settings URIs / shell: folders.
+- Layout: **Win7 two-column** (580 × 700 px):
+  - `DIVIDER_X = 330` separates left (programs) from right (shell links).
+  - Left column: Search box | Pinned 2×3 grid | Recommended section | Bottom bar.
+  - Right column: Username header + `Win7RightItem` list (folders + separator + applets).
+- Executes items via:
+  - `SHGetKnownFolderPath` for personal folders (Documents, Pictures, Music, Downloads, Computer).
+  - `ShellExecuteW` for shell applets (control, CLSID shell links, ms-settings:, HelpPane.exe).
+  - Hover/click wired for all 10 right-column entries; separators non-clickable.
+- Username displayed in right-column header (from `GetEnvironmentVariableW("USERNAME")` / `GetUserNameW` fallback).
 
 ### Existing plan document (applies to current Win11-style menu)
 File: `PLAN.md`
@@ -167,8 +181,11 @@ DoD:
 2) **Refactor StartMenuWindow**:
    - Split rendering into: Frame, LeftColumn, RightColumn, Search, Power
    - Introduce a menu model (items, folders, actions) separate from paint code.
-3) **Shell link correctness**:
-   - Implement right-column links via known folder IDs / shell verbs (not hard-coded strings where possible).
+3) ✅ **Shell link correctness** *(DONE 2026-02-21 — branch `claude/right-column-win7`)*:
+   - Implemented `Win7RightItem` struct + `s_rightItems[10]` with KNOWNFOLDERID entries and shell applet fallbacks.
+   - `PaintWin7RightColumn()`, `GetRightItemAtPoint()`, `ExecuteRightItem()` implemented.
+   - `DIVIDER_X = 330` two-column split established in layout constants.
+   - Files: `Core/StartMenuWindow.h`, `Core/StartMenuWindow.cpp`.
 4) **All Programs enumerator**:
    - Implement folder scan + .lnk resolution strategy; build a tree structure.
 5) **Keyboard navigation skeleton**:
@@ -176,6 +193,9 @@ DoD:
    - Arrow keys move selection
    - Enter launches
    - Right arrow opens submenu
+6) **Left column Win7 alignment**:
+   - Typography, spacing, and visual styling to match Win7 look (currently Win11-style baseline).
+   - Add "All Programs" entry at bottom of left column.
 
 ---
 
