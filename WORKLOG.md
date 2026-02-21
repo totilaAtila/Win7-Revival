@@ -76,7 +76,7 @@ New requirement (non-negotiable, §10):
 Start Menu must match Windows 7 look & layout:
 - Two-column layout (left programs list + right system links).
 - Correct header/user area (user picture/name) in the right location.
-- Correct search box position and styling.
+- No Search Bar needed
 - Correct “All Programs” entry and navigation experience.
 - Correct bottom bar with Shut down button + arrow (power options).
 - Correct typography, spacing, hover highlights, separators, and corner/edge styling.
@@ -443,7 +443,7 @@ Request:
 - Acceptance criteria (measurable):
 - Tests to run (from TESTING.md + new ones):
 ## 10) Non-negotiables (repeat here so they are never “forgotten”)
-- Start Menu: visually + functional identical to Windows 7.
+- Start Menu: visually + functional identical to Windows 7. (everything but Search Bar. Not needed)
 - All menus/submenus: 100% functional (no dead UI).
 - No injection / no patching system components.
 - Clear logs + fail-safe behavior, no silent failures.
