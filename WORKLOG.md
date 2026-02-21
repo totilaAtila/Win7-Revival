@@ -92,7 +92,7 @@ Files: `Core/StartMenuWindow.h/.cpp`
   - Left column: Search box | Pinned 2×3 grid | Recommended section | Bottom bar.
   - Right column: Username header + `Win7RightItem` list (folders + separator + applets).
 - Executes items via:
-  - `SHGetKnownFolderPath` for personal folders (Documents, Pictures, Music, Downloads, Computer).
+  - `SHGetKnownFolderPath` for personal folders (Documents, Pictures, Music, Downloads).
   - `ShellExecuteW` for shell applets (control, CLSID shell links, ms-settings:, HelpPane.exe).
   - Hover/click wired for all 10 right-column entries; separators non-clickable.
 - Username displayed in right-column header (from `GetEnvironmentVariableW("USERNAME")` / `GetUserNameW` fallback).
