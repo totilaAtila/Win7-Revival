@@ -607,13 +607,6 @@ void StartMenuWindow::PaintApRow(HDC hdc, const RECT& cr) {
     RECT tr = { MARGIN + 6, AP_ROW_Y, DIVIDER_X - MARGIN, AP_ROW_Y + AP_ROW_H };
     DrawTextW(hdc, label, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
-    HFONT rowFont = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-    HFONT oldF = (HFONT)SelectObject(hdc, rowFont);
-    ::SetTextColor(hdc, m_textColor);
-    SetBkMode(hdc, TRANSPARENT);
-
     const wchar_t* label = (m_viewMode == LeftViewMode::AllPrograms)
                            ? L"\u25c4  Back"
                            : L"All Programs  \u203a";
