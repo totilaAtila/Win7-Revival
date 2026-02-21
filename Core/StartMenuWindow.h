@@ -194,7 +194,7 @@ private:
 
     // ── Bottom bar (Win7 Shut-down button + arrow dropdown) ─────────────────
     static constexpr int BOTTOM_BAR_H    = 40;
-    static constexpr int BOTTOM_BAR_Y    = HEIGHT - BOTTOM_BAR_H;   // 420
+    static constexpr int BOTTOM_BAR_Y    = HEIGHT - BOTTOM_BAR_H;   // 495
     // "Shut down" rectangular button (Win7 style)
     static constexpr int SHUT_BTN_W      = 88;   // width of "Shut down" label area
     static constexpr int SHUT_BTN_H      = 26;   // height of the button
@@ -204,11 +204,11 @@ private:
     //    search is still accessible via Win+S; kept as constant for hit-test
     //    legacy code that may reference it). Do NOT re-add to Paint().
     static constexpr int SEARCH_H        = 34;
-    static constexpr int SEARCH_Y        = BOTTOM_BAR_Y - SEARCH_H - 2;  // 624
+    static constexpr int SEARCH_Y        = BOTTOM_BAR_Y - SEARCH_H - 2;  // 459
 
     // ── "All Programs" / "Back" row — just above bottom bar (search removed) ─
     static constexpr int AP_ROW_H        = 28;
-    static constexpr int AP_ROW_Y        = BOTTOM_BAR_Y - AP_ROW_H - 2;  // 630
+    static constexpr int AP_ROW_Y        = BOTTOM_BAR_Y - AP_ROW_H - 2;  // 465
 
     // ── Programs list — vertical pinned-app rows, fills top of left column ──
     static constexpr int PROG_Y          = 8;
@@ -217,7 +217,7 @@ private:
     static constexpr int PROG_COUNT      = 6;   // must match s_pinnedItems length
 
     // Max items visible in All Programs list (without scroll)
-    static constexpr int AP_MAX_VISIBLE  = (AP_ROW_Y - PROG_Y) / PROG_ITEM_H; // ~16
+    static constexpr int AP_MAX_VISIBLE  = (AP_ROW_Y - PROG_Y) / PROG_ITEM_H; // 12
 
     // ── Hover submenu panel layout (S3.3) ───────────────────────────────────
     static constexpr int SM_X       = DIVIDER_X + 4;
