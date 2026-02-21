@@ -40,7 +40,7 @@ const Win7RightItem StartMenuWindow::s_rightItems[StartMenuWindow::RIGHT_ITEM_CO
     { L"Pictures",         false, &FOLDERID_Pictures,     L"explore", nullptr, nullptr },
     { L"Music",            false, &FOLDERID_Music,        L"explore", nullptr, nullptr },
     { L"Downloads",        false, &FOLDERID_Downloads,    L"explore", nullptr, nullptr },
-    { L"Computer",         false, &FOLDERID_ComputerFolder, L"open",  nullptr, nullptr },
+    { L"Computer",         false, nullptr, L"open", L"shell:MyComputerFolder", nullptr },
     // ── separator ──────────────────────────────────────────────────────────
     { nullptr,             true,  nullptr,                nullptr,    nullptr, nullptr },
     // ── System applets ─────────────────────────────────────────────────────
@@ -1022,6 +1022,7 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
 
         // TODO Phase S2: detect click on "All Programs" label and switch left column
         // to the All Programs tree view using m_programTree.
+
 
         // Search box — open Windows Search
         {

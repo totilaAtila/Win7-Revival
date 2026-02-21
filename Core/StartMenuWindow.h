@@ -131,6 +131,7 @@ private:
     // Phase S2 UI will iterate this to build the "All Programs" left-column view.
     std::vector<MenuNode> m_programTree;
 
+
     // ── Layout constants ────────────────────────────────────────────────────
     static constexpr int WIDTH  = 580;
     static constexpr int HEIGHT = 700;
