@@ -148,7 +148,10 @@ private:
     // Keyboard selection state (distinct from hover; cleared by mouse movement)
     int  m_keySelProgIndex     = -1;   // keyboard-focused item in Programs list
     bool m_keySelApRow         = false; // keyboard focus on "All Programs"/"Back" row
-    int  m_keySelApIndex       = -1;   // keyboard-focused item in AllPrograms list
+    int  m_keySelApIndex       = -1;   // keyboard-focused item in AllPrograms list (absolute)
+
+    // Scroll offset for AllPrograms list (first visible node index); keyboard-driven.
+    int  m_apScrollOffset      = 0;
 
     // Cached Windows login name for the right-column header
     wchar_t m_username[64] = {};
