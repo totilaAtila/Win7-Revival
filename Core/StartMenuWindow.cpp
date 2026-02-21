@@ -152,6 +152,12 @@ bool StartMenuWindow::CreateMenuWindow() {
 
     CF_LOG(Info, "Start Menu window created HWND=0x"
                  << std::hex << reinterpret_cast<uintptr_t>(m_hwnd) << std::dec);
+
+    // Phase S2 foundation: pre-cache All Programs tree.
+    // No UI rendering yet — Phase S2 will consume m_programTree to build the
+    // "All Programs" left-column view and nested submenus.
+    m_programTree = BuildAllProgramsTree();
+
     return true;
 }
 
@@ -1013,6 +1019,9 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
 
         // Bottom bar — power button
         if (IsOverPowerButton(pt)) { ShowPowerMenu(); }
+
+        // TODO Phase S2: detect click on "All Programs" label and switch left column
+        // to the All Programs tree view using m_programTree.
 
         // Search box — open Windows Search
         {

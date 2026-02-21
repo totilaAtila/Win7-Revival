@@ -3,6 +3,8 @@
 #include <functional>
 #include <string>
 #include <map>
+#include <vector>
+#include "AllProgramsEnumerator.h"   // MenuNode, BuildAllProgramsTree
 
 namespace CrystalFrame {
 
@@ -124,6 +126,10 @@ private:
 
     // Cached Windows login name for the right-column header
     wchar_t m_username[64] = {};
+
+    // Phase S2: All Programs tree pre-cached at Initialize(); not yet rendered.
+    // Phase S2 UI will iterate this to build the "All Programs" left-column view.
+    std::vector<MenuNode> m_programTree;
 
     // ── Layout constants ────────────────────────────────────────────────────
     static constexpr int WIDTH  = 580;
