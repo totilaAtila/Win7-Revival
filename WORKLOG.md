@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-02-21 (session 6)
+Last updated: 2026-02-26 (session 7)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -20,7 +20,7 @@ Taskbar overlay is considered finished for the current scope:
 - Tray + autostart behavior supported (starts hidden in tray when launched via autostart flag).
 Reference: README.md (Done section) + TESTING.md (M1/M2/M4 test cases).
 
-### ✅ Start Menu: DONE (S1+S2+S3+S4+S5 complete — PR #48 pending merge, 2026-02-21)
+### ✅ Start Menu: DONE (S1+S2+S3+S4+S5 complete — merged to main, 2026-02-21)
 Current Start Menu implementation:
 - **Phase S1 #3 DONE (2026-02-21):** Win7 two-column layout established. Right column functional via `SHGetKnownFolderPath` (Documents, Pictures, Music, Downloads) and shell target for the virtual Computer folder (`shell:MyComputerFolder`); remaining applets use `ShellExecuteW` (Control Panel, Devices & Printers, Default Programs, Help and Support).
   `Win7RightItem` struct introduced; hover/click handlers wired; separator drawn between
@@ -68,6 +68,13 @@ Remaining for Phase S1 DoD:
 New requirement (non-negotiable, §10):
 - **Start Menu must be visually AND functionally identical to Windows 7**
 - **All menus and submenus must be 100% functional** (no placeholders, no fake UI)
+
+### Session 7 note (2026-02-26) — Reset main la baseline stabil
+- Commit-urile S6.0 (`f280310`, `4847839`: logging reform + MiniDump crash handler) au produs erori și au fost **abandonate**.
+- `main` a fost resetat forțat la `d3274ca` (S1–S5 complet, fără S6.0).
+- Toate branch-urile extra au fost șterse; pe remote rămâne **doar `main`**.
+- Punct de plecare pentru sesiunile viitoare: `d3274ca` (WIDTH=400, HEIGHT=535, DIVIDER_X=248).
+- S6.0 (iconițe reale, logging reform) poate fi reimplementat curat într-un sprint viitor dacă este necesar.
 
 ---
 
