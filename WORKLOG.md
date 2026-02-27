@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-02-26 (session 7)
+Last updated: 2026-02-27 (session 8)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -68,6 +68,27 @@ Remaining for Phase S1 DoD:
 New requirement (non-negotiable, §10):
 - **Start Menu must be visually AND functionally identical to Windows 7**
 - **All menus and submenus must be 100% functional** (no placeholders, no fake UI)
+
+### Session 8 note (2026-02-27) — First-run safe mode + diagnostic session
+
+**Context:** Test pe PC s-a terminat cu "silent crash" — aplicația nu apare, cursor busy câteva secunde, proces dispare. Fereastra nu a apărut deloc.
+
+**Analiză cod (fără acces la stack trace / Event Viewer):**
+- `BuildAllProgramsTree()` rulează sincron pe UI thread în `StartMenuWindow::Initialize()`, apelat din `CoreInitialize()`. Dacă `config.json` nu există (prima rulare), `LoadAsync()` se completează sincron → `_core.Initialize()` rulează sincron în constructorul `MainWindow`, înainte ca `_window.Activate()` să poată fi procesat de message loop.
+- Hook-ul de tastatură/mouse (`WH_KEYBOARD_LL`, `WH_MOUSE_LL`) era activat hardcodat (`[TEST]`) la fiecare pornire, indiferent de starea efectelor.
+- Crash-ul exact nu a putut fi determinat fără log / Event Viewer — se recomandă verificarea `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log` și Windows Event Viewer → Application la testul următor.
+
+**Fix implementat — First-run safe mode (`claude/reset-working-commit-o1Ia3`):**
+- `Config.IsFirstRun = true` (default) — câmp nou în `config.json`.
+- `Config.TaskbarEnabled` și `Config.StartEnabled` default = `false` (erau `true`).
+- La pornire: dacă `IsFirstRun == true`, se forțează `TaskbarEnabled=false`, `StartEnabled=false`, se setează `IsFirstRun=false` și se salvează config. Hook-ul Start Menu nu se activează.
+- La porniri ulterioare (după primul launch reușit): setările salvate de utilizator se aplică normal.
+- **Beneficiu diagnostic:** dacă aplicația a crashat înainte de a salva `IsFirstRun=false`, la repornire va intra din nou în safe mode — reducând la minimum riscul de crash și permițând activarea treptată a funcționalităților.
+- Eliminat `[TEST]` hardcoding pentru `SetStartMenuHookEnabled(true)`.
+
+**Fișiere modificate:** `Dashboard/ConfigManager.cs`, `Dashboard/MainViewModel.cs`
+
+---
 
 ### Session 7 note (2026-02-26) — Reset main la baseline stabil
 - Commit-urile S6.0 (`f280310`, `4847839`: logging reform + MiniDump crash handler) au produs erori și au fost **abandonate**.
