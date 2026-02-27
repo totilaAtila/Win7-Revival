@@ -9,8 +9,8 @@ namespace CrystalFrame.Dashboard
     {
         public int TaskbarOpacity { get; set; } = 75;
         public int StartOpacity { get; set; } = 50;
-        public bool TaskbarEnabled { get; set; } = true;
-        public bool StartEnabled { get; set; } = true;
+        public bool TaskbarEnabled { get; set; } = false;
+        public bool StartEnabled { get; set; } = false;
         public bool CoreEnabled { get; set; } = true;  // Default ON - Core runs in background after Dashboard closes
         public int TaskbarColorR { get; set; } = 0;
         public int TaskbarColorG { get; set; } = 0;
@@ -41,6 +41,10 @@ namespace CrystalFrame.Dashboard
         public bool StartShowPlaceholder5 { get; set; } = false;
         public bool TaskbarBlur { get; set; } = false;
         public bool StartBlur { get; set; } = false;
+        // True until the first successful launch completes — triggers safe-mode defaults.
+        // Default is false so that existing config files (upgrade scenario) are not treated
+        // as first-run when the field is absent from JSON.
+        public bool IsFirstRun { get; set; } = false;
     }
 
     public class ConfigManager
@@ -162,6 +166,7 @@ namespace CrystalFrame.Dashboard
         public bool StartShowPlaceholder5 { get => _config.StartShowPlaceholder5; set { _config.StartShowPlaceholder5 = value; _ = SaveAsync(); } }
         public bool TaskbarBlur { get => _config.TaskbarBlur; set { _config.TaskbarBlur = value; _ = SaveAsync(); } }
         public bool StartBlur   { get => _config.StartBlur;   set { _config.StartBlur   = value; _ = SaveAsync(); } }
+        public bool IsFirstRun  { get => _config.IsFirstRun;  set { _config.IsFirstRun  = value; _ = SaveAsync(); } }
 
         public async Task LoadAsync()
         {
@@ -171,10 +176,13 @@ namespace CrystalFrame.Dashboard
                 {
                     var json = await File.ReadAllTextAsync(_configPath);
                     _config = JsonSerializer.Deserialize<Config>(json) ?? new Config();
+                    // Existing file: IsFirstRun defaults to false in Config class,
+                    // so absent field in JSON = upgrade scenario = normal run. Correct.
                 }
                 else
                 {
-                    _config = new Config();
+                    // No file at all = genuine first install.
+                    _config = new Config { IsFirstRun = true };
                 }
             }
             catch (Exception ex)
