@@ -143,6 +143,7 @@ static MenuNode ScanFolder(const std::wstring& folderPath) {
 
             MenuNode item;
             item.isFolder = false;
+            item.lnkPath  = fullPath;  // S6.5: kept for icon extraction in Initialize()
             // Strip extension for display
             auto dot = entryName.rfind(L'.');
             item.name = (dot != std::wstring::npos) ? entryName.substr(0, dot) : entryName;

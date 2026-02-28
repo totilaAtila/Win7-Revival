@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-02-28 (session 9)
+Last updated: 2026-02-28 (session 9 — S6 real icons)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -109,7 +109,53 @@ New requirement (non-negotiable, §10):
 1. Merge branch `claude/reset-working-commit-o1Ia3` → main (PR existent pe GitHub).
 2. Rebuild `CrystalFrame.Core.dll` cu CMake (pentru static CRT + crash handler activ).
 3. Test publish → verifică că `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log` apare la prima pornire.
-4. Start implementare **S6** (iconițe reale din sistem) — plan detaliat deja în secțiunea 5 din WORKLOG.
+4. ✅ S6 implementat în această sesiune — iconițe reale din sistem (detalii în Session 9 S6 note de mai jos).
+
+---
+
+### Session 9 — S6 note (2026-02-28) — Iconițe reale din sistem
+
+**Obiectiv:** înlocuire `DrawIconSquare` (pătrate colorate cu text glyph) cu iconițe reale extrase din shell via `SHGetFileInfoW` / `SHGetStockIconInfo`. Fallback la pătrat colorat dacă iconița nu e disponibilă.
+
+**Fișiere modificate:**
+
+- **`Core/AllProgramsEnumerator.h`**
+  - `MenuNode` — adăugate câmpurile `lnkPath` (cale fișier `.lnk`/`.url` original) și `hIcon` (HICON, implicit `nullptr`).
+  - `hIcon` rămâne `nullptr` pe toată durata `BuildAllProgramsTree()` (inclusiv `MergeTree` / `std::sort`) — iconițele sunt încărcate ulterior, în `Initialize()`.
+
+- **`Core/AllProgramsEnumerator.cpp`**
+  - `ScanFolder()` — setează `node.lnkPath = fullPath` pentru fiecare shortcut `.lnk`/`.url`.
+
+- **`Core/StartMenuWindow.h`**
+  - `m_pinnedIcons[PROG_COUNT]` — array HICON 32×32 pentru aplicațiile pinned.
+  - `m_rightIcons[RIGHT_ITEM_COUNT]` — array HICON 16×16 pentru coloana dreaptă.
+  - Declarații `LoadNodeIcons()` și `FreeNodeIcons()` (recursive tree walkers).
+
+- **`Core/StartMenuWindow.cpp`**
+  - **`Initialize()`** — după `BuildAllProgramsTree()`:
+    - S6.1: `SHGetFileInfoW(command, SHGFI_ICON | SHGFI_LARGEICON)` pentru fiecare pinned app.
+    - S6.5: `LoadNodeIcons(m_programTree)` — walk recursiv: foldere → `SHGetStockIconInfo(SIID_FOLDER)`, shortcuts → `SHGetFileInfoW(lnkPath, SHGFI_LARGEICON)`.
+    - S6.4: pentru fiecare item din coloana dreaptă — `SHGetKnownFolderPath` (dacă folderId) sau target direct → `SHGetFileInfoW(path, SHGFI_SMALLICON)`.
+  - **`Shutdown()`** — `DestroyIcon` pentru `m_pinnedIcons[]`, `m_rightIcons[]`, apoi `FreeNodeIcons(m_programTree)`.
+  - **`LoadNodeIcons()`** / **`FreeNodeIcons()`** — recursive tree walkers.
+  - **`PaintProgramsList()`** — `DrawIconEx` când `m_pinnedIcons[i] != nullptr`, altfel fallback.
+  - **`PaintAllProgramsView()`** — `DrawIconEx` când `node.hIcon != nullptr`, altfel fallback.
+  - **`PaintSubMenu()`** — idem, icon 20×20.
+  - **`PaintWin7RightColumn()`** — icon 16×16 la stânga textului; text întotdeauna indentat cu 24px (slot consistent chiar și fără icon).
+
+**Detalii tehnice:**
+- `SHGetFileInfoW` pe fișierul `.lnk` returnează iconița target-ului (shell o rezolvă), inclusiv pentru aplicații UWP dacă shortcut-ul e în Start Menu Programs.
+- Aplicații pinned tip URI (`ms-settings:`) — `SHGetFileInfoW` poate eșua pentru URI-uri → fallback la pătrat colorat (acceptabil pentru sprint 1).
+- DPI: iconițe SHGFI_LARGEICON (32px) scalate la 24px cu `DrawIconEx` — calitate acceptabilă la 100% DPI; sprint viitor poate adăuga SHIL_EXTRALARGE pentru 125%+.
+- Nicio schimbare de comportament funcțional — toate acțiunile (click, hover, keyboard nav) rămân identice.
+
+**Ordine implementare respectată (conform plan S6 din WORKLOG §5):**
+S6.1 (pinned) → S6.5 (All Programs) → S6.4 (right column)
+
+**Următori pași posibili:**
+- S6.2: fallback mai bun pentru aplicații UWP pinned (căutare .lnk în Start Menu tree)
+- S6.3: suport DPI 125%+ cu SHIL_EXTRALARGE + IImageList::GetIcon
+- Testare: verificare iconițe pe instalare curată (fără VS pe PC)
 
 ---
 

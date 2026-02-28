@@ -2,6 +2,7 @@
 #include <Windows.h>
 #include <string>
 #include <vector>
+#include <shellapi.h>  // HICON (via Windows.h already, but explicit for clarity)
 
 namespace CrystalFrame {
 
@@ -16,6 +17,10 @@ struct MenuNode {
     std::wstring          target;      // Resolved exe / URL (empty for folders)
     std::wstring          args;        // Command-line arguments from .lnk (may be empty)
     std::wstring          folderPath;  // Absolute filesystem path (folders only)
+    std::wstring          lnkPath;     // S6.5: original .lnk/.url file path (shortcuts only)
+    HICON                 hIcon = nullptr; // S6.5: loaded by StartMenuWindow::Initialize();
+                                           // never set during BuildAllProgramsTree() so
+                                           // MergeTree/sort operate safely on null handles.
     std::vector<MenuNode> children;    // Sub-items (folders first, then shortcuts, alpha)
 };
 

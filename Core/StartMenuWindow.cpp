@@ -126,11 +126,60 @@ bool StartMenuWindow::Initialize() {
     m_programTree = BuildAllProgramsTree();
     CF_LOG(Info, "All Programs tree cached: " << m_programTree.size() << " top-level nodes");
 
+    // S6 — load real system icons.
+    // SHGetFileInfoW / SHGetStockIconInfo do not require explicit COM init;
+    // the WinUI 3 host already initialises COM on the main thread.
+
+    // S6.1 — Pinned app icons (32×32, scaled to PROG_ICON_SZ at paint time).
+    for (int i = 0; i < PROG_COUNT; ++i) {
+        SHFILEINFOW sfi = {};
+        if (SHGetFileInfoW(s_pinnedItems[i].command, 0, &sfi, sizeof(sfi),
+                           SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
+            m_pinnedIcons[i] = sfi.hIcon;
+    }
+
+    // S6.5 — All Programs tree icons (loaded recursively into MenuNode::hIcon).
+    LoadNodeIcons(m_programTree);
+
+    // S6.4 — Right-column icons (16×16).
+    for (int i = 0; i < RIGHT_ITEM_COUNT; ++i) {
+        const Win7RightItem& ri = s_rightItems[i];
+        if (ri.isSeparator) continue;
+
+        std::wstring iconPath;
+        if (ri.folderId) {
+            // Resolve KNOWNFOLDERID to a filesystem path for icon extraction.
+            PWSTR p = nullptr;
+            if (SUCCEEDED(SHGetKnownFolderPath(*ri.folderId, KF_FLAG_DEFAULT, nullptr, &p)) && p) {
+                iconPath = p;
+                CoTaskMemFree(p);
+            }
+        } else if (ri.target) {
+            iconPath = ri.target;  // exe name, shell: URI, or ms-settings: URI
+        }
+
+        if (!iconPath.empty()) {
+            SHFILEINFOW sfi = {};
+            if (SHGetFileInfoW(iconPath.c_str(), 0, &sfi, sizeof(sfi),
+                               SHGFI_ICON | SHGFI_SMALLICON) && sfi.hIcon)
+                m_rightIcons[i] = sfi.hIcon;
+        }
+    }
+
     CF_LOG(Info, "StartMenuWindow initialized successfully");
     return true;
 }
 
 void StartMenuWindow::Shutdown() {
+    // S6 — release icon handles before window destruction.
+    for (int i = 0; i < PROG_COUNT; ++i) {
+        if (m_pinnedIcons[i]) { DestroyIcon(m_pinnedIcons[i]); m_pinnedIcons[i] = nullptr; }
+    }
+    for (int i = 0; i < RIGHT_ITEM_COUNT; ++i) {
+        if (m_rightIcons[i]) { DestroyIcon(m_rightIcons[i]); m_rightIcons[i] = nullptr; }
+    }
+    FreeNodeIcons(m_programTree);
+
     if (m_hwnd) {
         DestroyWindow(m_hwnd);
         m_hwnd = nullptr;
@@ -417,6 +466,39 @@ void StartMenuWindow::DrawSeparator(HDC hdc, int y, int x1, int x2) {
     DeleteObject(pen);
 }
 
+// ── S6 icon helpers ───────────────────────────────────────────────────────────
+// Walk the All-Programs tree and load a shell icon for every node.
+// Folders get the standard SIID_FOLDER stock icon; shortcuts get the icon
+// embedded in (or pointed to by) their .lnk / .url file.
+// Called once from Initialize(), after BuildAllProgramsTree() has returned
+// the final, sorted, merged tree — so MergeTree/std::sort never see live HICONs.
+void StartMenuWindow::LoadNodeIcons(std::vector<MenuNode>& nodes) {
+    for (auto& node : nodes) {
+        if (node.isFolder) {
+            SHSTOCKICONINFO sii = {};
+            sii.cbSize = sizeof(sii);
+            if (SUCCEEDED(SHGetStockIconInfo(SIID_FOLDER,
+                                             SHGSI_ICON | SHGSI_SMALLICON, &sii)) && sii.hIcon)
+                node.hIcon = sii.hIcon;
+            LoadNodeIcons(node.children);   // recurse
+        } else if (!node.lnkPath.empty()) {
+            // SHGetFileInfoW on the .lnk file returns the target app's icon.
+            SHFILEINFOW sfi = {};
+            if (SHGetFileInfoW(node.lnkPath.c_str(), 0, &sfi, sizeof(sfi),
+                               SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
+                node.hIcon = sfi.hIcon;
+        }
+    }
+}
+
+// Walk the tree and release every HICON handle, then clear it to nullptr.
+void StartMenuWindow::FreeNodeIcons(std::vector<MenuNode>& nodes) {
+    for (auto& node : nodes) {
+        if (node.hIcon) { DestroyIcon(node.hIcon); node.hIcon = nullptr; }
+        if (node.isFolder) FreeNodeIcons(node.children);
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PaintProgramsList — Win7-style vertical list of pinned apps (left column)
 // Each row: [colored icon square 24×24] [app name]
@@ -449,11 +531,16 @@ void StartMenuWindow::PaintProgramsList(HDC hdc, const RECT& cr) {
             DeleteObject(hBr);
         }
 
-        // Icon square (centred vertically in the row)
+        // Icon — real system icon when available, colored square fallback
         int iconCX = MARGIN + PROG_ICON_SZ / 2 + 4;
         int iconCY = itemY + PROG_ITEM_H / 2;
-        DrawIconSquare(hdc, iconCX, iconCY, PROG_ICON_SZ,
-                       s_pinnedItems[i].iconColor, s_pinnedItems[i].shortName);
+        if (m_pinnedIcons[i]) {
+            DrawIconEx(hdc, iconCX - PROG_ICON_SZ / 2, iconCY - PROG_ICON_SZ / 2,
+                       m_pinnedIcons[i], PROG_ICON_SZ, PROG_ICON_SZ, 0, nullptr, DI_NORMAL);
+        } else {
+            DrawIconSquare(hdc, iconCX, iconCY, PROG_ICON_SZ,
+                           s_pinnedItems[i].iconColor, s_pinnedItems[i].shortName);
+        }
 
         // App name
         ::SetTextColor(hdc, m_textColor);
@@ -522,13 +609,18 @@ void StartMenuWindow::PaintAllProgramsView(HDC hdc, const RECT& cr) {
         int iconCX = MARGIN + PROG_ICON_SZ / 2 + 4;
         int iconCY = itemY + PROG_ITEM_H / 2;
 
-        if (node.isFolder) {
-            // Folder: amber icon with "›" glyph
+        if (node.hIcon) {
+            // Real system icon from shell
+            DrawIconEx(hdc, iconCX - PROG_ICON_SZ / 2, iconCY - PROG_ICON_SZ / 2,
+                       node.hIcon, PROG_ICON_SZ, PROG_ICON_SZ, 0, nullptr, DI_NORMAL);
+            SelectObject(hdc, node.isFolder ? boldFont : nameFont);
+        } else if (node.isFolder) {
+            // Folder fallback: amber square with "›" glyph
             DrawIconSquare(hdc, iconCX, iconCY, PROG_ICON_SZ,
                            RGB(210, 150, 20), L"\u203a");
             SelectObject(hdc, boldFont);
         } else {
-            // Shortcut: teal icon with "»" glyph
+            // Shortcut fallback: teal square with "»" glyph
             DrawIconSquare(hdc, iconCX, iconCY, PROG_ICON_SZ,
                            RGB(30, 140, 130), L"\u00bb");
             SelectObject(hdc, nameFont);
@@ -743,9 +835,16 @@ void StartMenuWindow::PaintWin7RightColumn(HDC hdc, const RECT& cr) {
                 DeleteObject(hBr);
             }
 
-            // Item label
+            // Item icon (16×16) — drawn at left edge of item row
+            if (m_rightIcons[i]) {
+                int iconX = RC_X + 4;
+                int iconY = y + (RC_ITEM_H - 16) / 2;
+                DrawIconEx(hdc, iconX, iconY, m_rightIcons[i], 16, 16, 0, nullptr, DI_NORMAL);
+            }
+
+            // Item label — always indented by 24 px to leave room for the icon slot
             ::SetTextColor(hdc, m_textColor);
-            RECT tr = { RC_X + 10, y, cr.right - 8, y + RC_ITEM_H };
+            RECT tr = { RC_X + 24, y, cr.right - 8, y + RC_ITEM_H };
             DrawTextW(hdc, item.label, -1, &tr,
                       DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
@@ -1238,14 +1337,19 @@ void StartMenuWindow::PaintSubMenu(HDC hdc, const RECT& cr) {
             DeleteObject(hBr);
         }
 
-        // Small icon
+        // Small icon (20×20 slot)
+        static constexpr int SM_ICON_SZ = 20;
         int iconCX = SM_X + 14;
         int iconCY = itemY + SM_ITEM_H / 2;
-        if (child.isFolder) {
-            DrawIconSquare(hdc, iconCX, iconCY, 20, RGB(210, 150, 20), L"\u203a");
+        if (child.hIcon) {
+            DrawIconEx(hdc, iconCX - SM_ICON_SZ / 2, iconCY - SM_ICON_SZ / 2,
+                       child.hIcon, SM_ICON_SZ, SM_ICON_SZ, 0, nullptr, DI_NORMAL);
+            SelectObject(hdc, child.isFolder ? boldF : itemF);
+        } else if (child.isFolder) {
+            DrawIconSquare(hdc, iconCX, iconCY, SM_ICON_SZ, RGB(210, 150, 20), L"\u203a");
             SelectObject(hdc, boldF);
         } else {
-            DrawIconSquare(hdc, iconCX, iconCY, 20, RGB(30, 140, 130), L"\u00bb");
+            DrawIconSquare(hdc, iconCX, iconCY, SM_ICON_SZ, RGB(30, 140, 130), L"\u00bb");
             SelectObject(hdc, itemF);
         }
 
