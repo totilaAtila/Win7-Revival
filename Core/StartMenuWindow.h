@@ -29,6 +29,18 @@ struct MenuItem {
 };
 
 /// <summary>
+/// Recently used program, populated from the Windows UserAssist registry at startup.
+/// Shown below pinned items in the left column (Win7 §2.2 parity).
+/// </summary>
+struct RecentItem {
+    std::wstring exePath;    // Full path to .exe or .lnk (for ShellExecute)
+    std::wstring name;       // Display name (from SHGetFileInfoW SHGFI_DISPLAYNAME)
+    HICON        hIcon;      // 32×32 icon (nullptr → DrawIconSquare fallback)
+    FILETIME     ftLastRun;  // Last execution time (for sorting; most recent first)
+    DWORD        runCount;   // Usage count from UserAssist
+};
+
+/// <summary>
 /// Pinned app shown in the left-column vertical list (Win7 style).
 /// </summary>
 struct PinnedItem {
@@ -170,6 +182,10 @@ private:
     // Phase S2: All Programs tree pre-cached at Initialize().
     std::vector<MenuNode> m_programTree;
 
+    // S7 — recently used programs, loaded from UserAssist at Initialize().
+    // Shown below pinned items; max RECENT_COUNT entries, sorted by last-run time.
+    std::vector<RecentItem> m_recentItems;
+
 
     // ── Layout constants (Windows 7 style) ──────────────────────────────────
     static constexpr int WIDTH  = 400;   // 450 - 50 (left panel narrowed ~7 chars)
@@ -215,6 +231,7 @@ private:
     static constexpr int PROG_ITEM_H     = 36;
     static constexpr int PROG_ICON_SZ    = 24;
     static constexpr int PROG_COUNT      = 6;   // must match s_pinnedItems length
+    static constexpr int RECENT_COUNT    = 5;   // max recently-used items shown below pinned
 
     // Max items visible in All Programs list (without scroll)
     static constexpr int AP_MAX_VISIBLE  = (AP_ROW_Y - PROG_Y) / PROG_ITEM_H; // ~16
@@ -275,6 +292,9 @@ private:
     // S6 — icon lifecycle helpers (walk m_programTree recursively)
     void LoadNodeIcons(std::vector<MenuNode>& nodes);
     void FreeNodeIcons(std::vector<MenuNode>& nodes);
+
+    // S7 — populate m_recentItems from Windows UserAssist registry
+    void LoadRecentPrograms();
 
     // Draw a subtle horizontal separator line
     void DrawSeparator(HDC hdc, int y, int x1, int x2);

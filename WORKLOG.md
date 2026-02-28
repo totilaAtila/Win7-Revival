@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-02-28 (session 9 — S6 real icons + S6.2 UWP fallback + Shutdown fix)
+Last updated: 2026-02-28 (session 10 — S7 recently used programs via UserAssist)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -110,6 +110,45 @@ New requirement (non-negotiable, §10):
 2. Rebuild `CrystalFrame.Core.dll` cu CMake (pentru static CRT + crash handler activ).
 3. Test publish → verifică că `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log` apare la prima pornire.
 4. ✅ S6 implementat în această sesiune — iconițe reale din sistem (detalii în Session 9 S6 note de mai jos).
+
+---
+
+### Session 10 — S7 recently used programs (2026-02-28) — UserAssist registry
+
+**Obiectiv:** afișarea programelor recent folosite în coloana stângă, sub itemii pinned — parity cu Windows 7 autentic (§2.2: "Pinned programs + recently used programs").
+
+**Sursă date:** `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist`
+- GUID aplicații: `{CEBFF5CD-ACE2-4F4F-9178-9926F41749EA}\Count`
+- GUID shortcut-uri: `{F4E57C4B-2036-45F0-A9AB-443BCFE33D9F}\Count`
+- Valorile sunt codificate ROT13; datele conțin DWORD run count la offset 4 și FILETIME last run la offset 16 (format Windows Vista+, 24+ bytes)
+
+**`LoadRecentPrograms()` — algoritm:**
+1. Deschide ambele GUID-uri din registry
+2. Enumeră valorile, decodifică ROT13, filtrează:
+   - Sare `UEME_` (metadata UserAssist)
+   - Acceptă doar `.exe` și `.lnk`
+   - Sare entries cu count == 0
+   - Expandează variabile de mediu (`%windir%` etc.)
+3. Sortează descrescător după FILETIME (cel mai recent primul)
+4. Ia primele `RECENT_COUNT = 5` care nu sunt deja în lista pinned
+5. Pentru fiecare: `SHGetFileInfoW` cu `SHGFI_DISPLAYNAME` (display name) + `SHGFI_ICON | SHGFI_LARGEICON` (icon)
+
+**Modificări UI (`PaintProgramsList`):**
+- Pinned items: neschimbat (6 itemi)
+- Separator existent rămâne după pinned
+- Recent items: painted imediat sub separator, același stil (icon 24px + text)
+- Hover/keyboard selection extinsă la range `0..PROG_COUNT+recentCount-1`
+
+**Modificări structurale:**
+- `struct RecentItem { std::wstring exePath; std::wstring name; HICON hIcon; FILETIME ftLastRun; DWORD runCount; }` adăugat în `.h`
+- `static constexpr int RECENT_COUNT = 5` (max itemi recenți afișați)
+- `std::vector<RecentItem> m_recentItems` în `.h`
+- `GetProgItemAtPoint()`: extins să returneze `PROG_COUNT + i` pentru zona recent
+- `ExecutePinnedItem(int index)`: index `>= PROG_COUNT` → lansează `m_recentItems[index-PROG_COUNT].exePath`
+- Keyboard nav: upper bound extins la `PROG_COUNT + recentCount - 1`
+- `Shutdown()`: `DestroyIcon` pentru fiecare `m_recentItems[i].hIcon`
+
+**Fișiere modificate:** `Core/StartMenuWindow.h`, `Core/StartMenuWindow.cpp`
 
 ---
 

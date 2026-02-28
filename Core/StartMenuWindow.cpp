@@ -5,6 +5,7 @@
 #include <windowsx.h>
 #include <shellapi.h>
 #include <shlobj.h>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -224,6 +225,10 @@ bool StartMenuWindow::Initialize() {
         }
     }
 
+    // S7 — recently used programs from UserAssist (loaded after program tree
+    // so pinned-list deduplication can use m_programTree if needed in future).
+    LoadRecentPrograms();
+
     CF_LOG(Info, "StartMenuWindow initialized successfully");
     return true;
 }
@@ -237,6 +242,12 @@ void StartMenuWindow::Shutdown() {
         if (m_rightIcons[i]) { DestroyIcon(m_rightIcons[i]); m_rightIcons[i] = nullptr; }
     }
     FreeNodeIcons(m_programTree);
+
+    // S7 — release recently used program icons
+    for (auto& ri : m_recentItems) {
+        if (ri.hIcon) { DestroyIcon(ri.hIcon); ri.hIcon = nullptr; }
+    }
+    m_recentItems.clear();
 
     if (m_hwnd) {
         DestroyWindow(m_hwnd);
@@ -558,6 +569,174 @@ void StartMenuWindow::FreeNodeIcons(std::vector<MenuNode>& nodes) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// S7 — LoadRecentPrograms
+// Reads Windows UserAssist registry to find the most recently used programs.
+// UserAssist stores ROT13-encoded paths with run count + FILETIME last run.
+// We load both the Applications GUID and the Shortcut Links GUID, decode,
+// filter to .exe/.lnk, sort by last-run time, deduplicate against pinned list,
+// and keep the top RECENT_COUNT entries.
+//
+// Data format (Windows Vista+ — 24+ bytes per value):
+//   offset 0  : DWORD — unknown / session count
+//   offset 4  : DWORD — run count (0 = never counted)
+//   offset 8  : DWORD — focus count
+//   offset 12 : DWORD — focus time (ms)
+//   offset 16 : FILETIME (8 bytes) — last execution time
+// ─────────────────────────────────────────────────────────────────────────────
+void StartMenuWindow::LoadRecentPrograms() {
+    m_recentItems.clear();
+
+    // ROT13 decode: shift alphabetic chars by 13 positions.
+    auto rot13 = [](std::wstring s) -> std::wstring {
+        for (wchar_t& c : s) {
+            if      (c >= L'a' && c <= L'z') c = L'a' + (c - L'a' + 13) % 26;
+            else if (c >= L'A' && c <= L'Z') c = L'A' + (c - L'A' + 13) % 26;
+        }
+        return s;
+    };
+
+    struct UAEntry {
+        std::wstring path;
+        DWORD        count;
+        FILETIME     lastRun;
+    };
+    std::vector<UAEntry> entries;
+
+    // Two UserAssist GUIDs: executables + shortcut links
+    static const wchar_t* kGuids[] = {
+        L"{CEBFF5CD-ACE2-4F4F-9178-9926F41749EA}",  // Applications (.exe)
+        L"{F4E57C4B-2036-45F0-A9AB-443BCFE33D9F}",  // Shortcut links (.lnk)
+    };
+
+    for (const auto* guid : kGuids) {
+        std::wstring keyPath =
+            std::wstring(L"Software\\Microsoft\\Windows\\CurrentVersion\\"
+                         L"Explorer\\UserAssist\\") + guid + L"\\Count";
+
+        HKEY hKey = nullptr;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, keyPath.c_str(), 0,
+                          KEY_READ, &hKey) != ERROR_SUCCESS)
+            continue;
+
+        DWORD valueCount = 0, maxNameLen = 0, maxDataLen = 0;
+        RegQueryInfoKeyW(hKey, nullptr, nullptr, nullptr, nullptr, nullptr,
+                         nullptr, &valueCount, &maxNameLen, &maxDataLen,
+                         nullptr, nullptr);
+        ++maxNameLen; // include null terminator
+
+        std::vector<wchar_t> nameBuf(maxNameLen + 1);
+        std::vector<BYTE>    dataBuf(max(maxDataLen, (DWORD)72));
+
+        for (DWORD idx = 0; idx < valueCount; ++idx) {
+            DWORD nameLen = maxNameLen;
+            DWORD dataLen = static_cast<DWORD>(dataBuf.size());
+            DWORD type    = 0;
+
+            if (RegEnumValueW(hKey, idx, nameBuf.data(), &nameLen, nullptr,
+                              &type, dataBuf.data(), &dataLen) != ERROR_SUCCESS)
+                continue;
+            if (type != REG_BINARY || dataLen < 20) continue;
+
+            // Decode ROT13 — UserAssist encodes value names to deter peeking
+            std::wstring decoded = rot13(std::wstring(nameBuf.data(), nameLen));
+
+            // Truncate at embedded NUL (some entries append window title after \0)
+            auto nul = decoded.find(L'\0');
+            if (nul != std::wstring::npos) decoded.resize(nul);
+            if (decoded.empty()) continue;
+
+            // Skip UserAssist metadata entries (UEME_*)
+            if (decoded.size() >= 5 && decoded.substr(0, 5) == L"UEME_") continue;
+
+            // Extract run count (offset 4) and last-run FILETIME (offset 16)
+            DWORD    count   = 0;
+            FILETIME lastRun = {};
+            memcpy(&count,   dataBuf.data() + 4,  sizeof(DWORD));
+            memcpy(&lastRun, dataBuf.data() + 16, sizeof(FILETIME));
+            if (count == 0) continue;
+
+            // Accept only .exe and .lnk paths
+            auto lower = decoded;
+            for (auto& c : lower) c = static_cast<wchar_t>(towlower(c));
+            bool isExe = lower.size() > 4 && lower.compare(lower.size() - 4, 4, L".exe") == 0;
+            bool isLnk = lower.size() > 4 && lower.compare(lower.size() - 4, 4, L".lnk") == 0;
+            if (!isExe && !isLnk) continue;
+
+            // Expand environment variables (%windir%, %appdata%, etc.)
+            wchar_t expanded[MAX_PATH] = {};
+            DWORD expLen = ExpandEnvironmentStringsW(decoded.c_str(), expanded,
+                                                     static_cast<DWORD>(std::size(expanded)));
+            std::wstring path = (expLen > 1 && expLen <= MAX_PATH) ? expanded : decoded;
+
+            entries.push_back({path, count, lastRun});
+        }
+
+        RegCloseKey(hKey);
+    }
+
+    // Sort descending by last-run FILETIME (most recent first)
+    std::sort(entries.begin(), entries.end(), [](const UAEntry& a, const UAEntry& b) {
+        if (a.lastRun.dwHighDateTime != b.lastRun.dwHighDateTime)
+            return a.lastRun.dwHighDateTime > b.lastRun.dwHighDateTime;
+        return a.lastRun.dwLowDateTime > b.lastRun.dwLowDateTime;
+    });
+
+    // Collect up to RECENT_COUNT unique entries not already in the pinned list
+    for (const auto& e : entries) {
+        if (static_cast<int>(m_recentItems.size()) >= RECENT_COUNT) break;
+
+        // Get display name via shell (handles .lnk resolution + UWP app names)
+        SHFILEINFOW sfi = {};
+        if (!SHGetFileInfoW(e.path.c_str(), 0, &sfi, sizeof(sfi),
+                            SHGFI_DISPLAYNAME))
+            continue;                      // path doesn't exist / not accessible
+        std::wstring displayName = sfi.szDisplayName;
+        if (displayName.empty()) continue;
+
+        // Remove trailing ".lnk" / ".exe" that some shells leave in display name
+        auto lowerName = displayName;
+        for (auto& c : lowerName) c = static_cast<wchar_t>(towlower(c));
+        if (lowerName.size() > 4) {
+            auto ext = lowerName.substr(lowerName.size() - 4);
+            if (ext == L".lnk" || ext == L".exe")
+                displayName.resize(displayName.size() - 4);
+        }
+
+        // Skip if already in pinned list (case-insensitive name match)
+        bool alreadyPinned = false;
+        for (int pi = 0; pi < PROG_COUNT; ++pi) {
+            auto pn = std::wstring(s_pinnedItems[pi].name);
+            auto dn = displayName;
+            for (auto& c : pn) c = static_cast<wchar_t>(towlower(c));
+            for (auto& c : dn) c = static_cast<wchar_t>(towlower(c));
+            if (pn == dn) { alreadyPinned = true; break; }
+        }
+        if (alreadyPinned) continue;
+
+        // Skip duplicate display names already added to recent list
+        bool dupName = false;
+        for (const auto& ri : m_recentItems) {
+            auto a = ri.name, b = displayName;
+            for (auto& c : a) c = static_cast<wchar_t>(towlower(c));
+            for (auto& c : b) c = static_cast<wchar_t>(towlower(c));
+            if (a == b) { dupName = true; break; }
+        }
+        if (dupName) continue;
+
+        // Load icon (reuse the SHGetFileInfoW call with SHGFI_ICON this time)
+        HICON hIcon = nullptr;
+        SHFILEINFOW sfiIcon = {};
+        if (SHGetFileInfoW(e.path.c_str(), 0, &sfiIcon, sizeof(sfiIcon),
+                           SHGFI_ICON | SHGFI_LARGEICON) && sfiIcon.hIcon)
+            hIcon = sfiIcon.hIcon;
+
+        m_recentItems.push_back({e.path, displayName, hIcon, e.lastRun, e.count});
+    }
+
+    CF_LOG(Info, "LoadRecentPrograms: " << m_recentItems.size() << " entries loaded");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PaintProgramsList — Win7-style vertical list of pinned apps (left column)
 // Each row: [colored icon square 24×24] [app name]
 // ─────────────────────────────────────────────────────────────────────────────
@@ -608,10 +787,60 @@ void StartMenuWindow::PaintProgramsList(HDC hdc, const RECT& cr) {
                   DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     }
 
+    // ── S7: Recently used programs — below pinned items ──────────────────────
+    int recentCount  = static_cast<int>(m_recentItems.size());
+    int recentStartY = PROG_Y + PROG_COUNT * PROG_ITEM_H + 12; // 12px gap (4 sep + 8 pad)
+
+    for (int i = 0; i < recentCount; ++i) {
+        int itemIdx = PROG_COUNT + i;
+        int itemY   = recentStartY + i * PROG_ITEM_H;
+
+        // Hover / keyboard-selection highlight
+        bool isKeySel = (itemIdx == m_keySelProgIndex);
+        bool isHover  = (itemIdx == m_hoveredProgIndex) && !isKeySel;
+        if (isKeySel || isHover) {
+            COLORREF hlColor = isKeySel ? CalculateSelectionColor() : CalculateHoverColor();
+            HBRUSH hBr  = CreateSolidBrush(hlColor);
+            HPEN   noPn = (HPEN)GetStockObject(NULL_PEN);
+            HBRUSH ob   = (HBRUSH)SelectObject(hdc, hBr);
+            HPEN   op   = (HPEN)SelectObject(hdc, noPn);
+            RoundRect(hdc, MARGIN, itemY + 2,
+                      DIVIDER_X - MARGIN, itemY + PROG_ITEM_H - 2, 6, 6);
+            SelectObject(hdc, ob);
+            SelectObject(hdc, op);
+            DeleteObject(hBr);
+        }
+
+        // Icon
+        int iconCX = MARGIN + PROG_ICON_SZ / 2 + 4;
+        int iconCY = itemY + PROG_ITEM_H / 2;
+        if (m_recentItems[i].hIcon) {
+            DrawIconEx(hdc, iconCX - PROG_ICON_SZ / 2, iconCY - PROG_ICON_SZ / 2,
+                       m_recentItems[i].hIcon, PROG_ICON_SZ, PROG_ICON_SZ,
+                       0, nullptr, DI_NORMAL);
+        } else {
+            // Fallback: gray square with first 3 chars of name
+            std::wstring fb = m_recentItems[i].name.size() > 3
+                              ? m_recentItems[i].name.substr(0, 3)
+                              : m_recentItems[i].name;
+            DrawIconSquare(hdc, iconCX, iconCY, PROG_ICON_SZ,
+                           RGB(90, 90, 90), fb.c_str());
+        }
+
+        // Name (slightly dimmed to distinguish from pinned — Win7 uses same color,
+        // but we keep it consistent with m_textColor)
+        ::SetTextColor(hdc, m_textColor);
+        RECT nr = { MARGIN + PROG_ICON_SZ + 12, itemY,
+                    DIVIDER_X - MARGIN,          itemY + PROG_ITEM_H };
+        SelectObject(hdc, nameFont);
+        DrawTextW(hdc, m_recentItems[i].name.c_str(), -1, &nr,
+                  DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    }
+
     SelectObject(hdc, oldF);
     DeleteObject(nameFont);
 
-    // Thin separator below programs list
+    // Thin separator below pinned list (above recent items)
     int sepY = PROG_Y + PROG_COUNT * PROG_ITEM_H + 4;
     if (sepY < AP_ROW_Y)
         DrawSeparator(hdc, sepY, MARGIN, DIVIDER_X - MARGIN);
@@ -1077,9 +1306,22 @@ void StartMenuWindow::Paint() {
 // Returns the pinned item index at pt (Programs view), or -1.
 int StartMenuWindow::GetProgItemAtPoint(POINT pt) {
     if (pt.x < MARGIN || pt.x >= DIVIDER_X - MARGIN) return -1;
-    if (pt.y < PROG_Y || pt.y >= PROG_Y + PROG_COUNT * PROG_ITEM_H) return -1;
-    int idx = (pt.y - PROG_Y) / PROG_ITEM_H;
-    if (idx >= 0 && idx < PROG_COUNT) return idx;
+
+    // Pinned zone: indices 0..PROG_COUNT-1
+    if (pt.y >= PROG_Y && pt.y < PROG_Y + PROG_COUNT * PROG_ITEM_H) {
+        int idx = (pt.y - PROG_Y) / PROG_ITEM_H;
+        if (idx >= 0 && idx < PROG_COUNT) return idx;
+    }
+
+    // S7 — Recent zone: indices PROG_COUNT..PROG_COUNT+recentCount-1
+    int recentCount  = static_cast<int>(m_recentItems.size());
+    int recentStartY = PROG_Y + PROG_COUNT * PROG_ITEM_H + 12;
+    if (recentCount > 0 && pt.y >= recentStartY &&
+        pt.y < recentStartY + recentCount * PROG_ITEM_H) {
+        int idx = (pt.y - recentStartY) / PROG_ITEM_H;
+        if (idx >= 0 && idx < recentCount) return PROG_COUNT + idx;
+    }
+
     return -1;
 }
 
@@ -1148,9 +1390,21 @@ int StartMenuWindow::GetRightItemAtPoint(POINT pt) {
 
 // ── Execution ─────────────────────────────────────────────────────────────────
 void StartMenuWindow::ExecutePinnedItem(int index) {
-    if (index < 0 || index >= PROG_COUNT) return;
-    CF_LOG(Info, "ExecutePinnedItem: " << index);
-    ShellExecuteW(NULL, L"open", s_pinnedItems[index].command, NULL, NULL, SW_SHOW);
+    if (index < 0) return;
+
+    if (index < PROG_COUNT) {
+        // Pinned item
+        CF_LOG(Info, "ExecutePinnedItem: " << index);
+        ShellExecuteW(NULL, L"open", s_pinnedItems[index].command, NULL, NULL, SW_SHOW);
+    } else {
+        // S7 — Recently used item (index == PROG_COUNT + recentIdx)
+        int ri = index - PROG_COUNT;
+        if (ri >= static_cast<int>(m_recentItems.size())) return;
+        CF_LOG(Info, "ExecuteRecentItem: " << ri
+               << " (" << m_recentItems[ri].name.c_str() << ")");
+        ShellExecuteW(NULL, L"open", m_recentItems[ri].exePath.c_str(),
+                      NULL, NULL, SW_SHOW);
+    }
     Hide();
 }
 
@@ -1729,12 +1983,14 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
 
             if (m_viewMode == LeftViewMode::Programs) {
                 // Navigation range: 0..PROG_COUNT-1, then AP row
+                // S7: total navigable items = pinned + recently used
+                int totalProgItems = PROG_COUNT + static_cast<int>(m_recentItems.size());
                 if (down) {
                     if (m_keySelApRow) {
                         // already at bottom; clamp
                     } else if (m_keySelProgIndex < 0) {
                         m_keySelProgIndex = 0;
-                    } else if (m_keySelProgIndex < PROG_COUNT - 1) {
+                    } else if (m_keySelProgIndex < totalProgItems - 1) {
                         ++m_keySelProgIndex;
                     } else {
                         m_keySelApRow     = true;
@@ -1743,7 +1999,7 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
                 } else {
                     if (m_keySelApRow) {
                         m_keySelApRow     = false;
-                        m_keySelProgIndex = PROG_COUNT - 1;
+                        m_keySelProgIndex = totalProgItems - 1;
                     } else if (m_keySelProgIndex > 0) {
                         --m_keySelProgIndex;
                     } else if (m_keySelProgIndex == 0) {
