@@ -56,6 +56,11 @@ if(MSVC)
         /d2ReducedOptimizeHugeFunctions  # Reduce optimization for huge functions
     )
 
+    # Static CRT: embed runtime into the DLL so VCRUNTIME140.dll / MSVCP140.dll
+    # are not required in the publish folder or on the target machine.
+    set_property(TARGET CrystalFrame.Core PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
     # Definitions
     target_compile_definitions(CrystalFrame.Core PRIVATE
         UNICODE
