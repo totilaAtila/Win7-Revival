@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-02-28 (session 9 — S6 real icons)
+Last updated: 2026-02-28 (session 9 — S6 real icons + S6.2 UWP fallback + Shutdown fix)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -110,6 +110,46 @@ New requirement (non-negotiable, §10):
 2. Rebuild `CrystalFrame.Core.dll` cu CMake (pentru static CRT + crash handler activ).
 3. Test publish → verifică că `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log` apare la prima pornire.
 4. ✅ S6 implementat în această sesiune — iconițe reale din sistem (detalii în Session 9 S6 note de mai jos).
+
+---
+
+### Session 9 — S6.2 + Shutdown note (2026-02-28) — UWP icon fallback + Power button fix
+
+**Branch:** `claude/s6-2-uwp-icons-shutdown-o1Ia3`
+
+**Fișiere modificate:** `Core/StartMenuWindow.cpp` (singur fișier — 80 linii adăugate)
+
+#### S6.2 — Fallback icon UWP pentru aplicații pinned
+
+**Problema:** Aplicații UWP pinned (Settings, Calculator, Edge) au `command` de tip URI (`ms-settings:`) sau stub EXE (`calc.exe` redirecționat spre UWP) — `SHGetFileInfoW` pe aceste stringuri eșuează → fallback la pătrat colorat.
+
+**Soluția — `FindLnkPathByName()`:**
+- Funcție statică în `StartMenuWindow.cpp`, caută recursiv în `m_programTree` un nod cu `name` identic (case-insensitive) cu `s_pinnedItems[i].name`.
+- Returnează `lnkPath`-ul găsit (ex.: `C:\ProgramData\...\Settings.lnk`).
+- `SHGetFileInfoW` pe fișierul `.lnk` returnează iconița UWP (shell-ul o rezolvă din AppUserModelId).
+
+**Flux în `Initialize()`:**
+1. **S6.1** (pass 1): `SHGetFileInfoW(command, SHGFI_LARGEICON)` — funcționează pentru EXE-uri tradiționale (explorer.exe, notepad.exe, taskmgr.exe).
+2. **S6.2** (pass 2 — fallback): pentru intrările cu `m_pinnedIcons[i] == nullptr` → `FindLnkPathByName(m_programTree, name)` → `SHGetFileInfoW(lnkPath)`.
+
+#### Shutdown / Power menu — fix privilege
+
+**Problema:** `ExitWindowsEx` eșua silențios — fără `SE_SHUTDOWN_NAME` privilege activat, apelul returnează `FALSE` pe conturi standard (și uneori chiar pe Administrator fără privilege explicit).
+
+**`EnableShutdownPrivilege()`:**
+```cpp
+OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken);
+LookupPrivilegeValueW(nullptr, SE_SHUTDOWN_NAME, &tkp.Privileges[0].Luid);
+AdjustTokenPrivileges(hToken, FALSE, &tkp, 0, nullptr, nullptr);
+```
+Apelat înainte de orice `ExitWindowsEx` (Logoff, Restart, Shutdown).
+
+**Alte fix-uri:**
+- `EWX_SHUTDOWN` → `EWX_SHUTDOWN | EWX_POWEROFF` (flag explicit pentru oprire completă a alimentării)
+- `SHTDN_REASON_MAJOR_OTHER` → `SHTDN_REASON_MAJOR_APPLICATION` (reason code mai corect)
+- Sleep / Hibernate: `SetSuspendState` nu necesită privilege — neschimbat
+- Switch User / Lock: `LockWorkStation()` — comportament corect pe Windows 11 (afișează lock screen cu opțiunea "Switch user")
+- Adăugat `#pragma comment(lib, "advapi32.lib")` pentru `AdjustTokenPrivileges`
 
 ---
 
