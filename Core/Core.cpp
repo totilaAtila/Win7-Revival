@@ -59,7 +59,20 @@ bool Core::Initialize() {
         return false;
     }
 
-    // Initialize Start Menu Hook (intercepts Windows key and Start button clicks)
+    // Initialize custom Start Menu window first (can take several seconds due to
+    // SHGetFileInfoW icon loading). Hooks are installed AFTER this completes so
+    // that WH_KEYBOARD_LL / WH_MOUSE_LL are never installed on a busy thread —
+    // a blocked hook thread causes Windows to time out the hooks and stutter the
+    // mouse cursor for the entire duration of initialization.
+    m_startMenuWindow = std::make_unique<StartMenuWindow>();
+    if (!m_startMenuWindow->Initialize()) {
+        CF_LOG(Error, "StartMenuWindow initialization failed");
+        return false;
+    }
+
+    // Initialize Start Menu Hook (intercepts Windows key and Start button clicks).
+    // Must be installed AFTER StartMenuWindow::Initialize() so the hook thread is
+    // free to service its message queue immediately upon installation.
     m_startMenuHook = std::make_unique<StartMenuHook>();
     if (!m_startMenuHook->Initialize()) {
         CF_LOG(Error, "StartMenuHook initialization failed");
@@ -99,13 +112,6 @@ bool Core::Initialize() {
 
     // Disabled by default - Dashboard will enable when configured
     m_startMenuHook->SetEnabled(false);
-
-    // Initialize custom Start Menu window
-    m_startMenuWindow = std::make_unique<StartMenuWindow>();
-    if (!m_startMenuWindow->Initialize()) {
-        CF_LOG(Error, "StartMenuWindow initialization failed");
-        return false;
-    }
 
     m_lastRefreshTick = GetTickCount64();
     m_lastDetectTick  = GetTickCount64();

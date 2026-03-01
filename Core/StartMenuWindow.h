@@ -1,8 +1,10 @@
 #pragma once
 #include <Windows.h>
+#include <atomic>
 #include <functional>
 #include <string>
 #include <map>
+#include <thread>
 #include <vector>
 #include "AllProgramsEnumerator.h"   // MenuNode, BuildAllProgramsTree
 
@@ -186,6 +188,16 @@ private:
     // Shown below pinned items; max RECENT_COUNT entries, sorted by last-run time.
     std::vector<RecentItem> m_recentItems;
 
+    // Background icon loading (S6/S7): icons are loaded on a worker thread so
+    // that Initialize() returns quickly and the hook thread is not blocked.
+    // m_iconsLoaded becomes true (release) after all icon writes are complete;
+    // paint code reads it (acquire) before using any icon handle.
+    std::thread          m_iconThread;
+    std::atomic<bool>    m_iconsLoaded{false};
+
+    // Posted to m_hwnd by the icon thread when loading is done → triggers repaint.
+    static constexpr UINT WM_ICONS_LOADED = WM_USER + 101;
+
 
     // ── Layout constants (Windows 7 style) ──────────────────────────────────
     static constexpr int WIDTH  = 400;   // 450 - 50 (left panel narrowed ~7 chars)
@@ -295,6 +307,10 @@ private:
 
     // S7 — populate m_recentItems from Windows UserAssist registry
     void LoadRecentPrograms();
+
+    // Background thread entry point: loads all system icons (S6.1/S6.2/S6.4/S6.5/S7),
+    // sets m_iconsLoaded = true, then posts WM_ICONS_LOADED to m_hwnd if it exists.
+    void LoadIconsAsync();
 
     // Draw a subtle horizontal separator line
     void DrawSeparator(HDC hdc, int y, int x1, int x2);

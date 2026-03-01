@@ -162,78 +162,29 @@ bool StartMenuWindow::Initialize() {
         }
     }
 
-    // Phase S2 foundation: pre-cache All Programs tree.
-    // Done here (not in CreateMenuWindow) because:
-    //   • Initialize() is called before HWND creation, so the heavy COM/FS
-    //     scan does not delay first window paint.
-    //   • BuildAllProgramsTree() self-manages COM; no HWND needed.
+    // Phase S2 foundation: pre-cache All Programs tree synchronously.
+    // BuildAllProgramsTree() self-manages COM and must complete before the menu
+    // can be shown (navigation data is required). Icon loading is deferred to a
+    // background thread so Initialize() returns promptly and the hook thread is
+    // not blocked (a blocked hook thread causes Windows to time out WH_MOUSE_LL /
+    // WH_KEYBOARD_LL and stutter the mouse cursor for the entire init period).
     m_programTree = BuildAllProgramsTree();
     CF_LOG(Info, "All Programs tree cached: " << m_programTree.size() << " top-level nodes");
 
-    // S6 — load real system icons.
-    // SHGetFileInfoW / SHGetStockIconInfo do not require explicit COM init;
-    // the WinUI 3 host already initialises COM on the main thread.
+    // Launch background thread for all SHGetFileInfoW / SHGetStockIconInfo calls.
+    // Icons paint as colored-square fallbacks until m_iconsLoaded becomes true.
+    m_iconThread = std::thread(&StartMenuWindow::LoadIconsAsync, this);
 
-    // S6.1 — Pinned app icons (32×32, scaled to PROG_ICON_SZ at paint time).
-    // First pass: direct SHGetFileInfoW on the command string (works for plain .exe names).
-    for (int i = 0; i < PROG_COUNT; ++i) {
-        SHFILEINFOW sfi = {};
-        if (SHGetFileInfoW(s_pinnedItems[i].command, 0, &sfi, sizeof(sfi),
-                           SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
-            m_pinnedIcons[i] = sfi.hIcon;
-    }
-
-    // S6.2 — UWP fallback: for pinned apps whose command is a URI (ms-settings:)
-    // or a stub name that the shell cannot resolve directly, search the All Programs
-    // tree for a shortcut with the same display name and use its .lnk path instead.
-    // This covers Settings, Calculator, Edge, and any other UWP app in the list.
-    for (int i = 0; i < PROG_COUNT; ++i) {
-        if (m_pinnedIcons[i]) continue;  // already resolved in S6.1
-        std::wstring lnkPath = FindLnkPathByName(m_programTree, s_pinnedItems[i].name);
-        if (lnkPath.empty()) continue;
-        SHFILEINFOW sfi = {};
-        if (SHGetFileInfoW(lnkPath.c_str(), 0, &sfi, sizeof(sfi),
-                           SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
-            m_pinnedIcons[i] = sfi.hIcon;
-    }
-
-    // S6.5 — All Programs tree icons (loaded recursively into MenuNode::hIcon).
-    LoadNodeIcons(m_programTree);
-
-    // S6.4 — Right-column icons (16×16).
-    for (int i = 0; i < RIGHT_ITEM_COUNT; ++i) {
-        const Win7RightItem& ri = s_rightItems[i];
-        if (ri.isSeparator) continue;
-
-        std::wstring iconPath;
-        if (ri.folderId) {
-            // Resolve KNOWNFOLDERID to a filesystem path for icon extraction.
-            PWSTR p = nullptr;
-            if (SUCCEEDED(SHGetKnownFolderPath(*ri.folderId, KF_FLAG_DEFAULT, nullptr, &p)) && p) {
-                iconPath = p;
-                CoTaskMemFree(p);
-            }
-        } else if (ri.target) {
-            iconPath = ri.target;  // exe name, shell: URI, or ms-settings: URI
-        }
-
-        if (!iconPath.empty()) {
-            SHFILEINFOW sfi = {};
-            if (SHGetFileInfoW(iconPath.c_str(), 0, &sfi, sizeof(sfi),
-                               SHGFI_ICON | SHGFI_SMALLICON) && sfi.hIcon)
-                m_rightIcons[i] = sfi.hIcon;
-        }
-    }
-
-    // S7 — recently used programs from UserAssist (loaded after program tree
-    // so pinned-list deduplication can use m_programTree if needed in future).
-    LoadRecentPrograms();
-
-    CF_LOG(Info, "StartMenuWindow initialized successfully");
+    CF_LOG(Info, "StartMenuWindow initialized successfully (icons loading in background)");
     return true;
 }
 
 void StartMenuWindow::Shutdown() {
+    // Wait for background icon thread to finish before releasing any resources
+    // it may still be writing to (m_pinnedIcons, m_rightIcons, m_recentItems, tree).
+    if (m_iconThread.joinable())
+        m_iconThread.join();
+
     // S6 — release icon handles before window destruction.
     for (int i = 0; i < PROG_COUNT; ++i) {
         if (m_pinnedIcons[i]) { DestroyIcon(m_pinnedIcons[i]); m_pinnedIcons[i] = nullptr; }
@@ -254,6 +205,84 @@ void StartMenuWindow::Shutdown() {
         m_hwnd = nullptr;
     }
     m_visible = false;
+}
+
+// ── Background icon loading ───────────────────────────────────────────────────
+// Runs on m_iconThread. Loads all HICON handles that Initialize() used to do
+// synchronously. When done, signals m_iconsLoaded and requests a repaint.
+//
+// Thread-safety contract:
+//   • m_programTree is fully built (by BuildAllProgramsTree) before this thread
+//     starts, and the main thread never modifies it during icon loading (navigation
+//     only reads children pointers; Hide() only resets the nav stack).
+//   • m_pinnedIcons[] and m_rightIcons[] are pointer-sized; writes are atomic on
+//     x86-64 and safe to read with a nullptr check in paint code.
+//   • m_recentItems is empty until this thread assigns the final vector; paint
+//     code only iterates it after m_iconsLoaded == true (acquire).
+void StartMenuWindow::LoadIconsAsync() {
+    CF_LOG(Info, "LoadIconsAsync: start");
+
+    // S6.1 — Pinned app icons (32×32).
+    for (int i = 0; i < PROG_COUNT; ++i) {
+        SHFILEINFOW sfi = {};
+        if (SHGetFileInfoW(s_pinnedItems[i].command, 0, &sfi, sizeof(sfi),
+                           SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
+            m_pinnedIcons[i] = sfi.hIcon;
+    }
+
+    // S6.2 — UWP fallback: search the All Programs tree for a .lnk with the same
+    // display name, then extract the icon from the .lnk (shell resolves AppUserModelId).
+    for (int i = 0; i < PROG_COUNT; ++i) {
+        if (m_pinnedIcons[i]) continue;
+        std::wstring lnkPath = FindLnkPathByName(m_programTree, s_pinnedItems[i].name);
+        if (lnkPath.empty()) continue;
+        SHFILEINFOW sfi = {};
+        if (SHGetFileInfoW(lnkPath.c_str(), 0, &sfi, sizeof(sfi),
+                           SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
+            m_pinnedIcons[i] = sfi.hIcon;
+    }
+
+    // S6.5 — All Programs tree icons (recursive).
+    LoadNodeIcons(m_programTree);
+
+    // S6.4 — Right-column icons (16×16).
+    for (int i = 0; i < RIGHT_ITEM_COUNT; ++i) {
+        const Win7RightItem& ri = s_rightItems[i];
+        if (ri.isSeparator) continue;
+
+        std::wstring iconPath;
+        if (ri.folderId) {
+            PWSTR p = nullptr;
+            if (SUCCEEDED(SHGetKnownFolderPath(*ri.folderId, KF_FLAG_DEFAULT, nullptr, &p)) && p) {
+                iconPath = p;
+                CoTaskMemFree(p);
+            }
+        } else if (ri.target) {
+            iconPath = ri.target;
+        }
+
+        if (!iconPath.empty()) {
+            SHFILEINFOW sfi = {};
+            if (SHGetFileInfoW(iconPath.c_str(), 0, &sfi, sizeof(sfi),
+                               SHGFI_ICON | SHGFI_SMALLICON) && sfi.hIcon)
+                m_rightIcons[i] = sfi.hIcon;
+        }
+    }
+
+    // S7 — recently used programs (builds a local vector, then moves it in).
+    // LoadRecentPrograms() writes directly to m_recentItems; it is safe here
+    // because the main thread only reads m_recentItems after m_iconsLoaded==true.
+    LoadRecentPrograms();
+
+    // Signal completion with release ordering so all preceding writes are
+    // visible to any thread that subsequently reads with acquire ordering.
+    m_iconsLoaded.store(true, std::memory_order_release);
+    CF_LOG(Info, "LoadIconsAsync: done — requesting repaint");
+
+    // If the Start Menu window already exists, request a repaint so real icons
+    // replace the colored-square fallbacks immediately.
+    if (m_hwnd)
+        PostMessage(m_hwnd, WM_ICONS_LOADED, 0, 0);
 }
 
 // ── Window creation ──────────────────────────────────────────────────────────
@@ -743,6 +772,10 @@ void StartMenuWindow::LoadRecentPrograms() {
 // ─────────────────────────────────────────────────────────────────────────────
 void StartMenuWindow::PaintProgramsList(HDC hdc, const RECT& cr) {
     (void)cr;
+    // All-or-nothing gate: use real icons only after the background thread has
+    // finished ALL writes. Prevents flickering caused by partially-loaded icon
+    // arrays being visible on intermediate hover repaints.
+    const bool iconsReady = m_iconsLoaded.load(std::memory_order_acquire);
     SetBkMode(hdc, TRANSPARENT);
 
     HFONT nameFont = CreateFontW(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
@@ -789,7 +822,10 @@ void StartMenuWindow::PaintProgramsList(HDC hdc, const RECT& cr) {
     }
 
     // ── S7: Recently used programs — below pinned items ──────────────────────
-    int recentCount  = static_cast<int>(m_recentItems.size());
+    // Only read m_recentItems after m_iconsLoaded (acquire) so the vector
+    // contents are fully visible (happens-before the release store in LoadIconsAsync).
+    int recentCount  = m_iconsLoaded.load(std::memory_order_acquire)
+                       ? static_cast<int>(m_recentItems.size()) : 0;
     int recentStartY = PROG_Y + PROG_COUNT * PROG_ITEM_H + 12; // 12px gap (4 sep + 8 pad)
 
     for (int i = 0; i < recentCount; ++i) {
@@ -1315,7 +1351,8 @@ int StartMenuWindow::GetProgItemAtPoint(POINT pt) {
     }
 
     // S7 — Recent zone: indices PROG_COUNT..PROG_COUNT+recentCount-1
-    int recentCount  = static_cast<int>(m_recentItems.size());
+    int recentCount  = m_iconsLoaded.load(std::memory_order_acquire)
+                       ? static_cast<int>(m_recentItems.size()) : 0;
     int recentStartY = PROG_Y + PROG_COUNT * PROG_ITEM_H + 12;
     if (recentCount > 0 && pt.y >= recentStartY &&
         pt.y < recentStartY + recentCount * PROG_ITEM_H) {
@@ -1793,6 +1830,12 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         Paint();
         return 0;
 
+    case WM_ICONS_LOADED:
+        // Posted by LoadIconsAsync() when all background icon loading is done.
+        // Repaint so real icons replace the colored-square fallbacks.
+        InvalidateRect(m_hwnd, nullptr, FALSE);
+        return 0;
+
     case WM_MOUSEMOVE: {
         if (!m_trackingMouse) {
             TRACKMOUSEEVENT tme = {};
@@ -1983,8 +2026,9 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
 
             if (m_viewMode == LeftViewMode::Programs) {
                 // Navigation range: 0..PROG_COUNT-1, then AP row
-                // S7: total navigable items = pinned + recently used
-                int totalProgItems = PROG_COUNT + static_cast<int>(m_recentItems.size());
+                // S7: total navigable items = pinned + recently used (only after icons loaded)
+                int totalProgItems = PROG_COUNT + (m_iconsLoaded.load(std::memory_order_acquire)
+                                    ? static_cast<int>(m_recentItems.size()) : 0);
                 if (down) {
                     if (m_keySelApRow) {
                         // already at bottom; clamp

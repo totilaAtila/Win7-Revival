@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-03-01 (session 11 — S7 build fix)
+Last updated: 2026-03-01 (session 12 — startup freeze fix)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -110,6 +110,43 @@ New requirement (non-negotiable, §10):
 2. Rebuild `CrystalFrame.Core.dll` cu CMake (pentru static CRT + crash handler activ).
 3. Test publish → verifică că `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log` apare la prima pornire.
 4. ✅ S6 implementat în această sesiune — iconițe reale din sistem (detalii în Session 9 S6 note de mai jos).
+
+---
+
+### Session 12 — Startup freeze fix (2026-03-01) — background icon loading
+
+**Simptom raportat:** ~8 secunde de freeze al mouse-ului la fiecare pornire/repornire a aplicației,
+în timp ce Dashboard-ul nu era complet afișat.
+
+**Root cause (două cauze în lanț):**
+1. **Hooks instalate pe thread blocat:** În `Core::Initialize()`, `StartMenuHook::Initialize()`
+   instala `WH_KEYBOARD_LL` + `WH_MOUSE_LL` ÎNAINTE de `StartMenuWindow::Initialize()`.
+   Hook-urile low-level trebuie servite de message loop-ul thread-ului instalator. Dar acel
+   thread se bloca imediat ~8 secunde în `StartMenuWindow::Initialize()` → Windows dădea
+   timeout hook-urilor (~300ms-1s) → mouse freeze pe toată durata inițializării.
+2. **Icon loading sincron (~8s):** `StartMenuWindow::Initialize()` apela `SHGetFileInfoW`
+   de sute de ori sincron (`LoadNodeIcons` pe tot tree-ul All Programs + pinned + right col + recent).
+
+**Fix 1 — `Core/Core.cpp`:** Reordonat blocul `StartMenuHook::Initialize()` să apară
+DUPĂ `StartMenuWindow::Initialize()`. Hook-urile sunt acum instalate abia la finalul inițializării,
+când thread-ul este liber să proceseze mesaje imediat.
+
+**Fix 2 — `Core/StartMenuWindow.h` + `Core/StartMenuWindow.cpp`:** Tot codul de icon loading
+(S6.1, S6.2, S6.4, S6.5, S7) mutat din `Initialize()` în noua metodă `LoadIconsAsync()`,
+lansată pe `std::thread m_iconThread` la finalul `Initialize()`. `BuildAllProgramsTree()`
+rămâne sincron (date necesare pentru navigare). Icoanele se afișează ca pătrate colorate
+(fallback existent) până când thread-ul termină, după care `PostMessage(WM_ICONS_LOADED)`
+declanșează un repaint. `Shutdown()` face `join()` pe thread înainte de a elibera resursele.
+
+**Thread safety:** `m_iconsLoaded` este `std::atomic<bool>` cu release/acquire ordering.
+`m_recentItems` este citit în paint/hit-test/keyboard-nav doar după `m_iconsLoaded==true`.
+`m_pinnedIcons[]`, `m_rightIcons[]`, `node.hIcon` sunt pointeri — scrierile sunt atomice
+pe x86-64 și protejate de garantia happens-before a store-release/load-acquire.
+
+**Fișiere modificate:**
+- `Core/Core.cpp` (reordonare hooks)
+- `Core/StartMenuWindow.h` (+ `<atomic>`, `<thread>`, `m_iconThread`, `m_iconsLoaded`, `WM_ICONS_LOADED`, `LoadIconsAsync()`)
+- `Core/StartMenuWindow.cpp` (+ `LoadIconsAsync`, `WM_ICONS_LOADED` handler, guards în paint/hit-test/keyboard-nav)
 
 ---
 
