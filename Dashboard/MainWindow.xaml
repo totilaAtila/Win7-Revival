@@ -2,16 +2,16 @@
     x:Class="CrystalFrame.Dashboard.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="CrystalFrame Settings"
-    MinWidth="360"
-    MinHeight="420">
+    Title="CrystalFrame Settings">
 
     <!-- Fără RequestedTheme forțat — urmează tema sistemului.
          NOTĂ: Window.Resources cu Style+ControlTemplate crashează XamlCompiler net472 Pass1.
          Proprietățile butoanelor sunt aplicate direct pe fiecare control (workaround).
 
-         NOTE WinUI 3: WindowStartupLocation nu există în WinUI 3 (WPF-only).
-                       UniformGrid nu există în WinUI 3 standard — înlocuit cu Grid 2×*.
+         NOTE WinUI 3: WindowStartupLocation, MinWidth, MinHeight pe Window nu există în
+                       WinUI 3 (WPF-only). UniformGrid absent din WinUI 3 standard —
+                       înlocuit cu Grid 2×*. MinWidth/MinHeight pot fi setate programatic
+                       via AppWindow.Resize() dacă e necesar în viitor.
 
          Structură Header (fix) / ScrollViewer pe Height=* / Footer (fix):
          headerul și footerul rămân întotdeauna ancorate, indiferent de dimensiunea ferestrei.
