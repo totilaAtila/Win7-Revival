@@ -4,362 +4,262 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Settings">
 
-    <!-- Fără RequestedTheme forțat — urmează tema sistemului.
-         NOTĂ: Window.Resources cu Style+ControlTemplate crashează XamlCompiler net472 Pass1.
-         Toate proprietățile aplicate direct pe controale. -->
-    <Border x:Name="RootBorder"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Top"
-            Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
-            Padding="16,12,12,16">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        
+        <Border x:Name="RootBorder"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Top"
+                Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+                Padding="16,12,16,24">
 
-        <Grid>
+            <Grid MaxWidth="500" HorizontalAlignment="Center">
 
-            <!-- ── Taskbar Panel ─────────────────────────────────────── -->
-            <StackPanel x:Name="TaskbarPanel" Spacing="12" Visibility="Visible">
+                <StackPanel x:Name="TaskbarPanel" Spacing="16" Visibility="Visible">
 
-                <!-- Header + enable toggle -->
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0"
-                               Text="Taskbar Overlay"
-                               FontSize="15" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                               VerticalAlignment="Center"/>
-                    <ToggleSwitch Grid.Column="1"
-                                  x:Name="TaskbarEnabledToggle"
-                                  OnContent="" OffContent=""
-                                  Toggled="TaskbarEnabled_Toggled"
-                                  Margin="0,-4,0,0"/>
-                </Grid>
-
-                <TextBlock x:Name="TaskbarStatusText"
-                           FontSize="11"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-
-                <!-- Transparență -->
-                <StackPanel Spacing="4" MinWidth="250">
-                    <TextBlock Text="Transparency"
-                               FontSize="13" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="36"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="%"
-                                   VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <Slider Grid.Column="1" x:Name="TaskbarOpacitySlider"
-                                Minimum="0" Maximum="100" StepFrequency="1"
-                                ValueChanged="TaskbarOpacity_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="TaskbarOpacityValue"
-                                   TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Column="0"
+                                   Text="Taskbar Overlay"
+                                   FontSize="16" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"/>
+                        <ToggleSwitch Grid.Column="1"
+                                      x:Name="TaskbarEnabledToggle"
+                                      OnContent="" OffContent=""
+                                      Toggled="TaskbarEnabled_Toggled"
+                                      Margin="12,0,0,0"
+                                      MinWidth="0"/>
+                    </Grid>
+
+                    <TextBlock x:Name="TaskbarStatusText"
+                               FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"/>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Transparency"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   TextWrapping="Wrap"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="40"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="%"
+                                       VerticalAlignment="Center" FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <Slider Grid.Column="1" x:Name="TaskbarOpacitySlider"
+                                    Minimum="0" Maximum="100" StepFrequency="1"
+                                    ValueChanged="TaskbarOpacity_ValueChanged"/>
+                            <TextBlock Grid.Column="2" x:Name="TaskbarOpacityValue"
+                                       TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Background Color"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   TextWrapping="Wrap"/>
+                        
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="40"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="R" VerticalAlignment="Center" FontSize="11" Foreground="#FF6060"/>
+                            <Slider Grid.Column="1" x:Name="TaskbarColorRSlider"
+                                    Minimum="0" Maximum="255" StepFrequency="1"
+                                    ValueChanged="TaskbarColorR_ValueChanged"/>
+                            <TextBlock Grid.Column="2" x:Name="TaskbarColorRValue"
+                                       TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </Grid>
+                        
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="40"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="G" VerticalAlignment="Center" FontSize="11" Foreground="#60C060"/>
+                            <Slider Grid.Column="1" x:Name="TaskbarColorGSlider"
+                                    Minimum="0" Maximum="255" StepFrequency="1"
+                                    ValueChanged="TaskbarColorG_ValueChanged"/>
+                            <TextBlock Grid.Column="2" x:Name="TaskbarColorGValue"
+                                       TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </Grid>
+                        
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="40"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="B" VerticalAlignment="Center" FontSize="11" Foreground="#6080FF"/>
+                            <Slider Grid.Column="1" x:Name="TaskbarColorBSlider"
+                                    Minimum="0" Maximum="255" StepFrequency="1"
+                                    ValueChanged="TaskbarColorB_ValueChanged"/>
+                            <TextBlock Grid.Column="2" x:Name="TaskbarColorBValue"
+                                       TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </Grid>
+
+                        <Border Height="20" CornerRadius="4" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1">
+                            <Border x:Name="TaskbarColorPreview" Background="Black" CornerRadius="3"/>
+                        </Border>
+                    </StackPanel>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Blur effect (acrylic)"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"/>
+                        <ToggleSwitch Grid.Column="1"
+                                      x:Name="TaskbarBlurToggle"
+                                      OnContent="" OffContent=""
+                                      Toggled="TaskbarBlur_Toggled"
+                                      Margin="12,0,0,0"
+                                      MinWidth="0"/>
                     </Grid>
                 </StackPanel>
 
-                <!-- Culoare fundal -->
-                <StackPanel Spacing="4" MinWidth="250">
-                    <TextBlock Text="Background Color"
-                               FontSize="13" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                <StackPanel x:Name="StartMenuPanel" Spacing="16" Visibility="Collapsed">
+
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="36"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="R"
-                                   VerticalAlignment="Center" FontSize="11" Foreground="#FF6060"/>
-                        <Slider Grid.Column="1" x:Name="TaskbarColorRSlider"
-                                Minimum="0" Maximum="255" StepFrequency="1"
-                                ValueChanged="TaskbarColorR_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="TaskbarColorRValue"
-                                   TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Column="0"
+                                   Text="Start Menu Overlay"
+                                   FontSize="16" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"/>
+                        <ToggleSwitch Grid.Column="1"
+                                      x:Name="StartEnabledToggle"
+                                      OnContent="" OffContent=""
+                                      Toggled="StartEnabled_Toggled"
+                                      Margin="12,0,0,0"
+                                      MinWidth="0"/>
                     </Grid>
+
+                    <TextBlock x:Name="StartStatusText"
+                               FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"/>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Transparency" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="40"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="%" VerticalAlignment="Center" FontSize="11" Opacity="0.6"/>
+                            <Slider Grid.Column="1" x:Name="StartOpacitySlider" Minimum="0" Maximum="100" StepFrequency="1" ValueChanged="StartOpacity_ValueChanged"/>
+                            <TextBlock Grid.Column="2" x:Name="StartOpacityValue" TextAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
+                        </Grid>
+                    </StackPanel>
+
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="36"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="G"
-                                   VerticalAlignment="Center" FontSize="11" Foreground="#60C060"/>
-                        <Slider Grid.Column="1" x:Name="TaskbarColorGSlider"
-                                Minimum="0" Maximum="255" StepFrequency="1"
-                                ValueChanged="TaskbarColorG_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="TaskbarColorGValue"
-                                   TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Column="0" Text="Blur effect (acrylic)" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <ToggleSwitch Grid.Column="1" x:Name="StartBlurToggle" OnContent="" OffContent="" Toggled="StartBlur_Toggled" Margin="12,0,0,0" MinWidth="0"/>
                     </Grid>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="B"
-                                   VerticalAlignment="Center" FontSize="11" Foreground="#6080FF"/>
-                        <Slider Grid.Column="1" x:Name="TaskbarColorBSlider"
-                                Minimum="0" Maximum="255" StepFrequency="1"
-                                ValueChanged="TaskbarColorB_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="TaskbarColorBValue"
-                                   TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    </Grid>
-                    <Border Height="18" CornerRadius="3"
-                            BorderBrush="#3A3A3A" BorderThickness="1">
-                        <Border x:Name="TaskbarColorPreview" Background="Black" CornerRadius="3"/>
-                    </Border>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Background Color" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <Grid Margin="0,2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="R" VerticalAlignment="Center" FontSize="11" Foreground="#FF6060"/>
+                            <Slider Grid.Column="1" x:Name="StartBgColorRSlider" Minimum="0" Maximum="255" ValueChanged="StartBgColorR_ValueChanged"/>
+                            <TextBlock Grid.Column="2" x:Name="StartBgColorRValue" TextAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
+                        </Grid>
+                        <Grid Margin="0,2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="G" VerticalAlignment="Center" FontSize="11" Foreground="#60C060"/>
+                            <Slider Grid.Column="1" x:Name="StartBgColorGSlider" Minimum="0" Maximum="255" ValueChanged="StartBgColorG_ValueChanged"/>
+                            <TextBlock Grid.Column="2" x:Name="StartBgColorGValue" TextAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
+                        </Grid>
+                        <Grid Margin="0,2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="B" VerticalAlignment="Center" FontSize="11" Foreground="#6080FF"/>
+                            <Slider Grid.Column="1" x:Name="StartBgColorBSlider" Minimum="0" Maximum="255" ValueChanged="StartBgColorB_ValueChanged"/>
+                            <TextBlock Grid.Column="2" x:Name="StartBgColorBValue" TextAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
+                        </Grid>
+                        <Border Height="20" CornerRadius="4" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1">
+                            <Border x:Name="StartBgColorPreview" Background="Black" CornerRadius="3"/>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Text Color" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <Grid Margin="0,2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="R" VerticalAlignment="Center" FontSize="11" Foreground="#FF6060"/>
+                            <Slider Grid.Column="1" x:Name="StartTextColorRSlider" Minimum="0" Maximum="255" ValueChanged="StartTextColorR_ValueChanged"/>
+                            <TextBlock Grid.Column="2" x:Name="StartTextColorRValue" TextAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
+                        </Grid>
+                        <Grid Margin="0,2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="G" VerticalAlignment="Center" FontSize="11" Foreground="#60C060"/>
+                            <Slider Grid.Column="1" x:Name="StartTextColorGSlider" Minimum="0" Maximum="255" ValueChanged="StartTextColorG_ValueChanged"/>
+                            <TextBlock Grid.Column="2" x:Name="StartTextColorGValue" TextAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
+                        </Grid>
+                        <Grid Margin="0,2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="B" VerticalAlignment="Center" FontSize="11" Foreground="#6080FF"/>
+                            <Slider Grid.Column="1" x:Name="StartTextColorBSlider" Minimum="0" Maximum="255" ValueChanged="StartTextColorB_ValueChanged"/>
+                            <TextBlock Grid.Column="2" x:Name="StartTextColorBValue" TextAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
+                        </Grid>
+                        <Border Height="20" CornerRadius="4" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1">
+                            <Border x:Name="StartTextColorPreview" Background="White" CornerRadius="3"/>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Menu Items" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <Grid ColumnSpacing="8" RowSpacing="4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <CheckBox Grid.Row="0" Grid.Column="0" x:Name="StartShowControlPanel" Content="Control Panel" FontSize="12" Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
+                            <CheckBox Grid.Row="0" Grid.Column="1" x:Name="StartShowDeviceManager" Content="Device Mgr" FontSize="12" Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
+                            <CheckBox Grid.Row="1" Grid.Column="0" x:Name="StartShowInstalledApps" Content="Installed Apps" FontSize="12" Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
+                            <CheckBox Grid.Row="1" Grid.Column="1" x:Name="StartShowDocuments" Content="Documents" FontSize="12" Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
+                            <CheckBox Grid.Row="2" Grid.Column="0" x:Name="StartShowPictures" Content="Pictures" FontSize="12" Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
+                            <CheckBox Grid.Row="2" Grid.Column="1" x:Name="StartShowVideos" Content="Videos" FontSize="12" Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
+                            <CheckBox Grid.Row="3" Grid.Column="0" x:Name="StartShowRecentFiles" Content="Recent Files" FontSize="12" Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
+                        </Grid>
+                    </StackPanel>
                 </StackPanel>
 
-                <!-- Blur / Acrylic -->
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0"
-                               Text="Blur effect (acrylic)"
-                               FontSize="13" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                               VerticalAlignment="Center"/>
-                    <ToggleSwitch Grid.Column="1"
-                                  x:Name="TaskbarBlurToggle"
-                                  OnContent="" OffContent=""
-                                  Toggled="TaskbarBlur_Toggled"
-                                  Margin="0,-4,0,0"/>
-                </Grid>
-
-            </StackPanel>
-
-            <!-- ── Start Menu Panel ──────────────────────────────────── -->
-            <StackPanel x:Name="StartMenuPanel" Spacing="12" Visibility="Collapsed">
-
-                <!-- Header + enable toggle -->
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0"
-                               Text="Start Menu Overlay"
-                               FontSize="15" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                               VerticalAlignment="Center"/>
-                    <ToggleSwitch Grid.Column="1"
-                                  x:Name="StartEnabledToggle"
-                                  OnContent="" OffContent=""
-                                  Toggled="StartEnabled_Toggled"
-                                  Margin="0,-4,0,0"/>
-                </Grid>
-
-                <TextBlock x:Name="StartStatusText"
-                           FontSize="11"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-
-                <!-- Transparență -->
-                <StackPanel Spacing="4" MinWidth="250">
-                    <TextBlock Text="Transparency"
-                               FontSize="13" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="%"
-                                   VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <Slider Grid.Column="1" x:Name="StartOpacitySlider"
-                                Minimum="0" Maximum="100" StepFrequency="1"
-                                ValueChanged="StartOpacity_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="StartOpacityValue"
-                                   TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    </Grid>
-                </StackPanel>
-
-                <!-- Blur / Acrylic -->
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0"
-                               Text="Blur effect (acrylic)"
-                               FontSize="13" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                               VerticalAlignment="Center"/>
-                    <ToggleSwitch Grid.Column="1"
-                                  x:Name="StartBlurToggle"
-                                  OnContent="" OffContent=""
-                                  Toggled="StartBlur_Toggled"
-                                  Margin="0,-4,0,0"/>
-                </Grid>
-
-                <!-- Culoare fundal -->
-                <StackPanel Spacing="4" MinWidth="250">
-                    <TextBlock Text="Background Color"
-                               FontSize="13" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="R"
-                                   VerticalAlignment="Center" FontSize="11" Foreground="#FF6060"/>
-                        <Slider Grid.Column="1" x:Name="StartBgColorRSlider"
-                                Minimum="0" Maximum="255" StepFrequency="1"
-                                ValueChanged="StartBgColorR_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="StartBgColorRValue"
-                                   TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    </Grid>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="G"
-                                   VerticalAlignment="Center" FontSize="11" Foreground="#60C060"/>
-                        <Slider Grid.Column="1" x:Name="StartBgColorGSlider"
-                                Minimum="0" Maximum="255" StepFrequency="1"
-                                ValueChanged="StartBgColorG_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="StartBgColorGValue"
-                                   TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    </Grid>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="B"
-                                   VerticalAlignment="Center" FontSize="11" Foreground="#6080FF"/>
-                        <Slider Grid.Column="1" x:Name="StartBgColorBSlider"
-                                Minimum="0" Maximum="255" StepFrequency="1"
-                                ValueChanged="StartBgColorB_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="StartBgColorBValue"
-                                   TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    </Grid>
-                    <Border Height="18" CornerRadius="3"
-                            BorderBrush="#3A3A3A" BorderThickness="1">
-                        <Border x:Name="StartBgColorPreview" Background="Black" CornerRadius="3"/>
-                    </Border>
-                </StackPanel>
-
-                <!-- Culoare text -->
-                <StackPanel Spacing="4" MinWidth="250">
-                    <TextBlock Text="Text Color"
-                               FontSize="13" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="R"
-                                   VerticalAlignment="Center" FontSize="11" Foreground="#FF6060"/>
-                        <Slider Grid.Column="1" x:Name="StartTextColorRSlider"
-                                Minimum="0" Maximum="255" StepFrequency="1"
-                                ValueChanged="StartTextColorR_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="StartTextColorRValue"
-                                   TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    </Grid>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="G"
-                                   VerticalAlignment="Center" FontSize="11" Foreground="#60C060"/>
-                        <Slider Grid.Column="1" x:Name="StartTextColorGSlider"
-                                Minimum="0" Maximum="255" StepFrequency="1"
-                                ValueChanged="StartTextColorG_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="StartTextColorGValue"
-                                   TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    </Grid>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="B"
-                                   VerticalAlignment="Center" FontSize="11" Foreground="#6080FF"/>
-                        <Slider Grid.Column="1" x:Name="StartTextColorBSlider"
-                                Minimum="0" Maximum="255" StepFrequency="1"
-                                ValueChanged="StartTextColorB_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="StartTextColorBValue"
-                                   TextAlignment="Right" VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    </Grid>
-                    <Border Height="18" CornerRadius="3"
-                            BorderBrush="#3A3A3A" BorderThickness="1">
-                        <Border x:Name="StartTextColorPreview" Background="White" CornerRadius="3"/>
-                    </Border>
-                </StackPanel>
-
-                <!-- Elemente meniu -->
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Menu Items"
-                               FontSize="13" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                    <Grid ColumnSpacing="4" RowSpacing="4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <CheckBox Grid.Row="0" Grid.Column="0" x:Name="StartShowControlPanel"
-                                  Content="Control Panel" IsChecked="True" FontSize="12"
-                                  Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
-                        <CheckBox Grid.Row="0" Grid.Column="1" x:Name="StartShowDeviceManager"
-                                  Content="Device Mgr" IsChecked="True" FontSize="12"
-                                  Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
-                        <CheckBox Grid.Row="1" Grid.Column="0" x:Name="StartShowInstalledApps"
-                                  Content="Installed Apps" IsChecked="True" FontSize="12"
-                                  Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
-                        <CheckBox Grid.Row="1" Grid.Column="1" x:Name="StartShowDocuments"
-                                  Content="Documents" IsChecked="True" FontSize="12"
-                                  Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
-                        <CheckBox Grid.Row="2" Grid.Column="0" x:Name="StartShowPictures"
-                                  Content="Pictures" IsChecked="True" FontSize="12"
-                                  Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
-                        <CheckBox Grid.Row="2" Grid.Column="1" x:Name="StartShowVideos"
-                                  Content="Videos" IsChecked="True" FontSize="12"
-                                  Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
-                        <CheckBox Grid.Row="3" Grid.Column="0" x:Name="StartShowRecentFiles"
-                                  Content="Recent Files" IsChecked="True" FontSize="12"
-                                  Checked="StartMenuItem_Changed" Unchecked="StartMenuItem_Changed"/>
-                    </Grid>
-                </StackPanel>
-
-            </StackPanel>
-
-        </Grid>
-    </Border>
-
+            </Grid>
+        </Border>
+    </ScrollViewer>
 </Window>
