@@ -1,161 +1,130 @@
-# Plan: Start Menu Fixes
+# Plan: Blur fix + Text shadow/quality
 
-## Cerințe
+## Problemă 1 — Switch-ul Blur nu funcționează
 
-1. **Poziționare corectă** – Start Menu să apară ancorat la butonul Windows, indiferent de poziția taskbar-ului (jos, sus, stânga, dreapta).
-2. **Meniuri funcționale** – Search Box și zona User/Avatar să răspundă la click.
-3. **Autostart → tray** – Dacă aplicația pornește cu Windows, să se ascundă în System Tray (fără fereastră).
+### Diagnostic complet
 
----
+**Start Menu blur — bug de cod confirmat (2 defecte):**
 
-## Task 1 – Poziționare Start Menu ancorat la butonul Start ✅ DONE
-
-### Problema rezolvată
-`Show(int x, int y)` – meniu-ul se centra mereu orizontal.
-Acum se ancorează la butonul Start indiferent de orientarea taskbar-ului.
-
-**Fix suplimentar (review P2):** Taskbar-urile verticale (stânga/dreapta) erau clasificate greșit
-ca „bottom-docked" deoarece `tbRect.bottom ≈ screenH`. Rezolvat prin compararea `tbW` vs `tbH`
-**înainte** de verificarea poziției pe ecran.
-
-### Fișier modificat
-`Core/StartMenuWindow.cpp` – funcția `Show()`
-
-### Logică implementată
-
-**Pas 1 – Obține RECT taskbar**
+**Defect A — `StartMenuWindow::ApplyTransparency()` ignoră blur:**
 ```cpp
-HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
-RECT tbRect = {};
-GetWindowRect(taskbar, &tbRect);
+// StartMenuWindow.cpp:471
+accent.AccentState = ACCENT_ENABLE_TRANSPARENTGRADIENT; // mereu, indiferent
 ```
+Nu există `m_blur` în clasă, nu există `SetBlur()`. Funcția setează
+mereu `TRANSPARENTGRADIENT`, niciodată `ACRYLICBLURBEHIND`.
 
-**Pas 2 – Detectează orientarea prin dimensiuni (tbW vs tbH)**
+**Defect B — `Core::SetStartBlur()` nu ajunge la StartMenuWindow:**
 ```cpp
-int tbW = tbRect.right  - tbRect.left;
-int tbH = tbRect.bottom - tbRect.top;
-
-bool tbLeft  = tbW < tbH && tbRect.left <= screenW / 2;  // vertical, stânga
-bool tbRight = tbW < tbH && tbRect.left >  screenW / 2;  // vertical, dreapta
-bool tbTop   = tbW >= tbH && tbRect.top <= screenH / 2;  // orizontal, sus
-// default = jos
+// Core.cpp:297-305
+void Core::SetStartBlur(bool enabled) {
+    m_startBlur = enabled;
+    m_renderer->SetStartBlur(enabled);   // ← aplică pe HWND-ul Win native Start
+    m_config->SetStartBlur(enabled);
+    // LIPSĂ: m_startMenuWindow->SetBlur(enabled)
+}
 ```
+Renderer-ul aplică efectul pe HWND-ul native Windows Start Menu (care nu
+mai e vizibil — e înlocuit de StartMenuWindow noastră).
 
-**Pas 3 – Găsește RECT Start button**
+**Taskbar blur — codul Renderer.cpp este corect:**
+`Renderer::SetTaskbarBlur()` deja setează `ACCENT_ENABLE_ACRYLICBLURBEHIND`
+pe HWND-ul taskbar-ului real. Dacă nu e vizibil, cauza probabilă:
+- Opacity implicită 30 → alpha = 178/255 → tinta e ~70% opacă → blur-ul
+  e acoperit de culoarea de fond. La opacity mai mare (ex. 70+), blur-ul
+  e vizibil.
+- Posibil Windows 11 taskbar specificity (de verificat la runtime).
+
+### Fix
+
+**Fișier: `Core/StartMenuWindow.h`**
+- Adaugă `bool m_blur = false;` la starea privată
+- Adaugă declarație publică `void SetBlur(bool useBlur);`
+
+**Fișier: `Core/StartMenuWindow.cpp`**
+- Implementează `SetBlur()`:
+  ```cpp
+  void StartMenuWindow::SetBlur(bool useBlur) {
+      m_blur = useBlur;
+      if (m_visible) ApplyTransparency();
+  }
+  ```
+- Modifică `ApplyTransparency()` — linia 471:
+  ```cpp
+  accent.AccentState = m_blur ? ACCENT_ENABLE_ACRYLICBLURBEHIND
+                               : ACCENT_ENABLE_TRANSPARENTGRADIENT;
+  ```
+
+**Fișier: `Core/Core.cpp`**
+- În `Core::SetStartBlur()`, adaugă apelul lipsă la StartMenuWindow:
+  ```cpp
+  if (m_startMenuWindow) m_startMenuWindow->SetBlur(enabled);
+  ```
+- La inițializare, aplică starea inițială de blur pe StartMenuWindow.
+
+---
+
+## Problemă 2 — Text pixelat în Start Menu
+
+### Diagnostic
+
+**Cauza — ClearType pe fundal transparent:**
+`CLEARTYPE_QUALITY` folosește subpixel rendering LCD: îmbină componentele
+R/G/B cu fundalul asumat. Când fundalul real (blur/transparență DWM) diferă,
+apar halouri de culoare și aspectul „pixelat"/zimțat.
+
+### Soluție — ANTIALIASED_QUALITY + Shadow text
+
+**Pasul 1 — Schimbă calitatea fontului:**
+`CLEARTYPE_QUALITY` → `ANTIALIASED_QUALITY` în TOATE apelurile `CreateFontW()`
+din `StartMenuWindow.cpp` (liniile ~543, 1062, 1115, 1125, 1260, 1283, 1674
+și fontul default al Window-ului dacă există).
+
+`ANTIALIASED_QUALITY` = antialiasing griuri, independent de fundal →
+text neted pe orice fundal (transparent sau blur).
+
+**Pasul 2 — Shadow text (efect stil Windows 11 desktop):**
+Adaugă funcție statică `DrawShadowText()`:
+
 ```cpp
-HWND sb = FindWindowExW(taskbar, nullptr, L"Start", nullptr);
-if (!sb) sb = FindWindowExW(taskbar, nullptr, L"TrayButton", nullptr);
-```
+static COLORREF ShadowColor(COLORREF fg) {
+    int lum = (GetRValue(fg)*299 + GetGValue(fg)*587 + GetBValue(fg)*114) / 1000;
+    return lum > 128 ? RGB(0, 0, 0) : RGB(220, 220, 220);
+}
 
-**Pas 4 – Calculează poziția în funcție de orientare**
-| Orientare       | menuX                    | menuY                    |
-|-----------------|--------------------------|--------------------------|
-| Taskbar stânga  | `tbRect.right + 1`       | `sbTop`                  |
-| Taskbar dreapta | `tbRect.left - WIDTH - 1`| `sbTop`                  |
-| Taskbar sus     | `sbLeft`                 | `tbRect.bottom + 1`      |
-| Taskbar jos     | `sbLeft`                 | `tbRect.top - HEIGHT - 1`|
-| Fallback        | `0`                      | `screenH - HEIGHT - 48`  |
-
-**Pas 5 – Clamp final** – asigură că meniu-ul nu iese din ecran pe niciun ax.
-
----
-
-## Task 2 – Search Box funcțional (click → Windows Search) ✅ DONE
-
-### Problema rezolvată
-Click pe search box deschide Windows Search (`ms-search:`).
-
-### Implementare
-- Hit test: `[MARGIN, SEARCH_Y, cr.right-MARGIN, SEARCH_Y+SEARCH_H]`
-- `WM_LBUTTONDOWN` → `ShellExecuteW(NULL, L"open", L"ms-search:", NULL, NULL, SW_SHOW)`
-- Hover state cu redesenare la `WM_MOUSEMOVE`
-
----
-
-## Task 3 – Zona User/Avatar funcțională (click → Setări cont) ✅ DONE
-
-### Problema rezolvată
-Click pe avatar/user din bottom bar deschide `ms-settings:accounts`.
-
-### Implementare
-- Hit test pe zona avatar + text (stânga bottom bar)
-- `WM_LBUTTONDOWN` → `ShellExecuteW(NULL, L"open", L"ms-settings:accounts", NULL, NULL, SW_SHOW)`
-- Hover highlight subtil, același pattern ca pinned items
-
----
-
-## Task 4 – Autostart → pornește hidden în System Tray ✅ DONE
-
-### Problema rezolvată
-La pornirea Windows (autostart prin registry), aplicația deschidea fereastra principală
-în loc să se ascundă silențios în System Tray.
-
-### Fișiere modificate
-
-**`Dashboard/StartupManager.cs`**
-```csharp
-key.SetValue(AppName, $"\"{path}\" /autostart");
-```
-
-**`Dashboard/App.xaml.cs`** – `OnLaunched()`
-```csharp
-bool startHidden = args.Arguments.Contains("/autostart", StringComparison.OrdinalIgnoreCase)
-                || Environment.GetCommandLineArgs().Any(
-                       a => a.Equals("/autostart", StringComparison.OrdinalIgnoreCase));
-_window = new MainWindow(startHidden);
-_window.Activate();
-```
-
-**`Dashboard/MainWindow.xaml.cs`** – constructor
-```csharp
-public MainWindow(bool startHidden = false)
-{
-    // ...
-    if (startHidden)
-        DispatcherQueue.TryEnqueue(() => _appWindow.Hide());
+static void DrawShadowText(HDC hdc, const wchar_t* text, int len,
+                           RECT* rect, UINT fmt, COLORREF fg) {
+    RECT sr = { rect->left + 1, rect->top + 1,
+                rect->right + 1, rect->bottom + 1 };
+    ::SetTextColor(hdc, ShadowColor(fg));
+    DrawTextW(hdc, text, len, &sr, fmt | DT_NOCLIP);
+    ::SetTextColor(hdc, fg);
+    DrawTextW(hdc, text, len, rect, fmt);
 }
 ```
 
-### Comportament rezultat
-| Mod lansare                  | Comportament                             |
-|------------------------------|------------------------------------------|
-| Normal (dublu-click pe .exe) | Deschide fereastra principală            |
-| Autostart (registry Run key) | Pornește silențios, icoană în Tray       |
-| Al doilea launch când hidden | `EnumWindows` găsește fereastra ascunsă, o afișează |
-| Dublu-click icoană tray      | Deschide fereastra principală            |
-| Click dreapta → Exit         | Oprește Core + iese complet              |
+Logica umbrei: text deschis → umbră neagră; text închis → umbră gri deschis.
+Deplasare 1px jos-dreapta — identic cu etichete icoane Windows 11.
 
-**Fix suplimentar (review P2):** `BringExistingInstanceToForeground()` nu gestiona ferestre
-ascunse (`IsWindowVisible=false`). `Process.MainWindowHandle` returnează `IntPtr.Zero` pentru
-ferestre hidden. Rezolvat prin `EnumWindows` + `GetWindowThreadProcessId` ca fallback,
-plus `SW_SHOW` (nu `SW_RESTORE`) pentru dezascundere.
+**Pasul 3 — Înlocuiește DrawTextW → DrawShadowText** pentru texte vizibile:
+- Programe (pinned + recent): liniile ~820, ~873
+- All Programs (foldere/apps): ~957
+- Right column items: ~1172
+- Username: ~1131
+- Submenu title + items: ~1682, ~1724
+- Scroll hints (▲▼): ~966, ~973, ~1741
 
----
-
-## Fix-uri de calitate ✅ DONE
-
-- **JSON trailing comma** (`SaveCustomNames()`) — virgulă în plus înainte de `}` când
-  `m_customTitle` era gol. Rezolvat prin colectarea intrărilor într-un `vector` și join cu
-  separator condiționat.
+Excepții (nu se modifică): butoane Shut down și arrow (text închis pe
+fundal solid - umbra nu ajută).
 
 ---
 
-## Ordine de implementare
+## Fișiere de modificat
 
-1. ✅ Task 1 (poziționare) — izolată în `Show()`; fix vertical taskbar în review
-2. ✅ Task 2 (search box) — hover + click
-3. ✅ Task 3 (user area) — hover + click
-4. ✅ Task 4 (autostart tray) — `/autostart` flag + `_appWindow.Hide()`; fix hidden re-launch în review
+| Fișier | Modificări |
+|--------|-----------|
+| `Core/StartMenuWindow.h` | + `bool m_blur = false`, + `void SetBlur(bool)` |
+| `Core/StartMenuWindow.cpp` | `SetBlur()`, `ApplyTransparency()`, toate `CreateFontW` CLEARTYPE→ANTIALIASED, + `DrawShadowText` helper, DrawTextW→DrawShadowText |
+| `Core/Core.cpp` | `SetStartBlur()` + `m_startMenuWindow->SetBlur()` + init |
 
-## Următori pași posibili
-
-- **Multi-monitor** — overlay pe display-uri non-primare
-- **Global hotkey** — toggle overlay-uri fără Dashboard
-- **Color presets** — teme predefinite (Aero Glass, Dark, etc.)
-- **Auto-update check** — notificare la nouă versiune GitHub
-
-## Ce NU facem (pentru a evita bug-uri)
-- Nu modificăm hook-urile (`StartMenuHook.cpp`) – funcționează corect
-- Nu modificăm sistemul de rendering/transparență
-- Nu schimbăm dimensiunile ferestrei (`WIDTH`/`HEIGHT`)
-- Nu adăugăm input text real în search box (risc ridicat, complex)
+**Nu se modifică:** Dashboard (C#), Renderer.cpp, CoreApi, IpcBridge.
