@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-03-01 (session 13 — Dashboard layout best-mix refactor)
+Last updated: 2026-03-03 (session 14 — Dashboard UI redesign + CrystalFrame screenshot)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -110,6 +110,50 @@ New requirement (non-negotiable, §10):
 2. Rebuild `CrystalFrame.Core.dll` cu CMake (pentru static CRT + crash handler activ).
 3. Test publish → verifică că `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log` apare la prima pornire.
 4. ✅ S6 implementat în această sesiune — iconițe reale din sistem (detalii în Session 9 S6 note de mai jos).
+
+---
+
+### Session 14 — Dashboard UI redesign + screenshot (2026-03-02)
+
+**Autor:** totila6 (commits directe pe `master`)
+
+**Commits:**
+- `5d042d9` — Schimbare Design Panou De Control si cele doua panouri adiacente
+- `e881191` — Adaugare fisier CrystalFrame.png in assets si referire la el in README.md
+
+#### Dashboard MainWindow redesign (`Dashboard/MainWindow.xaml`)
+
+- Eliminat blocul de comentarii introductive (păstrat codul curat).
+- Butoanele de navigare `NavTaskbar` / `NavStartMenu`: înălțime minimă crescută 44→50px, margini 3→4px, font 13→14px + `FontWeight="Medium"` (mai vizibil și mai accesibil).
+- `Padding` ScrollViewer: 12→16px (mai generos pe laterale).
+- `MaxWidth` StackPanel interior: 480→500px (ușoară creștere pentru conținut mai lat).
+- `Spacing` StackPanel: 6→10px; `Margin` bottom: 8→12px (mai mult spațiu respirabil).
+- Proprietăți `HorizontalContentAlignment`, `VerticalContentAlignment`, `BorderThickness`, `CornerRadius` eliminate de pe butoanele nav (revenire la stilul implicit WinUI 3 — mai consistent cu tema sistemului).
+
+#### Dashboard DetailWindow redesign (`Dashboard/DetailWindow.xaml`)
+
+- Întreg conținutul înfășurat în `ScrollViewer` (vertical, fără scroll orizontal) — panoul de setări devine scrollabil la ferestre mici.
+- `RootBorder`: `HorizontalAlignment="Left"` → `"Stretch"`; `Padding` drept 12→16px, bottom 16→24px.
+- `Grid` interior: `MaxWidth="500" HorizontalAlignment="Center"` — conținut centrat și lizibil pe ferestre mari.
+- Spacing-ul `StackPanel` Taskbar/StartMenu: 12→16px.
+- **Panel Taskbar:** coloane slider simplificate (24px → 28px label, 36px → 40px value); eliminat `MinWidth="250"` pe secțiuni individuale (acoperit de `MaxWidth` global).
+- **Panel Start Menu:**
+  - Eliminat setările de culoare text (R/G/B sliders + preview border) — funcționalitate înlăturată.
+  - Eliminat secțiunea "Menu Items" (checkboxuri Control Panel, etc.) — simplificare UI.
+  - Adăugat toggle `StartBlurToggle` pentru efectul blur/acrylic (nou).
+  - Layout coloane slider Start Menu: 24/*/36 → 28/*/40 (consistent cu Taskbar).
+  - `TextWrapping="Wrap"` adăugat pe `StartStatusText` și pe label-uri (prevenire trunchiere).
+
+#### README + assets
+
+- `README.md`: adăugat `![CrystalFrame Screenshot](assets/Crystal%20Frame.png)` imediat după badge-uri — screenshot vizibil pe pagina GitHub.
+- `assets/Crystal Frame.png`: fișier nou (939 KB) — screenshot al aplicației CrystalFrame.
+
+**Fișiere modificate:**
+- `Dashboard/MainWindow.xaml`
+- `Dashboard/DetailWindow.xaml`
+- `README.md`
+- `assets/Crystal Frame.png` (nou)
 
 ---
 
