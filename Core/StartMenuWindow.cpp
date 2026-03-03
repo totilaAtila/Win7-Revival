@@ -34,6 +34,15 @@ static COLORREF ShadowColorFor(COLORREF fg) {
     return lum > 128 ? RGB(0, 0, 0) : RGB(200, 200, 200);
 }
 
+// Helper simplu pentru conversie wstring la string pentru logging (rezolvă C2280)
+static std::string WStringToString(const std::wstring& wstr) {
+    if (wstr.empty()) return std::string();
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+    std::string strTo(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
+    return strTo;
+}
+
 static void DrawShadowText(HDC hdc, const wchar_t* text, int len,
                            RECT* rect, UINT fmt, COLORREF fg) {
     RECT sr = { rect->left + 1, rect->top + 1, rect->right + 1, rect->bottom + 1 };
@@ -417,7 +426,7 @@ void StartMenuWindow::LoadAvatarAsync() {
                                        reinterpret_cast<BYTE*>(pBits));
                 if (SUCCEEDED(hr)) {
                     m_avatarBitmap = hBmp;
-                    CF_LOG(Info, "LoadAvatarAsync: avatar loaded from " << picPath);
+                    CF_LOG(Info, "LoadAvatarAsync: avatar loaded from " << WStringToString(picPath));
                 } else {
                     DeleteObject(hBmp);
                 }
@@ -474,7 +483,10 @@ void StartMenuWindow::DrawAvatarCircle(HDC hdc, int cx, int cy, int r) {
         HFONT oldF = (HFONT)SelectObject(hdc, f);
         ::SetTextColor(hdc, RGB(255, 255, 255));
         SetBkMode(hdc, TRANSPARENT);
-        wchar_t init[2] = { m_username[0] ? towupper(m_username[0]) : L'U', 0 };
+        wchar_t init[2] = { 
+        m_username[0] ? static_cast<wchar_t>(towupper(m_username[0])) : L'U', 
+        0 
+    };
         RECT tr = { cx - r, cy - r, cx + r, cy + r };
         DrawTextW(hdc, init, 1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(hdc, oldF);
