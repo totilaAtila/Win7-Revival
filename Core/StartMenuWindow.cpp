@@ -1302,10 +1302,19 @@ void StartMenuWindow::PaintBottomBar(HDC hdc, const RECT& cr) {
 // ── Paint (master) ───────────────────────────────────────────────────────────
 void StartMenuWindow::Paint() {
     PAINTSTRUCT ps;
-    HDC hdc = BeginPaint(m_hwnd, &ps);
+    HDC screenDC = BeginPaint(m_hwnd, &ps);
 
     RECT cr;
     GetClientRect(m_hwnd, &cr);
+    int w = cr.right;
+    int h = cr.bottom;
+
+    // Off-screen buffer — all drawing goes here, then BitBlt in one shot
+    // to eliminate the background-erase flash (double buffering).
+    HDC     memDC  = CreateCompatibleDC(screenDC);
+    HBITMAP memBmp = CreateCompatibleBitmap(screenDC, w, h);
+    HBITMAP oldBmp = (HBITMAP)SelectObject(memDC, memBmp);
+    HDC hdc = memDC;
 
     // Background (whole window)
     HBRUSH bg = CreateSolidBrush(m_bgColor);
@@ -1336,6 +1345,13 @@ void StartMenuWindow::Paint() {
     if (m_subMenuOpen)
         PaintSubMenu(hdc, cr);
     PaintBottomBar(hdc, cr);
+
+    // Flip the completed frame to screen in one atomic operation
+    BitBlt(screenDC, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
+
+    SelectObject(memDC, oldBmp);
+    DeleteObject(memBmp);
+    DeleteDC(memDC);
 
     EndPaint(m_hwnd, &ps);
 }
@@ -1828,6 +1844,11 @@ LRESULT CALLBACK StartMenuWindow::WindowProc(HWND hwnd, UINT msg,
 
 LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
+
+    case WM_ERASEBKGND:
+        // Suppress background erasure — Paint() fills the entire window via
+        // the off-screen buffer, so erasing here would only cause a black flash.
+        return 1;
 
     case WM_PAINT:
         Paint();

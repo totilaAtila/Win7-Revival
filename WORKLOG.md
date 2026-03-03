@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-03-03 (session 14 — Dashboard UI redesign + CrystalFrame screenshot)
+Last updated: 2026-03-03 (session 15 — fix Start Menu flickering — double buffering + WM_ERASEBKGND)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -110,6 +110,43 @@ New requirement (non-negotiable, §10):
 2. Rebuild `CrystalFrame.Core.dll` cu CMake (pentru static CRT + crash handler activ).
 3. Test publish → verifică că `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log` apare la prima pornire.
 4. ✅ S6 implementat în această sesiune — iconițe reale din sistem (detalii în Session 9 S6 note de mai jos).
+
+---
+
+### Session 15 — Fix Start Menu flickering (2026-03-03) — issue #63
+
+**Branch:** `claude/update-worklog-MUEFZ`
+
+**Problema (issue #63):** Start Menu-ul prezenta flickering vizibil la fiecare hover și la repaint în general.
+
+**Root cause (două cauze combinate):**
+
+1. **`WM_ERASEBKGND` negestionat** — Clasa de fereastră (`WNDCLASSEXW`) are `hbrBackground = BLACK_BRUSH`. Când `InvalidateRect` marchează fereastra ca invalidă, Windows trimite `WM_ERASEBKGND` înainte de `WM_PAINT`. Fără un handler explicit, `DefWindowProc` șterge fereastra cu `BLACK_BRUSH` → flash negru vizibil între fiecare repaint.
+
+2. **Fără double buffering** — `Paint()` desena direct pe screen DC. Operațiile succesive (`FillRect` fundal → `RoundRect` border → `PaintProgramsList` → `PaintWin7RightColumn` → etc.) erau vizibile pe ecran pe rând → scintilare la fiecare hover change.
+
+   Notă: `InvalidateRect(hwnd, NULL, FALSE)` (bErase=FALSE) suprimă erasure-ul _dacă_ nu există alte invalidări cu bErase=TRUE în update region. La prima afișare sau la `SetWindowPos`, Windows poate marca fereastra cu erasure=TRUE — suficient pentru a declanșa flash-ul negru.
+
+**Fix-uri aplicate (`Core/StartMenuWindow.cpp`):**
+
+1. **Handler `WM_ERASEBKGND`** adăugat în `HandleMessage`:
+   ```cpp
+   case WM_ERASEBKGND:
+       return 1;  // suprimă erasure — Paint() acoperă tot prin buffer
+   ```
+
+2. **Double buffering în `Paint()`:**
+   - `BeginPaint` returnează `screenDC` (DC-ul ecranului).
+   - Se creează `memDC = CreateCompatibleDC(screenDC)` + `memBmp = CreateCompatibleBitmap(screenDC, w, h)`.
+   - Toate apelurile de paint (`FillRect`, `RoundRect`, `PaintProgramsList`, `PaintAllProgramsView`, `PaintApRow`, `PaintWin7RightColumn`, `PaintSubMenu`, `PaintBottomBar`) desenează pe `memDC`.
+   - La final: `BitBlt(screenDC, 0, 0, w, h, memDC, 0, 0, SRCCOPY)` — frame complet transferat pe ecran într-o singură operație atomică.
+   - Cleanup: `SelectObject`, `DeleteObject(memBmp)`, `DeleteDC(memDC)` înainte de `EndPaint`.
+
+**Comportament rezultat:**
+- Niciun flash negru la hover sau la orice alt repaint.
+- Toate funcțiile de paint rămân nemodificate — schimbarea este transparentă pentru restul codului.
+
+**Fișiere modificate:** `Core/StartMenuWindow.cpp`
 
 ---
 
