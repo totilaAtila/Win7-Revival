@@ -2581,7 +2581,7 @@ void StartMenuWindow::LoadPinnedItems() {
                 size_t p = ln.find(kq);
                 if (p == std::wstring::npos) return 0;
                 size_t vs = p + kq.size();
-                return static_cast<DWORD>(_wtoul(ln.c_str() + vs));
+                return static_cast<DWORD>(wcstoul(ln.c_str() + vs, nullptr, 10));
             };
             while (std::getline(f, line)) {
                 if (line.find(L'{') != std::wstring::npos) { cur = {}; inItem = true; }
