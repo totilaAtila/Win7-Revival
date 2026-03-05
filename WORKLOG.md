@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-03-05 (session 17 — fluidity overhaul + dynamic pinned list + right-click pin/unpin + ClearType fix)
+Last updated: 2026-03-05 (session 17 — fluidity + pinned list + ClearType + right-click context menu fix + _wtoul portability)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -131,6 +131,29 @@ New requirement (non-negotiable, §10):
 
 **Fix:** înlocuit `ANTIALIASED_QUALITY` → `CLEARTYPE_QUALITY` în toate cele **17** apeluri `CreateFontW` din `StartMenuWindow.cpp`.
 ClearType folosește sub-pixel rendering (R/G/B pe pixel), rezultând text mai fin și mai crisp la aceeași greutate.
+
+---
+
+#### Fix portabilitate `_wtoul` → `wcstoul` (commit 532a19e, 2026-03-05)
+
+**Context:** `_wtoul` este extensie non-standard MSVC, indisponibilă pe compilatoare MinGW/Clang și pe builds cu `/Za`. Build local eșua cu eroare la linkare.
+
+**Fix:** înlocuit toate apelurile `_wtoul` cu echivalentul standard `wcstoul` (bază 10). Schimbare push-ată direct pe `main` de utilizator.
+
+---
+
+#### Fix right-click context menus — `AttachThreadInput` (PR #71, 2026-03-05)
+
+**Problemă:** click dreapta pe orice element din Start Menu nu producea niciun efect.
+
+**Root cause:** fereastra e creată cu `WS_EX_NOACTIVATE + SW_SHOWNOACTIVATE` → nu devine niciodată foreground window. `SetForegroundWindow(m_hwnd)` eșua tăcut (Windows interzice apelul dacă procesul nu e foreground). `TrackPopupMenu` afișa popup-ul și îl închidea instantaneu.
+
+**Fix aplicat** (`StartMenuWindow.cpp`):
+- `ActivateForPopup(hwnd)` helper: `AttachThreadInput(fgTid, myTid, TRUE)` → `SetForegroundWindow` → `AttachThreadInput(FALSE)` — forțează thread-ul nostru în foreground input queue indiferent de stilul ferestrei.
+- `PostMessage(m_hwnd, WM_NULL, 0, 0)` după `TrackPopupMenu` — dismissal curat la Esc / click în afară.
+- Adăugat opțiunea **"Pin to Taskbar"** în meniul din All Programs: verbul shell `TaskbarPin` aplicat pe `MenuNode::lnkPath`.
+
+**Fișiere modificate:** `Core/StartMenuWindow.cpp`
 
 ---
 
