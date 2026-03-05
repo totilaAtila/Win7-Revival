@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-03-05 (session 17 — fluidity overhaul + dynamic pinned list + right-click pin/unpin)
+Last updated: 2026-03-05 (session 17 — fluidity overhaul + dynamic pinned list + right-click pin/unpin + ClearType fix)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -120,6 +120,17 @@ New requirement (non-negotiable, §10):
 **Motivație:** eliminarea sacadărilor mouse cauzate de hook-uri blocate, afișare instantanee a meniului, listă pinned editabilă de utilizator.
 
 **Fișiere modificate:** `Core/Core.cpp`, `Core/StartMenuWindow.h`, `Core/StartMenuWindow.cpp`
+
+---
+
+#### Fix text quality — ClearType (PR #69, 2026-03-05)
+
+**Context:** textul din meniu apărea vizual "bold" din cauza a două efecte cumulate:
+1. `FW_SEMIBOLD` folosit pe foldere (All Programs), username, submeniu — corect și intenționat (parity Win7)
+2. `ANTIALIASED_QUALITY` pe toate fonturile — greyscale antialiasing îngroașă gliful la dimensiuni mici (13-15px)
+
+**Fix:** înlocuit `ANTIALIASED_QUALITY` → `CLEARTYPE_QUALITY` în toate cele **17** apeluri `CreateFontW` din `StartMenuWindow.cpp`.
+ClearType folosește sub-pixel rendering (R/G/B pe pixel), rezultând text mai fin și mai crisp la aceeași greutate.
 
 ---
 
