@@ -18,6 +18,10 @@
 - **RGB Color Control** — Independent R/G/B sliders for background and text color per panel
 - **Opacity Control** — 0–100% adjustable per panel
 - **Enable/Disable per panel** — Toggle Taskbar and Start Menu overlays independently
+- **Blur / Acrylic effect** — Optional acrylic blur behind the overlay (per panel)
+- **Theme Presets** — One-click presets: Classic Win7, Aero Glass, Dark
+- **Border / Accent Color** — Separate color control for the Start Menu border
+- **Menu Items** — Show or hide individual items in the Start Menu right column
 - **Run at Startup** — Optional auto-start via Windows registry; starts silently in System Tray
 - **System Tray icon** — Minimize to tray; right-click menu (Open / Exit); double-click to restore
 - **System Theme Support** — Follows Windows light/dark theme automatically
@@ -44,10 +48,10 @@ CrystalFrame.Core.dll  (C++20, Win32)
 - Explorer restart recovery (WinEvent hook)
 
 **CrystalFrame.Dashboard** — Settings UI (C# .NET 8, WinUI 3)
-- Compact main window: Core on/off toggle, Run at Startup, panel navigation
-- Separate DetailWindow per panel (Taskbar / Start Menu settings)
-- Dynamic window sizing (SizeToContent via `UIElement.Measure`)
-- Real-time status indicators
+- Single compact window (460×560 px), fixed size — no scroll on the window itself
+- Slim header: Core Engine status, Core ON/OFF toggle, Run at Startup toggle
+- Tab strip: **Taskbar** | **Start Menu** — all settings in-window, scrollable per tab
+- Real-time status indicators (detection dot, connection status)
 
 ### Technology Stack
 
@@ -97,24 +101,37 @@ Click **Core Engine** toggle → ON to start the overlay engine.
 
 ## Usage
 
-### Main Window
+### Header (always visible)
 
 | Control | Action |
 |---------|--------|
-| **Taskbar** button | Open Taskbar settings panel |
-| **Start Menu** button | Open Start Menu settings panel |
+| Core status dot | Green = engine running, Gray = stopped |
 | Core Engine toggle | Start / stop the overlay engine |
-| Run at startup toggle | Enable / disable Windows registry autostart |
+| Startup toggle | Enable / disable Windows registry autostart |
 
-### Detail Window (per panel)
+### Taskbar tab
 
 | Control | Action |
 |---------|--------|
-| Panel enable toggle | Enable / disable this overlay |
+| Taskbar Overlay toggle | Enable / disable the Taskbar overlay |
 | Transparency slider | 0–100% opacity |
-| R / G / B sliders | Background color (and Text Color for Start Menu) |
+| R / G / B sliders | Background color |
 | Color preview bar | Live preview of the selected color |
-| Menu Items checkboxes | Choose which items appear in Start Menu *(Start Menu panel only)* |
+| Blur (acrylic) toggle | Enable acrylic blur behind the overlay |
+
+### Start Menu tab
+
+| Control | Action |
+|---------|--------|
+| Start Menu Overlay toggle | Enable / disable the Start Menu overlay |
+| Transparency slider | 0–100% opacity |
+| Blur (acrylic) toggle | Enable acrylic blur behind the overlay |
+| Background Color sliders | R / G / B for the menu background |
+| Text Color sliders | R / G / B for menu text |
+| Menu Items checkboxes | Show / hide individual right-column items |
+| Keep Start Menu Open | Pin the menu open to preview effects in real time |
+| Border / Accent Color | R / G / B for the menu border |
+| Theme Presets | Classic Win7 / Aero Glass / Dark — one-click apply |
 
 ---
 
@@ -128,9 +145,6 @@ Click **Core Engine** toggle → ON to start the overlay engine.
 **Start Menu not detected**
 - Expected on some Windows builds; Taskbar overlay continues to work normally
 - Start overlay enables automatically when detection succeeds
-
-**DetailWindow appears off-screen**
-- Fixed in v2.1 — window is now clamped to the display work area on all edges
 
 ---
 
@@ -155,7 +169,7 @@ Click **Core Engine** toggle → ON to start the overlay engine.
 - Explorer restart recovery
 - Run at Startup (registry) — starts hidden in System Tray when launched at boot
 - System theme (light/dark) support
-- Separate DetailWindow with dynamic sizing
+- Compact single-window settings panel (460×560 px) with tab strip (Taskbar / Start Menu)
 - System tray icon — minimize to tray; right-click menu (Open / Exit); double-click to restore
 - Win7-style Start Menu — two-column layout (programs list + system links), All Programs hierarchical tree with folder drill-down, keyboard navigation (Up/Down/Enter/Esc), mouse-wheel scroll, hover-to-open lateral submenus, search box, power menu
 
