@@ -79,15 +79,18 @@ bool Core::Initialize() {
         return false;
     }
 
-    // Set callbacks for Start Menu hook
+    // Set callbacks for Start Menu hook.
+    // IMPORTANT: these lambdas run on the low-level hook thread. They must return
+    // in microseconds — any real work is posted to the UI thread via PostMessage.
     m_startMenuHook->SetShowMenuCallback([this](int x, int y) {
-        OnCustomStartMenuRequested(x, y);
+        HWND hwnd = m_startMenuWindow ? m_startMenuWindow->GetMenuHwnd() : nullptr;
+        if (hwnd) PostMessage(hwnd, StartMenuWindow::WM_APP_SHOW_MENU,
+                              static_cast<WPARAM>(x), static_cast<LPARAM>(y));
     });
 
     m_startMenuHook->SetHideMenuCallback([this]() {
-        if (m_startMenuWindow) {
-            m_startMenuWindow->Hide();
-        }
+        HWND hwnd = m_startMenuWindow ? m_startMenuWindow->GetMenuHwnd() : nullptr;
+        if (hwnd) PostMessage(hwnd, StartMenuWindow::WM_APP_HIDE_MENU, 0, 0);
     });
 
     m_startMenuHook->SetIsMenuVisibleCallback([this]() -> bool {

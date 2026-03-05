@@ -81,10 +81,23 @@ enum class LeftViewMode { Programs, AllPrograms };
 /// Right column : Win7 shell links (Documents, Pictures, Music, …, Control Panel, …)
 /// Bottom bar   : User avatar + name | Power button
 /// </summary>
+// Dynamic pinned item — persisted to JSON, replaces the static s_pinnedItems at runtime.
+struct DynamicPinnedItem {
+    std::wstring name;
+    std::wstring shortName;
+    std::wstring command;
+    COLORREF     iconColor = RGB(64, 64, 68);
+    HICON        hIcon     = nullptr;  // loaded async; pointer-sized, safe concurrent write
+};
+
 class StartMenuWindow {
 public:
     StartMenuWindow();
     ~StartMenuWindow();
+
+    // Posted by Core's hook callbacks to Show/Hide on the UI thread (no work on hook thread).
+    static constexpr UINT WM_APP_SHOW_MENU = WM_USER + 103;
+    static constexpr UINT WM_APP_HIDE_MENU = WM_USER + 104;
 
     /// Initialize window classes (call once at startup)
     bool Initialize();
@@ -190,6 +203,7 @@ private:
     static constexpr UINT_PTR HOVER_TIMER_ID      = 1;
     static constexpr UINT     HOVER_DELAY_MS      = 50;   // was 400 — snappy submenu opening
     static constexpr UINT_PTR HOVER_ANIM_TIMER_ID = 2;    // S-C: hover fade-in animation
+    static constexpr UINT_PTR FADE_TIMER_ID       = 3;    // Show() window fade-in
 
     // Cached Windows login name for the right-column header
     wchar_t m_username[64] = {};
@@ -200,6 +214,23 @@ private:
     // S7 — recently used programs, loaded from UserAssist at Initialize().
     // Shown below pinned items; max RECENT_COUNT entries, sorted by last-run time.
     std::vector<RecentItem> m_recentItems;
+
+    // Dynamic pinned list (replaces static s_pinnedItems at runtime).
+    // Loaded from JSON at Initialize(); saved on every pin/unpin.
+    std::vector<DynamicPinnedItem> m_dynamicPinnedItems;
+
+    // Cached menu position — computed once at Initialize() and refreshed on
+    // WM_SETTINGCHANGE / WM_DISPLAYCHANGE so Show() never calls FindWindowW.
+    int  m_cachedMenuX      = 0;
+    int  m_cachedMenuY      = 0;
+
+    // Window fade-in state — ramps SetLayeredWindowAttributes 0→255 over ~80ms.
+    BYTE     m_fadeAlpha    = 255;
+    UINT_PTR m_fadeTimer    = 0;
+
+    // Transparency applied flag — ApplyTransparency() is skipped on Show() if
+    // already applied; only re-applied when blur/color/opacity config changes.
+    bool m_transparencyApplied = false;
 
     // Background icon loading (S6/S7): icons are loaded on a worker thread so
     // that Initialize() returns quickly and the hook thread is not blocked.
@@ -293,10 +324,8 @@ private:
     static const PinnedItem    s_pinnedItems[PROG_COUNT];
     static const Win7RightItem s_rightItems[RIGHT_ITEM_COUNT];
 
-    // S6 — real system icons loaded once in Initialize(), freed in Shutdown().
-    // Declared after PROG_COUNT / RIGHT_ITEM_COUNT so MSVC can resolve the sizes.
-    // NULL entries mean "no icon available → fall back to DrawIconSquare".
-    HICON m_pinnedIcons[PROG_COUNT]      = {};  // 32×32 for pinned app list
+    // S6 — real system icons for the right column (16×16).
+    // Pinned app icons are now stored inside DynamicPinnedItem::hIcon.
     HICON m_rightIcons[RIGHT_ITEM_COUNT] = {};  // 16×16 for right-column items
 
     // ── Win32 plumbing ──────────────────────────────────────────────────────
@@ -387,6 +416,17 @@ private:
     // ── Name helpers ─────────────────────────────────────────────────────────
     const wchar_t* GetMenuItemName(int index);
     const wchar_t* GetTitle();
+
+    // ── Pinned list — dynamic, persisted ─────────────────────────────────────
+    void LoadPinnedItems();
+    void SavePinnedItems();
+    void UnpinItem(int index);
+    void PinItemFromAllPrograms(int apIndex);
+    void ShowPinnedContextMenu(int pinnedIndex, POINT screenPt);
+    void ShowAllProgramsContextMenu(int apIndex, POINT screenPt);
+
+    // ── Position cache ────────────────────────────────────────────────────────
+    void CacheMenuPosition();
 
     // ── Persistence ──────────────────────────────────────────────────────────
     void LoadCustomNames();

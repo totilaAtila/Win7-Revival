@@ -200,6 +200,19 @@ bool StartMenuWindow::Initialize() {
     m_programTree = BuildAllProgramsTree();
     CF_LOG(Info, "All Programs tree cached: " << m_programTree.size() << " top-level nodes");
 
+    // Load dynamic pinned list from JSON (falls back to built-in defaults).
+    LoadPinnedItems();
+
+    // Pre-create the menu window now so Show() needs zero setup work.
+    // The window is kept hidden (SW_HIDE) until the user opens it.
+    if (!CreateMenuWindow()) {
+        CF_LOG(Error, "Failed to pre-create Start Menu window");
+        return false;
+    }
+
+    // Cache taskbar/Start-button position so Show() is a single SetWindowPos call.
+    CacheMenuPosition();
+
     // Launch background thread for all SHGetFileInfoW / SHGetStockIconInfo calls.
     // Icons paint as colored-square fallbacks until m_iconsLoaded becomes true.
     m_iconThread = std::thread(&StartMenuWindow::LoadIconsAsync, this);
@@ -218,8 +231,8 @@ void StartMenuWindow::Shutdown() {
         m_iconThread.join();
 
     // S6 — release icon handles before window destruction.
-    for (int i = 0; i < PROG_COUNT; ++i) {
-        if (m_pinnedIcons[i]) { DestroyIcon(m_pinnedIcons[i]); m_pinnedIcons[i] = nullptr; }
+    for (auto& item : m_dynamicPinnedItems) {
+        if (item.hIcon) { DestroyIcon(item.hIcon); item.hIcon = nullptr; }
     }
     for (int i = 0; i < RIGHT_ITEM_COUNT; ++i) {
         if (m_rightIcons[i]) { DestroyIcon(m_rightIcons[i]); m_rightIcons[i] = nullptr; }
@@ -250,31 +263,29 @@ void StartMenuWindow::Shutdown() {
 //   • m_programTree is fully built (by BuildAllProgramsTree) before this thread
 //     starts, and the main thread never modifies it during icon loading (navigation
 //     only reads children pointers; Hide() only resets the nav stack).
-//   • m_pinnedIcons[] and m_rightIcons[] are pointer-sized; writes are atomic on
-//     x86-64 and safe to read with a nullptr check in paint code.
+//   • m_dynamicPinnedItems is fully built (LoadPinnedItems) before this thread
+//     starts and is never resized during loading; hIcon writes are pointer-sized
+//     and safe on x86-64 (same guarantee as the former m_pinnedIcons[] array).
 //   • m_recentItems is empty until this thread assigns the final vector; paint
 //     code only iterates it after m_iconsLoaded == true (acquire).
 void StartMenuWindow::LoadIconsAsync() {
     CF_LOG(Info, "LoadIconsAsync: start");
 
-    // S6.1 — Pinned app icons (32×32).
-    for (int i = 0; i < PROG_COUNT; ++i) {
+    // S6.1 — Pinned app icons (32×32). Try direct command first, then .lnk lookup.
+    for (auto& item : m_dynamicPinnedItems) {
         SHFILEINFOW sfi = {};
-        if (SHGetFileInfoW(s_pinnedItems[i].command, 0, &sfi, sizeof(sfi),
-                           SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
-            m_pinnedIcons[i] = sfi.hIcon;
-    }
-
-    // S6.2 — UWP fallback: search the All Programs tree for a .lnk with the same
-    // display name, then extract the icon from the .lnk (shell resolves AppUserModelId).
-    for (int i = 0; i < PROG_COUNT; ++i) {
-        if (m_pinnedIcons[i]) continue;
-        std::wstring lnkPath = FindLnkPathByName(m_programTree, s_pinnedItems[i].name);
-        if (lnkPath.empty()) continue;
-        SHFILEINFOW sfi = {};
-        if (SHGetFileInfoW(lnkPath.c_str(), 0, &sfi, sizeof(sfi),
-                           SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
-            m_pinnedIcons[i] = sfi.hIcon;
+        if (SHGetFileInfoW(item.command.c_str(), 0, &sfi, sizeof(sfi),
+                           SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon) {
+            item.hIcon = sfi.hIcon;
+            continue;
+        }
+        // S6.2 — UWP fallback via .lnk in All Programs tree
+        std::wstring lnkPath = FindLnkPathByName(m_programTree, item.name);
+        if (!lnkPath.empty()) {
+            if (SHGetFileInfoW(lnkPath.c_str(), 0, &sfi, sizeof(sfi),
+                               SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
+                item.hIcon = sfi.hIcon;
+        }
     }
 
     // S6.5 — All Programs tree icons (recursive).
@@ -528,72 +539,32 @@ bool StartMenuWindow::CreateMenuWindow() {
 }
 
 // ── Show / Hide ──────────────────────────────────────────────────────────────
-void StartMenuWindow::Show(int x, int y) {
+void StartMenuWindow::Show(int /*x*/, int /*y*/) {
     CF_LOG(Info, "StartMenuWindow::Show");
 
-    if (!m_hwnd && !CreateMenuWindow()) return;
+    if (!m_hwnd) return;  // Pre-created at Initialize()
 
-    int screenW = GetSystemMetrics(SM_CXSCREEN);
-    int screenH = GetSystemMetrics(SM_CYSCREEN);
+    // Refresh cached position in case the taskbar moved since last open.
+    CacheMenuPosition();
 
-    // Locate taskbar and detect its orientation
-    HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
-    RECT tbRect  = {};
-    bool hasTb   = taskbar && GetWindowRect(taskbar, &tbRect);
-
-    // Detect Start button position (best-effort; fallback to hint x/y from hook)
-    int sbLeft = x, sbTop = y;
-    if (taskbar) {
-        HWND sb = FindWindowExW(taskbar, nullptr, L"Start", nullptr);
-        if (!sb) sb = FindWindowExW(taskbar, nullptr, L"TrayButton", nullptr);
-        if (sb) {
-            RECT sbRect = {};
-            if (GetWindowRect(sb, &sbRect)) {
-                sbLeft = sbRect.left;
-                sbTop  = sbRect.top;
-            }
-        }
+    // Apply transparency once if not yet done (lazy: skip on every Show()).
+    if (!m_transparencyApplied) {
+        ApplyTransparency();
+        m_transparencyApplied = true;
     }
 
-    int menuX, menuY;
-
-    if (hasTb) {
-        int tbW = tbRect.right  - tbRect.left;
-        int tbH = tbRect.bottom - tbRect.top;
-
-        bool tbLeft  = tbW < tbH && tbRect.left <= screenW / 2;
-        bool tbRight = tbW < tbH && tbRect.left >  screenW / 2;
-        bool tbTop   = tbW >= tbH && tbRect.top <= screenH / 2;
-
-        if (tbLeft) {
-            menuX = tbRect.right + 1;
-            menuY = sbTop;
-        } else if (tbRight) {
-            menuX = tbRect.left - WIDTH - 1;
-            menuY = sbTop;
-        } else if (tbTop) {
-            menuX = sbLeft;
-            menuY = tbRect.bottom + 1;
-        } else {
-            menuX = sbLeft;
-            menuY = tbRect.top - HEIGHT - 1;
-        }
-    } else {
-        menuX = 0;
-        menuY = screenH - HEIGHT - 48;
-    }
-
-    menuX = max(0, min(menuX, screenW - WIDTH));
-    menuY = max(0, min(menuY, screenH - HEIGHT));
-
-    SetWindowPos(m_hwnd, HWND_TOPMOST, menuX, menuY, WIDTH, HEIGHT,
-                 SWP_SHOWWINDOW | SWP_NOACTIVATE);
-    ApplyTransparency();
+    // Start fade-in: set window alpha to 0, show, then ramp to 255 over ~80ms.
+    SetLayeredWindowAttributes(m_hwnd, 0, 0, LWA_ALPHA);
+    SetWindowPos(m_hwnd, HWND_TOPMOST, m_cachedMenuX, m_cachedMenuY, 0, 0,
+                 SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE);
     ShowWindow(m_hwnd, SW_SHOWNOACTIVATE);
-    UpdateWindow(m_hwnd);
     m_visible = true;
 
-    CF_LOG(Info, "Start Menu shown at (" << menuX << ", " << menuY << ")");
+    m_fadeAlpha = 0;
+    if (!m_fadeTimer)
+        m_fadeTimer = SetTimer(m_hwnd, FADE_TIMER_ID, 16, NULL);
+
+    CF_LOG(Info, "Start Menu shown at (" << m_cachedMenuX << ", " << m_cachedMenuY << ")");
 }
 
 void StartMenuWindow::Hide() {
@@ -602,6 +573,9 @@ void StartMenuWindow::Hide() {
     if (m_pinned) return;
 
     if (m_hwnd && m_visible) {
+        if (m_fadeTimer) { KillTimer(m_hwnd, FADE_TIMER_ID); m_fadeTimer = 0; }
+        m_fadeAlpha = 255;
+        SetLayeredWindowAttributes(m_hwnd, 0, 255, LWA_ALPHA);
         ShowWindow(m_hwnd, SW_HIDE);
         m_visible          = false;
         // Reset to Programs view on every hide
@@ -638,13 +612,16 @@ RECT StartMenuWindow::GetWindowBounds() const {
 // ── Appearance setters ───────────────────────────────────────────────────────
 void StartMenuWindow::SetOpacity(int opacity) {
     m_opacity = opacity;
-    if (m_visible) ApplyTransparency();
+    m_transparencyApplied = false;  // Force re-apply on next Show() or immediately
+    if (m_visible) { ApplyTransparency(); m_transparencyApplied = true; }
 }
 
 void StartMenuWindow::SetBackgroundColor(COLORREF color) {
     m_bgColor = color;
+    m_transparencyApplied = false;
     if (m_visible) {
         ApplyTransparency();
+        m_transparencyApplied = true;
         InvalidateRect(m_hwnd, NULL, FALSE);
     }
 }
@@ -755,7 +732,8 @@ COLORREF StartMenuWindow::AnimatedHoverColor() {
 // ── S15 — SetBlur ─────────────────────────────────────────────────────────────
 void StartMenuWindow::SetBlur(bool useBlur) {
     m_blur = useBlur;
-    if (m_visible) ApplyTransparency();
+    m_transparencyApplied = false;
+    if (m_visible) { ApplyTransparency(); m_transparencyApplied = true; }
 }
 
 // ── S-B — SetPinned / ForceHide ──────────────────────────────────────────────
@@ -995,8 +973,8 @@ void StartMenuWindow::LoadRecentPrograms() {
 
         // Skip if already in pinned list (case-insensitive name match)
         bool alreadyPinned = false;
-        for (int pi = 0; pi < PROG_COUNT; ++pi) {
-            auto pn = std::wstring(s_pinnedItems[pi].name);
+        for (const auto& pin : m_dynamicPinnedItems) {
+            auto pn = pin.name;
             auto dn = displayName;
             for (auto& c : pn) c = static_cast<wchar_t>(towlower(c));
             for (auto& c : dn) c = static_cast<wchar_t>(towlower(c));
@@ -1044,7 +1022,9 @@ void StartMenuWindow::PaintProgramsList(HDC hdc, const RECT& cr) {
         ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     HFONT oldF = (HFONT)SelectObject(hdc, nameFont);
 
-    for (int i = 0; i < PROG_COUNT; ++i) {
+    const int pinnedCount = static_cast<int>(m_dynamicPinnedItems.size());
+    for (int i = 0; i < pinnedCount; ++i) {
+        const DynamicPinnedItem& item = m_dynamicPinnedItems[static_cast<size_t>(i)];
         int itemY = PROG_Y + i * PROG_ITEM_H;
 
         // Hover / keyboard-selection highlight — S-C uses AnimatedHoverColor()
@@ -1066,18 +1046,18 @@ void StartMenuWindow::PaintProgramsList(HDC hdc, const RECT& cr) {
         // Icon — real system icon when available, colored square fallback
         int iconCX = MARGIN + PROG_ICON_SZ / 2 + 4;
         int iconCY = itemY + PROG_ITEM_H / 2;
-        if (iconsReady && m_pinnedIcons[i]) {
+        if (iconsReady && item.hIcon) {
             DrawIconEx(hdc, iconCX - PROG_ICON_SZ / 2, iconCY - PROG_ICON_SZ / 2,
-                       m_pinnedIcons[i], PROG_ICON_SZ, PROG_ICON_SZ, 0, nullptr, DI_NORMAL);
+                       item.hIcon, PROG_ICON_SZ, PROG_ICON_SZ, 0, nullptr, DI_NORMAL);
         } else {
             DrawIconSquare(hdc, iconCX, iconCY, PROG_ICON_SZ,
-                           s_pinnedItems[i].iconColor, s_pinnedItems[i].shortName);
+                           item.iconColor, item.shortName.c_str());
         }
 
         // App name (S15: shadow text)
         RECT nr = { MARGIN + PROG_ICON_SZ + 12, itemY,
                     DIVIDER_X - MARGIN,          itemY + PROG_ITEM_H };
-        DrawShadowText(hdc, s_pinnedItems[i].name, -1, &nr,
+        DrawShadowText(hdc, item.name.c_str(), -1, &nr,
                        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, m_textColor);
     }
 
@@ -1086,10 +1066,10 @@ void StartMenuWindow::PaintProgramsList(HDC hdc, const RECT& cr) {
     // contents are fully visible (happens-before the release store in LoadIconsAsync).
     int recentCount  = m_iconsLoaded.load(std::memory_order_acquire)
                        ? static_cast<int>(m_recentItems.size()) : 0;
-    int recentStartY = PROG_Y + PROG_COUNT * PROG_ITEM_H + 12; // 12px gap (4 sep + 8 pad)
+    int recentStartY = PROG_Y + pinnedCount * PROG_ITEM_H + 12; // 12px gap (4 sep + 8 pad)
 
     for (int i = 0; i < recentCount; ++i) {
-        int itemIdx = PROG_COUNT + i;
+        int itemIdx = pinnedCount + i;
         int itemY   = recentStartY + i * PROG_ITEM_H;
 
         // Hover / keyboard-selection highlight
@@ -1136,7 +1116,7 @@ void StartMenuWindow::PaintProgramsList(HDC hdc, const RECT& cr) {
     DeleteObject(nameFont);
 
     // Thin separator below pinned list (above recent items)
-    int sepY = PROG_Y + PROG_COUNT * PROG_ITEM_H + 4;
+    int sepY = PROG_Y + pinnedCount * PROG_ITEM_H + 4;
     if (sepY < AP_ROW_Y)
         DrawSeparator(hdc, sepY, MARGIN, DIVIDER_X - MARGIN);
 }
@@ -1610,20 +1590,22 @@ void StartMenuWindow::Paint() {
 int StartMenuWindow::GetProgItemAtPoint(POINT pt) {
     if (pt.x < MARGIN || pt.x >= DIVIDER_X - MARGIN) return -1;
 
-    // Pinned zone: indices 0..PROG_COUNT-1
-    if (pt.y >= PROG_Y && pt.y < PROG_Y + PROG_COUNT * PROG_ITEM_H) {
+    const int pinnedCount = static_cast<int>(m_dynamicPinnedItems.size());
+
+    // Pinned zone: indices 0..pinnedCount-1
+    if (pt.y >= PROG_Y && pt.y < PROG_Y + pinnedCount * PROG_ITEM_H) {
         int idx = (pt.y - PROG_Y) / PROG_ITEM_H;
-        if (idx >= 0 && idx < PROG_COUNT) return idx;
+        if (idx >= 0 && idx < pinnedCount) return idx;
     }
 
-    // S7 — Recent zone: indices PROG_COUNT..PROG_COUNT+recentCount-1
+    // S7 — Recent zone: indices pinnedCount..pinnedCount+recentCount-1
     int recentCount  = m_iconsLoaded.load(std::memory_order_acquire)
                        ? static_cast<int>(m_recentItems.size()) : 0;
-    int recentStartY = PROG_Y + PROG_COUNT * PROG_ITEM_H + 12;
+    int recentStartY = PROG_Y + pinnedCount * PROG_ITEM_H + 12;
     if (recentCount > 0 && pt.y >= recentStartY &&
         pt.y < recentStartY + recentCount * PROG_ITEM_H) {
         int idx = (pt.y - recentStartY) / PROG_ITEM_H;
-        if (idx >= 0 && idx < recentCount) return PROG_COUNT + idx;
+        if (idx >= 0 && idx < recentCount) return pinnedCount + idx;
     }
 
     return -1;
@@ -1696,13 +1678,15 @@ int StartMenuWindow::GetRightItemAtPoint(POINT pt) {
 void StartMenuWindow::ExecutePinnedItem(int index) {
     if (index < 0) return;
 
-    if (index < PROG_COUNT) {
+    const int pinnedCount = static_cast<int>(m_dynamicPinnedItems.size());
+    if (index < pinnedCount) {
         // Pinned item
         CF_LOG(Info, "ExecutePinnedItem: " << index);
-        ShellExecuteW(NULL, L"open", s_pinnedItems[index].command, NULL, NULL, SW_SHOW);
+        ShellExecuteW(NULL, L"open", m_dynamicPinnedItems[static_cast<size_t>(index)].command.c_str(),
+                      NULL, NULL, SW_SHOW);
     } else {
-        // S7 — Recently used item (index == PROG_COUNT + recentIdx)
-        int ri = index - PROG_COUNT;
+        // S7 — Recently used item (index == pinnedCount + recentIdx)
+        int ri = index - pinnedCount;
         if (ri >= static_cast<int>(m_recentItems.size())) return;
         CF_LOG(Info, "ExecuteRecentItem index=" << ri);
         ShellExecuteW(NULL, L"open", m_recentItems[ri].exePath.c_str(),
@@ -2322,10 +2306,11 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
             bool down = (wParam == VK_DOWN);
 
             if (m_viewMode == LeftViewMode::Programs) {
-                // Navigation range: 0..PROG_COUNT-1, then AP row
+                // Navigation range: 0..pinnedCount-1, then AP row
                 // S7: total navigable items = pinned + recently used (only after icons loaded)
-                int totalProgItems = PROG_COUNT + (m_iconsLoaded.load(std::memory_order_acquire)
-                                    ? static_cast<int>(m_recentItems.size()) : 0);
+                int totalProgItems = static_cast<int>(m_dynamicPinnedItems.size())
+                                   + (m_iconsLoaded.load(std::memory_order_acquire)
+                                      ? static_cast<int>(m_recentItems.size()) : 0);
                 if (down) {
                     if (m_keySelApRow) {
                         // already at bottom; clamp
@@ -2434,8 +2419,55 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
                 m_hoverAnimTimer = 0;
             }
             InvalidateRect(m_hwnd, NULL, FALSE);
+        } else if (wParam == FADE_TIMER_ID) {
+            // Show() fade-in: ramp SetLayeredWindowAttributes 0→255 over ~80ms (5 ticks × 16ms)
+            m_fadeAlpha = static_cast<BYTE>(min(255, static_cast<int>(m_fadeAlpha) + 51));
+            SetLayeredWindowAttributes(m_hwnd, 0, m_fadeAlpha, LWA_ALPHA);
+            if (m_fadeAlpha >= 255) {
+                KillTimer(m_hwnd, FADE_TIMER_ID);
+                m_fadeTimer = 0;
+            }
         }
         return 0;
+
+    case WM_SETTINGCHANGE:
+    case WM_DISPLAYCHANGE:
+        // Taskbar position / DPI changed — refresh cached menu position.
+        CacheMenuPosition();
+        return 0;
+
+    case WM_APP_SHOW_MENU:
+        // Posted by Core's hook callback — Show/Hide on the UI thread.
+        if (m_visible)
+            Hide();
+        else
+            Show(static_cast<int>(wParam), static_cast<int>(lParam));
+        return 0;
+
+    case WM_APP_HIDE_MENU:
+        Hide();
+        return 0;
+
+    case WM_RBUTTONDOWN: {
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        POINT screenPt = pt;
+        ClientToScreen(m_hwnd, &screenPt);
+
+        if (m_viewMode == LeftViewMode::Programs) {
+            int p = GetProgItemAtPoint(pt);
+            // Only show context menu on pinned items (not on recent items)
+            if (p >= 0 && p < static_cast<int>(m_dynamicPinnedItems.size()))
+                ShowPinnedContextMenu(p, screenPt);
+        } else if (m_viewMode == LeftViewMode::AllPrograms) {
+            int ap = GetApItemAtPoint(pt);
+            if (ap >= 0) {
+                const auto& nodes = CurrentApNodes();
+                if (!nodes[static_cast<size_t>(ap)].isFolder)
+                    ShowAllProgramsContextMenu(ap, screenPt);
+            }
+        }
+        return 0;
+    }
 
     case WM_MOUSEWHEEL: {
         // Only scroll in AllPrograms view, over the left column.
@@ -2473,6 +2505,231 @@ const wchar_t* StartMenuWindow::GetMenuItemName(int index) {
 const wchar_t* StartMenuWindow::GetTitle() {
     if (!m_customTitle.empty()) return m_customTitle.c_str();
     return L"CrystalFrame";
+}
+
+// ── Position cache ────────────────────────────────────────────────────────────
+void StartMenuWindow::CacheMenuPosition() {
+    int screenW = GetSystemMetrics(SM_CXSCREEN);
+    int screenH = GetSystemMetrics(SM_CYSCREEN);
+
+    HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
+    RECT tbRect  = {};
+    bool hasTb   = taskbar && GetWindowRect(taskbar, &tbRect);
+
+    int sbLeft = 0, sbTop = 0;
+    if (taskbar) {
+        HWND sb = FindWindowExW(taskbar, nullptr, L"Start", nullptr);
+        if (!sb) sb = FindWindowExW(taskbar, nullptr, L"TrayButton", nullptr);
+        if (sb) {
+            RECT sbRect = {};
+            if (GetWindowRect(sb, &sbRect)) {
+                sbLeft = sbRect.left;
+                sbTop  = sbRect.top;
+            }
+        }
+    }
+
+    if (hasTb) {
+        int tbW = tbRect.right  - tbRect.left;
+        int tbH = tbRect.bottom - tbRect.top;
+        bool tbLeft  = tbW < tbH && tbRect.left <= screenW / 2;
+        bool tbRight = tbW < tbH && tbRect.left >  screenW / 2;
+        bool tbTop   = tbW >= tbH && tbRect.top <= screenH / 2;
+        if (tbLeft)       { m_cachedMenuX = tbRect.right + 1;        m_cachedMenuY = sbTop; }
+        else if (tbRight) { m_cachedMenuX = tbRect.left - WIDTH - 1; m_cachedMenuY = sbTop; }
+        else if (tbTop)   { m_cachedMenuX = sbLeft; m_cachedMenuY = tbRect.bottom + 1; }
+        else              { m_cachedMenuX = sbLeft; m_cachedMenuY = tbRect.top - HEIGHT - 1; }
+    } else {
+        m_cachedMenuX = 0;
+        m_cachedMenuY = screenH - HEIGHT - 48;
+    }
+
+    m_cachedMenuX = max(0, min(m_cachedMenuX, screenW - WIDTH));
+    m_cachedMenuY = max(0, min(m_cachedMenuY, screenH - HEIGHT));
+}
+
+// ── Pinned list — dynamic, persisted ─────────────────────────────────────────
+
+/// JSON path: %LOCALAPPDATA%\CrystalFrame\pinned_apps.json
+/// Format: [{"name":"…","short":"…","cmd":"…","color":0xRRGGBB}, …]
+void StartMenuWindow::LoadPinnedItems() {
+    m_dynamicPinnedItems.clear();
+
+    // Try reading persisted JSON
+    PWSTR lap = nullptr;
+    bool loaded = false;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) {
+        std::wstring path = std::wstring(lap) + L"\\CrystalFrame\\pinned_apps.json";
+        CoTaskMemFree(lap);
+        std::wifstream f(path);
+        if (f.is_open()) {
+            // Minimal JSON array parser: each item on its own line
+            std::wstring line;
+            DynamicPinnedItem cur;
+            bool inItem = false;
+            auto extractStr = [](const std::wstring& ln, const wchar_t* key) -> std::wstring {
+                std::wstring kq = std::wstring(L"\"") + key + L"\":\"";
+                size_t p = ln.find(kq);
+                if (p == std::wstring::npos) return {};
+                size_t q1 = p + kq.size();
+                size_t q2 = ln.find(L'\"', q1);
+                if (q2 == std::wstring::npos) return {};
+                return ln.substr(q1, q2 - q1);
+            };
+            auto extractNum = [](const std::wstring& ln, const wchar_t* key) -> DWORD {
+                std::wstring kq = std::wstring(L"\"") + key + L"\":";
+                size_t p = ln.find(kq);
+                if (p == std::wstring::npos) return 0;
+                size_t vs = p + kq.size();
+                return static_cast<DWORD>(_wtoul(ln.c_str() + vs));
+            };
+            while (std::getline(f, line)) {
+                if (line.find(L'{') != std::wstring::npos) { cur = {}; inItem = true; }
+                if (inItem) {
+                    auto n = extractStr(line, L"name");   if (!n.empty()) cur.name = n;
+                    auto s = extractStr(line, L"short");  if (!s.empty()) cur.shortName = s;
+                    auto c = extractStr(line, L"cmd");    if (!c.empty()) cur.command = c;
+                    auto col = extractNum(line, L"color"); if (col) cur.iconColor = col;
+                }
+                if (inItem && line.find(L'}') != std::wstring::npos) {
+                    if (!cur.name.empty() && !cur.command.empty())
+                        m_dynamicPinnedItems.push_back(cur);
+                    inItem = false;
+                }
+            }
+            loaded = !m_dynamicPinnedItems.empty();
+        }
+    }
+
+    // Fall back to built-in defaults
+    if (!loaded) {
+        for (int i = 0; i < PROG_COUNT; ++i) {
+            DynamicPinnedItem di;
+            di.name      = s_pinnedItems[i].name;
+            di.shortName = s_pinnedItems[i].shortName;
+            di.command   = s_pinnedItems[i].command;
+            di.iconColor = s_pinnedItems[i].iconColor;
+            m_dynamicPinnedItems.push_back(di);
+        }
+    }
+}
+
+void StartMenuWindow::SavePinnedItems() {
+    PWSTR lap = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
+    std::wstring dir = std::wstring(lap) + L"\\CrystalFrame";
+    CoTaskMemFree(lap);
+    CreateDirectoryW(dir.c_str(), NULL);
+
+    std::wofstream f(dir + L"\\pinned_apps.json");
+    if (!f.is_open()) return;
+
+    f << L"[\n";
+    for (size_t i = 0; i < m_dynamicPinnedItems.size(); ++i) {
+        const auto& item = m_dynamicPinnedItems[i];
+        // Escape backslashes in command string
+        std::wstring cmd = item.command;
+        std::wstring escaped;
+        for (wchar_t ch : cmd) {
+            if (ch == L'\\') escaped += L"\\\\";
+            else if (ch == L'"') escaped += L"\\\"";
+            else escaped += ch;
+        }
+        f << L"  {\"name\":\"" << item.name
+          << L"\",\"short\":\"" << item.shortName
+          << L"\",\"cmd\":\"" << escaped
+          << L"\",\"color\":" << static_cast<DWORD>(item.iconColor) << L"}";
+        if (i + 1 < m_dynamicPinnedItems.size()) f << L",";
+        f << L"\n";
+    }
+    f << L"]\n";
+}
+
+void StartMenuWindow::UnpinItem(int index) {
+    if (index < 0 || index >= static_cast<int>(m_dynamicPinnedItems.size())) return;
+    if (!m_iconsLoaded.load(std::memory_order_acquire)) return; // Wait until icons done
+
+    if (m_dynamicPinnedItems[static_cast<size_t>(index)].hIcon)
+        DestroyIcon(m_dynamicPinnedItems[static_cast<size_t>(index)].hIcon);
+    m_dynamicPinnedItems.erase(m_dynamicPinnedItems.begin() + index);
+    SavePinnedItems();
+
+    // Clamp hover/key selection so they don't point past the new list end
+    int newCount = static_cast<int>(m_dynamicPinnedItems.size());
+    if (m_hoveredProgIndex >= newCount) m_hoveredProgIndex = -1;
+    if (m_keySelProgIndex  >= newCount) m_keySelProgIndex  = -1;
+
+    InvalidateRect(m_hwnd, NULL, FALSE);
+}
+
+void StartMenuWindow::PinItemFromAllPrograms(int apIndex) {
+    if (!m_iconsLoaded.load(std::memory_order_acquire)) return;
+
+    const auto& nodes = CurrentApNodes();
+    if (apIndex < 0 || apIndex >= static_cast<int>(nodes.size())) return;
+    const MenuNode& node = nodes[static_cast<size_t>(apIndex)];
+    if (node.isFolder) return;
+
+    // Don't add duplicates (case-insensitive)
+    for (const auto& p : m_dynamicPinnedItems) {
+        auto pn = p.name, nn = node.name;
+        for (auto& c : pn) c = static_cast<wchar_t>(towlower(c));
+        for (auto& c : nn) c = static_cast<wchar_t>(towlower(c));
+        if (pn == nn) return;
+    }
+
+    DynamicPinnedItem di;
+    di.name      = node.name;
+    di.shortName = node.name.size() >= 3 ? node.name.substr(0, 3) : node.name;
+    di.command   = node.lnkPath.empty() ? node.name : node.lnkPath;
+    di.iconColor = RGB(64, 64, 68);
+    di.hIcon     = node.hIcon ? CopyIcon(node.hIcon) : nullptr;
+    m_dynamicPinnedItems.push_back(di);
+    SavePinnedItems();
+
+    // If the icon wasn't already loaded (edge case), kick off a quick load
+    if (!di.hIcon && !di.command.empty()) {
+        std::wstring cmd = di.command;
+        DynamicPinnedItem* ptr = &m_dynamicPinnedItems.back();
+        std::thread([this, ptr, cmd]() {
+            SHFILEINFOW sfi = {};
+            if (SHGetFileInfoW(cmd.c_str(), 0, &sfi, sizeof(sfi),
+                               SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
+                ptr->hIcon = sfi.hIcon;
+            if (m_hwnd) PostMessage(m_hwnd, WM_ICONS_LOADED, 0, 0);
+        }).detach();
+    }
+
+    InvalidateRect(m_hwnd, NULL, FALSE);
+}
+
+void StartMenuWindow::ShowPinnedContextMenu(int pinnedIndex, POINT screenPt) {
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return;
+    AppendMenuW(menu, MF_STRING, 1, L"Unpin from Start Menu");
+
+    // SetForegroundWindow needed for TrackPopupMenu to dismiss correctly
+    SetForegroundWindow(m_hwnd);
+    int cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
+                             screenPt.x, screenPt.y, 0, m_hwnd, NULL);
+    DestroyMenu(menu);
+
+    if (cmd == 1)
+        UnpinItem(pinnedIndex);
+}
+
+void StartMenuWindow::ShowAllProgramsContextMenu(int apIndex, POINT screenPt) {
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return;
+    AppendMenuW(menu, MF_STRING, 1, L"Pin to Start Menu");
+
+    SetForegroundWindow(m_hwnd);
+    int cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
+                             screenPt.x, screenPt.y, 0, m_hwnd, NULL);
+    DestroyMenu(menu);
+
+    if (cmd == 1)
+        PinItemFromAllPrograms(apIndex);
 }
 
 // ── Persistence ───────────────────────────────────────────────────────────────
