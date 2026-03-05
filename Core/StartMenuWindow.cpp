@@ -490,7 +490,7 @@ void StartMenuWindow::DrawAvatarCircle(HDC hdc, int cx, int cy, int r) {
         int fontSize = max(10, r - 2);
         HFONT f = CreateFontW(fontSize, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         HFONT oldF = (HFONT)SelectObject(hdc, f);
         ::SetTextColor(hdc, RGB(255, 255, 255));
         SetBkMode(hdc, TRANSPARENT);
@@ -782,7 +782,7 @@ void StartMenuWindow::DrawIconSquare(HDC hdc, int cx, int cy, int sz,
         HFONT font = CreateFontW(
             11, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         HFONT oldFont = (HFONT)SelectObject(hdc, font);
         ::SetTextColor(hdc, textColor);
         SetBkMode(hdc, TRANSPARENT);
@@ -1019,7 +1019,7 @@ void StartMenuWindow::PaintProgramsList(HDC hdc, const RECT& cr) {
 
     HFONT nameFont = CreateFontW(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     HFONT oldF = (HFONT)SelectObject(hdc, nameFont);
 
     const int pinnedCount = static_cast<int>(m_dynamicPinnedItems.size());
@@ -1142,10 +1142,10 @@ void StartMenuWindow::PaintAllProgramsView(HDC hdc, const RECT& cr) {
 
     HFONT nameFont = CreateFontW(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     HFONT boldFont = CreateFontW(14, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     HFONT oldF = (HFONT)SelectObject(hdc, nameFont);
 
     for (int i = 0; i < count; ++i) {
@@ -1250,7 +1250,7 @@ void StartMenuWindow::PaintApRow(HDC hdc, const RECT& cr) {
 
     HFONT rowFont = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     HFONT oldF = (HFONT)SelectObject(hdc, rowFont);
     ::SetTextColor(hdc, m_textColor);
     SetBkMode(hdc, TRANSPARENT);
@@ -1301,7 +1301,7 @@ void StartMenuWindow::PaintWin7SearchBox(HDC hdc, const RECT& cr) {
     // Placeholder text
     HFONT ph = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     HFONT oldF = (HFONT)SelectObject(hdc, ph);
     ::SetTextColor(hdc, RGB(135, 135, 145));
     SetBkMode(hdc, TRANSPARENT);
@@ -1345,13 +1345,13 @@ void StartMenuWindow::PaintWin7RightColumn(HDC hdc, const RECT& cr) {
     // Dummy font for SelectObject chain (initF still needed for HFONT oldF)
     HFONT initF = CreateFontW(16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     HFONT oldF = (HFONT)SelectObject(hdc, initF);
 
     // Username text (S15: shadow text)
     HFONT nmF = CreateFontW(15, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     SelectObject(hdc, nmF);
     RECT nmR = { avCX + avR + 8, 0, cr.right - 8, RC_HDR_H };
     DrawShadowText(hdc, m_username, -1, &nmR,
@@ -1363,7 +1363,7 @@ void StartMenuWindow::PaintWin7RightColumn(HDC hdc, const RECT& cr) {
     // ── Shell link items ─────────────────────────────────────────────────────
     HFONT itemF = CreateFontW(15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     SelectObject(hdc, itemF);
 
     int y = RC_HDR_H + 2;
@@ -1443,13 +1443,13 @@ void StartMenuWindow::PaintBottomBar(HDC hdc, const RECT& cr) {
 
     HFONT initF = CreateFontW(12, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     HFONT oldF = (HFONT)SelectObject(hdc, initF);
 
     // ── "User" label (S15: shadow text) ──
     HFONT nmF = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     SelectObject(hdc, nmF);
     RECT nmR = { avCX + avR + 6, BOTTOM_BAR_Y, DIVIDER_X - MARGIN, cr.bottom };
     DrawShadowText(hdc, m_username, -1, &nmR,
@@ -1487,7 +1487,7 @@ void StartMenuWindow::PaintBottomBar(HDC hdc, const RECT& cr) {
         // Text
         HFONT  sdF = CreateFontW(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         HFONT  oldSdF = (HFONT)SelectObject(hdc, sdF);
         ::SetTextColor(hdc, RGB(10, 10, 10));
         RECT  tr = { sdL, btnTop, sdR, btnBot };
@@ -1513,7 +1513,7 @@ void StartMenuWindow::PaintBottomBar(HDC hdc, const RECT& cr) {
         // Arrow glyph (▼) centred
         HFONT  arF = CreateFontW(10, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Marlett");
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Marlett");
         HFONT  oldArF = (HFONT)SelectObject(hdc, arF);
         ::SetTextColor(hdc, RGB(10, 10, 10));
         RECT  tr = { arrL, btnTop, arrR, btnBot };
@@ -1906,7 +1906,7 @@ void StartMenuWindow::PaintSubMenu(HDC hdc, const RECT& cr) {
     // Title — folder name
     HFONT titleF = CreateFontW(14, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     HFONT oldF = (HFONT)SelectObject(hdc, titleF);
     ::SetTextColor(hdc, m_textColor);
     RECT tr = { SM_X, 0, cr.right - 4, SM_TITLE_H };
@@ -1917,10 +1917,10 @@ void StartMenuWindow::PaintSubMenu(HDC hdc, const RECT& cr) {
     // Items
     HFONT itemF = CreateFontW(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     HFONT boldF = CreateFontW(14, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 
     for (int i = 0; i < count; ++i) {
         const MenuNode& child = folder.children[static_cast<size_t>(i)];
