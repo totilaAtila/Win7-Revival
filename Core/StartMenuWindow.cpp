@@ -2886,19 +2886,14 @@ void StartMenuWindow::PinItemFromAllPrograms(int apIndex) {
 
     m_dynamicPinnedItems.push_back(di);
     SavePinnedItems();
-
-    // If the icon wasn't already loaded (edge case — e.g. lnkPath not in cache
-    // yet), route the async fallback through the cache too.
-    if (!m_dynamicPinnedItems.back().hIcon && !di.command.empty()) {
-        std::wstring cmd = di.command;
-        DynamicPinnedItem* ptr = &m_dynamicPinnedItems.back();
-        std::thread([this, ptr, cmd]() {
-            // Use the cache so the handle is owned + deduped correctly.
-            HICON icon = m_iconCache.GetIcon(cmd, /*small=*/false);
-            if (icon) ptr->hIcon = icon;
-            if (m_hwnd) PostMessage(m_hwnd, WM_ICONS_LOADED, 0, 0);
-        }).detach();
-    }
+    // No async fallback: PinItemFromAllPrograms() is only callable when
+    // m_iconsLoaded == true, which means LoadNodeIcons() has already called
+    // m_iconCache.GetIcon(node.lnkPath) for every tree node.  If the cache
+    // returned nullptr above the icon genuinely does not exist (unresolvable
+    // path); a detached thread calling SHGetFileInfoW on the same path would
+    // also fail, and — critically — IconCache is not thread-safe, so any
+    // concurrent GetIcon / ReleaseAll call would be undefined behaviour.
+    // The colored-square fallback (iconColor) is shown instead.
 
     InvalidateRect(m_hwnd, NULL, FALSE);
 }
