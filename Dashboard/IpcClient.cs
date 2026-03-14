@@ -46,18 +46,36 @@ namespace CrystalFrame.Dashboard
         private Task _listenerTask;
         private CancellationTokenSource _cts;
         private bool _disposed = false;
-        
+
         // ✅ ADDED: Signal for first successful connection
         private TaskCompletionSource<bool> _firstConnectionTcs;
-        
+
         // Reconnection settings
         private static readonly int[] RetryDelaysMs = { 1000, 2000, 4000, 8000, 15000 };
         private const int MaxRetryDelay = 15000;
 
+        // ── Task 6: Heartbeat ─────────────────────────────────────────────────
+        // A lightweight Ping/Pong check sent every HeartbeatIntervalMs.
+        // If the pipe write fails or we receive no Pong within HeartbeatTimeoutMs,
+        // the reconnect loop handles the broken connection automatically.
+        // CoreRestartRequested is raised so the host (MainViewModel / CoreManager)
+        // can restart Core.exe when it appears to have died.
+        private const int HeartbeatIntervalMs = 5000;
+        private const int HeartbeatTimeoutMs  = 3000;
+        private CancellationTokenSource _heartbeatCts;
+        private DateTime _lastPongTime = DateTime.MinValue;
+        private bool _awaitingPong = false;
+
         public event EventHandler<StatusUpdateEventArgs> StatusUpdated;
         public event EventHandler<string> ErrorReceived;
         public event EventHandler<bool> ConnectionChanged;
-        
+        /// <summary>
+        /// Raised when the heartbeat detects that Core is unresponsive and
+        /// the pipe cannot be reconnected.  The subscriber should attempt to
+        /// restart Core.exe and display a status-bar notification.
+        /// </summary>
+        public event EventHandler CoreRestartRequested;
+
         public bool IsConnected { get; private set; }
 
         // ✅ MODIFIED: Now returns when first connection succeeds (or timeout)
@@ -116,8 +134,17 @@ namespace CrystalFrame.Dashboard
 
                     attempt = 0;  // Reset on successful connection
 
+                    // Task 6: start heartbeat loop while connected.
+                    _heartbeatCts = new CancellationTokenSource();
+                    _lastPongTime = DateTime.UtcNow;
+                    _awaitingPong = false;
+                    _ = HeartbeatLoopAsync(_heartbeatCts.Token);
+
                     // Start listener (will return when connection drops)
                     await ListenAsync(ct);
+
+                    // Stop heartbeat when listener exits (connection lost).
+                    _heartbeatCts?.Cancel();
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
@@ -223,6 +250,12 @@ namespace CrystalFrame.Dashboard
                         StatusUpdated?.Invoke(this, new StatusUpdateEventArgs { Status = status });
                         break;
 
+                    case "Pong":
+                        // Task 6: heartbeat reply — record the time so the loop knows Core is alive.
+                        _lastPongTime = DateTime.UtcNow;
+                        _awaitingPong = false;
+                        break;
+
                     case "Error":
                         var errorMsg = doc.RootElement.GetProperty("data").GetProperty("message").GetString();
                         ErrorReceived?.Invoke(this, errorMsg);
@@ -256,14 +289,63 @@ namespace CrystalFrame.Dashboard
             }
         }
 
+        // ── Task 6: Heartbeat loop ────────────────────────────────────────────
+        // Sends a Ping to Core every HeartbeatIntervalMs.  If no Pong arrives
+        // within HeartbeatTimeoutMs the connection is treated as dead:
+        //   1. The pipe is closed so the reconnect loop picks up immediately.
+        //   2. CoreRestartRequested is raised once so the host can relaunch Core.
+        private async Task HeartbeatLoopAsync(CancellationToken ct)
+        {
+            int missedBeats = 0;
+            while (!ct.IsCancellationRequested && IsConnected)
+            {
+                try { await Task.Delay(HeartbeatIntervalMs, ct); }
+                catch (TaskCanceledException) { break; }
+
+                if (ct.IsCancellationRequested) break;
+
+                if (_awaitingPong)
+                {
+                    // Previous Ping was not answered.
+                    var elapsed = (DateTime.UtcNow - _lastPongTime).TotalMilliseconds;
+                    if (elapsed > HeartbeatTimeoutMs)
+                    {
+                        ++missedBeats;
+                        Debug.WriteLine($"IPC heartbeat: no Pong for {elapsed:F0}ms (missed={missedBeats})");
+
+                        if (missedBeats >= 2)
+                        {
+                            Debug.WriteLine("IPC heartbeat: Core unresponsive — requesting restart");
+                            CoreRestartRequested?.Invoke(this, EventArgs.Empty);
+                            missedBeats = 0;
+                        }
+
+                        // Force the reconnect loop to notice the dead connection.
+                        CleanupConnection();
+                        IsConnected = false;
+                        ConnectionChanged?.Invoke(this, false);
+                        break;
+                    }
+                }
+                else
+                {
+                    // Send Ping and mark that we are waiting for a reply.
+                    _awaitingPong = true;
+                    await SendCommandAsync("Ping", new { });
+                }
+            }
+        }
+
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            
+
+            _heartbeatCts?.Cancel();
             _cts?.Cancel();
             _listenerTask?.Wait(2000);
             CleanupConnection();
+            _heartbeatCts?.Dispose();
             _cts?.Dispose();
         }
     }

@@ -30,6 +30,23 @@ namespace CrystalFrame.Dashboard
             _ipc = ipc;
             _config = config;
             _extractor = new CoreExtractor();
+
+            // Task 6: restart Core.exe automatically when the heartbeat detects
+            // that it has died and the pipe cannot be reconnected.
+            _ipc.CoreRestartRequested += OnCoreRestartRequested;
+        }
+
+        private void OnCoreRestartRequested(object sender, EventArgs e)
+        {
+            Debug.WriteLine("[CoreProcessManager] CoreRestartRequested — attempting to restart Core.exe");
+            CoreRunningChanged?.Invoke(this, false);
+
+            // Give the previous process a moment to fully exit before relaunching.
+            System.Threading.Thread.Sleep(500);
+            bool started = StartCore();
+            Debug.WriteLine(started
+                ? "[CoreProcessManager] Core.exe restarted successfully"
+                : "[CoreProcessManager] Failed to restart Core.exe");
         }
 
         /// <summary>

@@ -217,6 +217,10 @@ bool StartMenuWindow::Initialize() {
     // Icons paint as colored-square fallbacks until m_iconsLoaded becomes true.
     m_iconThread = std::thread(&StartMenuWindow::LoadIconsAsync, this);
 
+    // Task 5 — start file-system watcher for Start Menu folders.
+    // Fires WM_APP_REFRESH_TREE when shortcuts are installed/removed.
+    StartFolderWatcher();
+
     // S-G: also kick off avatar loading in background (detached — result arrives via WM_AVATAR_LOADED)
     LoadAvatarAsync();
 
@@ -225,21 +229,28 @@ bool StartMenuWindow::Initialize() {
 }
 
 void StartMenuWindow::Shutdown() {
+    // Stop the file-system watcher first so it does not post new messages.
+    StopFolderWatcher();
+
     // Wait for background icon thread to finish before releasing any resources
     // it may still be writing to (m_pinnedIcons, m_rightIcons, m_recentItems, tree).
     if (m_iconThread.joinable())
         m_iconThread.join();
 
-    // S6 — release icon handles before window destruction.
-    for (auto& item : m_dynamicPinnedItems) {
-        if (item.hIcon) { DestroyIcon(item.hIcon); item.hIcon = nullptr; }
-    }
-    for (int i = 0; i < RIGHT_ITEM_COUNT; ++i) {
-        if (m_rightIcons[i]) { DestroyIcon(m_rightIcons[i]); m_rightIcons[i] = nullptr; }
-    }
-    FreeNodeIcons(m_programTree);
+    // S6 / Task 7 — release all icon handles via IconCache (deduplication means
+    // a single ReleaseAll() covers every HICON, including tree nodes, pinned items,
+    // and right-column entries that were loaded through the cache).
+    m_iconCache.ReleaseAll();
 
-    // S7 — release recently used program icons
+    // Null out all dangling hIcon references so FreeNodeIcons / the loops below
+    // are no-ops (icons already destroyed by the cache).
+    for (auto& item : m_dynamicPinnedItems)
+        item.hIcon = nullptr;
+    for (int i = 0; i < RIGHT_ITEM_COUNT; ++i)
+        m_rightIcons[i] = nullptr;
+    FreeNodeIcons(m_programTree);   // safe: hIcon already nullptr after cache clear
+
+    // S7 — release recently used program icons (not in cache — each loaded once)
     for (auto& ri : m_recentItems) {
         if (ri.hIcon) { DestroyIcon(ri.hIcon); ri.hIcon = nullptr; }
     }
@@ -271,27 +282,27 @@ void StartMenuWindow::Shutdown() {
 void StartMenuWindow::LoadIconsAsync() {
     CF_LOG(Info, "LoadIconsAsync: start");
 
-    // S6.1 — Pinned app icons (32×32). Try direct command first, then .lnk lookup.
+    // S6.1 — Pinned app icons (32×32). Use IconCache to avoid duplicate handles
+    // when a pinned item's command matches a path already loaded for the tree.
     for (auto& item : m_dynamicPinnedItems) {
-        SHFILEINFOW sfi = {};
-        if (SHGetFileInfoW(item.command.c_str(), 0, &sfi, sizeof(sfi),
-                           SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon) {
-            item.hIcon = sfi.hIcon;
-            continue;
-        }
+        HICON icon = m_iconCache.GetIcon(item.command, /*small=*/false);
+        if (icon) { item.hIcon = icon; continue; }
         // S6.2 — UWP fallback via .lnk in All Programs tree
         std::wstring lnkPath = FindLnkPathByName(m_programTree, item.name);
         if (!lnkPath.empty()) {
-            if (SHGetFileInfoW(lnkPath.c_str(), 0, &sfi, sizeof(sfi),
-                               SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
-                item.hIcon = sfi.hIcon;
+            icon = m_iconCache.GetIcon(lnkPath, /*small=*/false);
+            if (icon) item.hIcon = icon;
         }
     }
 
-    // S6.5 — All Programs tree icons (recursive).
-    LoadNodeIcons(m_programTree);
+    // S6.5 — All Programs tree icons (recursive). Locked so RefreshProgramTree
+    // on the UI thread cannot swap the tree while we're writing into it.
+    {
+        std::lock_guard<std::mutex> lk(m_treeMutex);
+        LoadNodeIcons(m_programTree);
+    }
 
-    // S6.4 — Right-column icons (16×16).
+    // S6.4 — Right-column icons (16×16). Use IconCache for dedup.
     for (int i = 0; i < RIGHT_ITEM_COUNT; ++i) {
         const Win7RightItem& ri = s_rightItems[i];
         if (ri.isSeparator) continue;
@@ -307,12 +318,8 @@ void StartMenuWindow::LoadIconsAsync() {
             iconPath = ri.target;
         }
 
-        if (!iconPath.empty()) {
-            SHFILEINFOW sfi = {};
-            if (SHGetFileInfoW(iconPath.c_str(), 0, &sfi, sizeof(sfi),
-                               SHGFI_ICON | SHGFI_SMALLICON) && sfi.hIcon)
-                m_rightIcons[i] = sfi.hIcon;
-        }
+        if (!iconPath.empty())
+            m_rightIcons[i] = m_iconCache.GetIcon(iconPath, /*small=*/true);
     }
 
     // S7 — recently used programs (builds a local vector, then moves it in).
@@ -812,18 +819,12 @@ void StartMenuWindow::DrawSeparator(HDC hdc, int y, int x1, int x2) {
 void StartMenuWindow::LoadNodeIcons(std::vector<MenuNode>& nodes) {
     for (auto& node : nodes) {
         if (node.isFolder) {
-            SHSTOCKICONINFO sii = {};
-            sii.cbSize = sizeof(sii);
-            if (SUCCEEDED(SHGetStockIconInfo(SIID_FOLDER,
-                                             SHGSI_ICON | SHGSI_SMALLICON, &sii)) && sii.hIcon)
-                node.hIcon = sii.hIcon;
+            // Use IconCache: all folders share one SIID_FOLDER handle (no dup).
+            node.hIcon = m_iconCache.GetStockIcon(SIID_FOLDER, /*small=*/true);
             LoadNodeIcons(node.children);   // recurse
         } else if (!node.lnkPath.empty()) {
-            // SHGetFileInfoW on the .lnk file returns the target app's icon.
-            SHFILEINFOW sfi = {};
-            if (SHGetFileInfoW(node.lnkPath.c_str(), 0, &sfi, sizeof(sfi),
-                               SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
-                node.hIcon = sfi.hIcon;
+            // Use IconCache: same .lnk loaded by pinned list AND tree → one handle.
+            node.hIcon = m_iconCache.GetIcon(node.lnkPath, /*small=*/false);
         }
     }
 }
@@ -2091,6 +2092,12 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         InvalidateRect(m_hwnd, nullptr, FALSE);
         return 0;
 
+    case WM_APP_REFRESH_TREE:
+        // Posted by the file-system watcher thread when a Start Menu folder
+        // change is detected.  Rebuild the programs tree on the UI thread.
+        RefreshProgramTree();
+        return 0;
+
     case WM_AVATAR_LOADED:
         // S-G: posted by avatar thread when bitmap is ready — trigger repaint.
         InvalidateRect(m_hwnd, nullptr, FALSE);
@@ -2505,6 +2512,156 @@ const wchar_t* StartMenuWindow::GetMenuItemName(int index) {
 const wchar_t* StartMenuWindow::GetTitle() {
     if (!m_customTitle.empty()) return m_customTitle.c_str();
     return L"CrystalFrame";
+}
+
+// ── Task 5: File-system watcher ───────────────────────────────────────────────
+// Monitors the two Start Menu Programs folders for any file-system change.
+// When a change is detected a WM_APP_REFRESH_TREE message is posted to the
+// menu window so the UI thread rebuilds the programs tree exactly once, rather
+// than rebuilding the entire tree on every menu open.
+void StartMenuWindow::StartFolderWatcher() {
+    m_watcherRunning.store(true, std::memory_order_relaxed);
+
+    m_watcherThread = std::thread([this]() {
+        // Resolve both Start Menu Programs paths.
+        auto resolvePath = [](REFKNOWNFOLDERID id) -> std::wstring {
+            PWSTR p = nullptr;
+            std::wstring result;
+            if (SUCCEEDED(SHGetKnownFolderPath(id, KF_FLAG_DEFAULT, nullptr, &p)) && p) {
+                result = p;
+                CoTaskMemFree(p);
+            }
+            return result;
+        };
+
+        std::wstring paths[2] = {
+            resolvePath(FOLDERID_CommonPrograms),
+            resolvePath(FOLDERID_Programs)
+        };
+
+        // Open directory handles for both folders.
+        HANDLE hDirs[2] = { INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE };
+        HANDLE hEvents[3]; // [0..1] = change events, [2] = stop event
+
+        HANDLE hStopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        hEvents[2] = hStopEvent;
+
+        int dirCount = 0;
+        for (int i = 0; i < 2; ++i) {
+            if (paths[i].empty()) continue;
+            HANDLE h = CreateFileW(paths[i].c_str(),
+                FILE_LIST_DIRECTORY,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                nullptr, OPEN_EXISTING,
+                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+                nullptr);
+            if (h != INVALID_HANDLE_VALUE) {
+                hDirs[dirCount] = h;
+                hEvents[dirCount] = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+                ++dirCount;
+            }
+        }
+
+        // Overlapped buffers for ReadDirectoryChangesW
+        const DWORD kBufSize = 4096;
+        alignas(DWORD) BYTE buf0[kBufSize] = {};
+        alignas(DWORD) BYTE buf1[kBufSize] = {};
+        BYTE* bufs[2] = { buf0, buf1 };
+        OVERLAPPED ov[2] = {};
+
+        // Issue initial ReadDirectoryChangesW calls.
+        auto issueRead = [&](int idx) {
+            if (idx >= dirCount) return;
+            ResetEvent(hEvents[idx]);
+            ov[idx].hEvent = hEvents[idx];
+            ReadDirectoryChangesW(hDirs[idx], bufs[idx], kBufSize,
+                /*watchSubtree=*/TRUE,
+                FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
+                FILE_NOTIFY_CHANGE_LAST_WRITE,
+                nullptr, &ov[idx], nullptr);
+        };
+        for (int i = 0; i < dirCount; ++i) issueRead(i);
+
+        DWORD waitCount = static_cast<DWORD>(dirCount) + 1; // dirs + stop
+        // Move stop event to correct index
+        hEvents[dirCount] = hStopEvent;
+
+        bool needsRefresh = false;
+        while (m_watcherRunning.load(std::memory_order_relaxed)) {
+            // Wait up to 500ms; batch rapid changes to avoid flooding messages.
+            DWORD res = WaitForMultipleObjects(waitCount, hEvents, FALSE,
+                needsRefresh ? 200 : INFINITE);
+
+            if (res == WAIT_TIMEOUT) {
+                // Batch delay elapsed — post refresh if changes were detected.
+                if (needsRefresh && m_hwnd) {
+                    PostMessageW(m_hwnd, WM_APP_REFRESH_TREE, 0, 0);
+                    needsRefresh = false;
+                }
+                continue;
+            }
+
+            if (res == WAIT_FAILED) break;
+
+            int idx = static_cast<int>(res - WAIT_OBJECT_0);
+            if (idx >= dirCount) break; // stop event or error
+
+            // Drain the change buffer and re-arm.
+            DWORD bytes = 0;
+            if (GetOverlappedResult(hDirs[idx], &ov[idx], &bytes, FALSE) && bytes > 0)
+                needsRefresh = true;
+            issueRead(idx);
+        }
+
+        // Cleanup
+        for (int i = 0; i < dirCount; ++i) {
+            CancelIo(hDirs[i]);
+            CloseHandle(hDirs[i]);
+            CloseHandle(hEvents[i]);
+        }
+        CloseHandle(hStopEvent);
+    });
+}
+
+void StartMenuWindow::StopFolderWatcher() {
+    m_watcherRunning.store(false, std::memory_order_relaxed);
+    if (m_watcherThread.joinable())
+        m_watcherThread.join();
+}
+
+// ── Task 3/5: RefreshProgramTree — rebuild on UI thread after watcher fires ───
+// Called on the UI thread from HandleMessage (WM_APP_REFRESH_TREE).
+// Joins the old icon thread, frees all icons, rebuilds the tree, and starts
+// a new icon-loading pass.
+void StartMenuWindow::RefreshProgramTree() {
+    CF_LOG(Info, "RefreshProgramTree: change detected, rebuilding All Programs tree");
+
+    // Stop icon loading for the old tree.
+    if (m_iconThread.joinable())
+        m_iconThread.join();
+
+    m_iconsLoaded.store(false, std::memory_order_relaxed);
+
+    // Release all icons from the old tree (via cache).
+    m_iconCache.ReleaseAll();
+    for (auto& item : m_dynamicPinnedItems) item.hIcon = nullptr;
+    for (int i = 0; i < RIGHT_ITEM_COUNT; ++i)   m_rightIcons[i] = nullptr;
+    for (auto& ri : m_recentItems) { ri.hIcon = nullptr; }
+
+    // Rebuild the tree under the mutex so LoadIconsAsync (new thread) can
+    // safely start reading it without racing with us.
+    {
+        std::lock_guard<std::mutex> lk(m_treeMutex);
+        m_programTree = BuildAllProgramsTree();
+    }
+
+    CF_LOG(Info, "RefreshProgramTree: " << m_programTree.size() << " top-level nodes");
+
+    // Kick off icon loading for the new tree.
+    m_iconThread = std::thread(&StartMenuWindow::LoadIconsAsync, this);
+
+    // Request a repaint so the UI reflects the rebuilt tree immediately.
+    if (m_hwnd) InvalidateRect(m_hwnd, nullptr, FALSE);
 }
 
 // ── Position cache ────────────────────────────────────────────────────────────

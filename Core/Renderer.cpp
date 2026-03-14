@@ -28,11 +28,17 @@ bool Renderer::Initialize() {
     );
 
     if (!m_setWindowCompositionAttribute) {
-        CF_LOG(Error, "SetWindowCompositionAttribute not found in user32.dll");
-        return false;
+        // Task 4: SWCA is undocumented and absent on some Windows 11 builds /
+        // virtualised environments.  Fall back to SetLayeredWindowAttributes so
+        // at least basic alpha transparency (no blur) is still applied.
+        CF_LOG(Warning, "SetWindowCompositionAttribute not found in user32.dll — "
+                        "using SetLayeredWindowAttributes fallback (no blur)");
+        m_wcaUnavailable = true;
     }
 
-    CF_LOG(Info, "Renderer initialized (SetWindowCompositionAttribute ready)");
+    CF_LOG(Info, m_wcaUnavailable
+        ? "Renderer initialized (fallback mode: SetLayeredWindowAttributes)"
+        : "Renderer initialized (SetWindowCompositionAttribute ready)");
     return true;
 }
 
@@ -189,8 +195,25 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
                  << ", RGB=(" << r << "," << g << "," << b << ")"
                  << ", blur=" << useBlur);
 
-    if (!hwnd || !IsWindow(hwnd) || !m_setWindowCompositionAttribute) {
-        CF_LOG(Warning, "[" << windowType << "] ApplyTransparencyWithColor early return");
+    if (!hwnd || !IsWindow(hwnd)) {
+        CF_LOG(Warning, "[" << windowType << "] ApplyTransparencyWithColor early return — invalid hwnd");
+        return;
+    }
+
+    // Task 4: SWCA unavailable — apply basic alpha via SetLayeredWindowAttributes.
+    if (m_wcaUnavailable || !m_setWindowCompositionAttribute) {
+        LONG exStyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
+        if (enabled && opacity > 0) {
+            SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+            // Match the opacity inversion used by the SWCA path.
+            BYTE alpha = static_cast<BYTE>(((100 - opacity) * 255) / 100);
+            SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
+            CF_LOG(Debug, "[" << windowType << "] Fallback: SetLayeredWindowAttributes alpha=" << (int)alpha);
+        } else {
+            // Restore: remove layered style if transparency was disabled.
+            SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
+            CF_LOG(Debug, "[" << windowType << "] Fallback: transparency disabled");
+        }
         return;
     }
 
@@ -238,8 +261,16 @@ void Renderer::RestoreWindow(HWND hwnd) {
     CF_LOG(Info, "RestoreWindow called for HWND 0x"
                  << std::hex << reinterpret_cast<uintptr_t>(hwnd) << std::dec);
 
-    if (!hwnd || !IsWindow(hwnd) || !m_setWindowCompositionAttribute) {
-        if (hwnd && !IsWindow(hwnd)) CF_LOG(Warning, "Window handle is no longer valid, cannot restore");
+    if (!hwnd || !IsWindow(hwnd)) {
+        if (hwnd) CF_LOG(Warning, "Window handle is no longer valid, cannot restore");
+        return;
+    }
+
+    // Task 4: fallback path — just remove the layered style.
+    if (m_wcaUnavailable || !m_setWindowCompositionAttribute) {
+        LONG exStyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
+        SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
+        CF_LOG(Info, "RestoreWindow (fallback): removed WS_EX_LAYERED");
         return;
     }
 

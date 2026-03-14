@@ -70,6 +70,9 @@ public:
 
 private:
     pfnSetWindowCompositionAttribute m_setWindowCompositionAttribute = nullptr;
+    // Task 4: when SWCA is unavailable (some Win11 builds / VMs), fall back to
+    // SetLayeredWindowAttributes for basic alpha transparency without blur.
+    bool m_wcaUnavailable = false;
 
     std::vector<HWND> m_hwndTaskbars;
     HWND m_hwndStart = nullptr;

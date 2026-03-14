@@ -2,11 +2,12 @@
 #include <Windows.h>
 #include <atomic>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <map>
 #include <thread>
 #include <vector>
-#include "AllProgramsEnumerator.h"   // MenuNode, BuildAllProgramsTree
+#include "AllProgramsEnumerator.h"   // MenuNode, BuildAllProgramsTree, IconCache
 
 namespace CrystalFrame {
 
@@ -232,6 +233,12 @@ private:
     // already applied; only re-applied when blur/color/opacity config changes.
     bool m_transparencyApplied = false;
 
+    // ── Thread safety ──────────────────────────────────────────────────────────
+    // Protects m_programTree between the background icon/watcher threads and the
+    // UI (paint) thread.  Lock held only for the duration of individual reads or
+    // the full tree-rebuild cycle so contention is negligible.
+    mutable std::mutex   m_treeMutex;
+
     // Background icon loading (S6/S7): icons are loaded on a worker thread so
     // that Initialize() returns quickly and the hook thread is not blocked.
     // m_iconsLoaded becomes true (release) after all icon writes are complete;
@@ -239,9 +246,23 @@ private:
     std::thread          m_iconThread;
     std::atomic<bool>    m_iconsLoaded{false};
 
+    // ── Shared icon cache (Task 7) ─────────────────────────────────────────────
+    // Owned exclusively by LoadIconsAsync; ReleaseAll() is called on the UI
+    // thread inside RefreshProgramTree() after m_iconThread has been joined.
+    IconCache            m_iconCache;
+
+    // ── File-system watcher (Task 5) ──────────────────────────────────────────
+    // Watches %ProgramData% and %AppData% Start Menu folders.  Posts
+    // WM_APP_REFRESH_TREE to m_hwnd when a change is detected so the UI thread
+    // can rebuild the tree without touching the watcher thread's resources.
+    std::thread          m_watcherThread;
+    std::atomic<bool>    m_watcherRunning{false};
+
     // Posted to m_hwnd by the icon thread when loading is done → triggers repaint.
-    static constexpr UINT WM_ICONS_LOADED  = WM_USER + 101;
-    static constexpr UINT WM_AVATAR_LOADED = WM_USER + 102; // S-G: avatar thread → UI
+    static constexpr UINT WM_ICONS_LOADED    = WM_USER + 101;
+    static constexpr UINT WM_AVATAR_LOADED   = WM_USER + 102; // S-G: avatar thread → UI
+    // Posted by the file-system watcher when a Start Menu folder change is detected.
+    static constexpr UINT WM_APP_REFRESH_TREE = WM_USER + 105;
 
     // S15 — blur switch
     bool m_blur = false;
@@ -405,6 +426,13 @@ private:
     // S-G — avatar background loading
     void LoadAvatarAsync();
     void DrawAvatarCircle(HDC hdc, int cx, int cy, int r);
+
+    // Task 5 — file-system watcher for Start Menu folders
+    void StartFolderWatcher();
+    void StopFolderWatcher();
+
+    // Task 3/5 — rebuild program tree on the UI thread after watcher fires
+    void RefreshProgramTree();
 
     // ── Color helpers ────────────────────────────────────────────────────────
     COLORREF CalculateHoverColor();

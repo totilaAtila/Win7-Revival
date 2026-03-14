@@ -23,6 +23,19 @@ namespace CrystalFrame.Dashboard
         private TrayIconManager? _trayIconManager;
         private bool _exitRequested = false;
 
+        // ── Debounce tokens for opacity/color sliders (Task 2) ────────────────
+        // Each slider group shares one CancellationTokenSource.  Moving a slider
+        // cancels the previous pending send and schedules a new one 50 ms later,
+        // so Core receives at most ~20 commands/s instead of hundreds.
+        private CancellationTokenSource _cts_taskbarOpacity = new();
+        private CancellationTokenSource _cts_taskbarColor   = new();
+        private CancellationTokenSource _cts_startOpacity   = new();
+        private CancellationTokenSource _cts_startBgColor   = new();
+        private CancellationTokenSource _cts_startTextColor = new();
+        private CancellationTokenSource _cts_startBorderColor = new();
+
+        private const int SliderDebounceMs = 50;
+
         [DllImport("user32.dll")]
         private static extern bool SetForegroundWindow(IntPtr hWnd);
 
@@ -363,12 +376,29 @@ namespace CrystalFrame.Dashboard
             _viewModel.OnTaskbarBlurChanged(TaskbarBlurToggle.IsOn);
         }
 
+        // ── Generic debounce helper ───────────────────────────────────────────
+        // Cancels any in-flight delay for the given CTS, then waits SliderDebounceMs
+        // before invoking |action|.  If the slider moves again within the window
+        // the previous Task is cancelled and a fresh one is started.
+        private async void DebounceSlider(ref CancellationTokenSource cts, Action action)
+        {
+            cts.Cancel();
+            cts = new CancellationTokenSource();
+            var token = cts.Token;
+            try
+            {
+                await Task.Delay(SliderDebounceMs, token);
+                if (!token.IsCancellationRequested) action();
+            }
+            catch (TaskCanceledException) { /* slider moved again — ignore */ }
+        }
+
         private void TaskbarOpacity_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
         {
             int value = (int)e.NewValue;
             TaskbarOpacityValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
-            _viewModel.OnTaskbarOpacityChanged(value);
+            DebounceSlider(ref _cts_taskbarOpacity, () => _viewModel.OnTaskbarOpacityChanged(value));
         }
 
         private void TaskbarColorR_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -377,7 +407,9 @@ namespace CrystalFrame.Dashboard
             TaskbarColorRValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateTaskbarColorPreview();
-            _viewModel.OnTaskbarColorChanged(value, (int)TaskbarColorGSlider.Value, (int)TaskbarColorBSlider.Value);
+            DebounceSlider(ref _cts_taskbarColor, () =>
+                _viewModel.OnTaskbarColorChanged(value,
+                    (int)TaskbarColorGSlider.Value, (int)TaskbarColorBSlider.Value));
         }
 
         private void TaskbarColorG_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -386,7 +418,9 @@ namespace CrystalFrame.Dashboard
             TaskbarColorGValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateTaskbarColorPreview();
-            _viewModel.OnTaskbarColorChanged((int)TaskbarColorRSlider.Value, value, (int)TaskbarColorBSlider.Value);
+            DebounceSlider(ref _cts_taskbarColor, () =>
+                _viewModel.OnTaskbarColorChanged(
+                    (int)TaskbarColorRSlider.Value, value, (int)TaskbarColorBSlider.Value));
         }
 
         private void TaskbarColorB_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -395,7 +429,9 @@ namespace CrystalFrame.Dashboard
             TaskbarColorBValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateTaskbarColorPreview();
-            _viewModel.OnTaskbarColorChanged((int)TaskbarColorRSlider.Value, (int)TaskbarColorGSlider.Value, value);
+            DebounceSlider(ref _cts_taskbarColor, () =>
+                _viewModel.OnTaskbarColorChanged(
+                    (int)TaskbarColorRSlider.Value, (int)TaskbarColorGSlider.Value, value));
         }
 
         // ── Start Menu handlers ───────────────────────────────────────────────────
@@ -418,7 +454,7 @@ namespace CrystalFrame.Dashboard
             int value = (int)e.NewValue;
             StartOpacityValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
-            _viewModel.OnStartOpacityChanged(value);
+            DebounceSlider(ref _cts_startOpacity, () => _viewModel.OnStartOpacityChanged(value));
         }
 
         private void StartBgColorR_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -427,7 +463,9 @@ namespace CrystalFrame.Dashboard
             StartBgColorRValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateStartBgColorPreview();
-            _viewModel.OnStartBgColorChanged(value, (int)StartBgColorGSlider.Value, (int)StartBgColorBSlider.Value);
+            DebounceSlider(ref _cts_startBgColor, () =>
+                _viewModel.OnStartBgColorChanged(value,
+                    (int)StartBgColorGSlider.Value, (int)StartBgColorBSlider.Value));
         }
 
         private void StartBgColorG_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -436,7 +474,9 @@ namespace CrystalFrame.Dashboard
             StartBgColorGValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateStartBgColorPreview();
-            _viewModel.OnStartBgColorChanged((int)StartBgColorRSlider.Value, value, (int)StartBgColorBSlider.Value);
+            DebounceSlider(ref _cts_startBgColor, () =>
+                _viewModel.OnStartBgColorChanged(
+                    (int)StartBgColorRSlider.Value, value, (int)StartBgColorBSlider.Value));
         }
 
         private void StartBgColorB_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -445,7 +485,9 @@ namespace CrystalFrame.Dashboard
             StartBgColorBValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateStartBgColorPreview();
-            _viewModel.OnStartBgColorChanged((int)StartBgColorRSlider.Value, (int)StartBgColorGSlider.Value, value);
+            DebounceSlider(ref _cts_startBgColor, () =>
+                _viewModel.OnStartBgColorChanged(
+                    (int)StartBgColorRSlider.Value, (int)StartBgColorGSlider.Value, value));
         }
 
         private void StartTextColorR_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -454,7 +496,9 @@ namespace CrystalFrame.Dashboard
             StartTextColorRValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateStartTextColorPreview();
-            _viewModel.OnStartTextColorChanged(value, (int)StartTextColorGSlider.Value, (int)StartTextColorBSlider.Value);
+            DebounceSlider(ref _cts_startTextColor, () =>
+                _viewModel.OnStartTextColorChanged(value,
+                    (int)StartTextColorGSlider.Value, (int)StartTextColorBSlider.Value));
         }
 
         private void StartTextColorG_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -463,7 +507,9 @@ namespace CrystalFrame.Dashboard
             StartTextColorGValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateStartTextColorPreview();
-            _viewModel.OnStartTextColorChanged((int)StartTextColorRSlider.Value, value, (int)StartTextColorBSlider.Value);
+            DebounceSlider(ref _cts_startTextColor, () =>
+                _viewModel.OnStartTextColorChanged(
+                    (int)StartTextColorRSlider.Value, value, (int)StartTextColorBSlider.Value));
         }
 
         private void StartTextColorB_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -472,7 +518,9 @@ namespace CrystalFrame.Dashboard
             StartTextColorBValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateStartTextColorPreview();
-            _viewModel.OnStartTextColorChanged((int)StartTextColorRSlider.Value, (int)StartTextColorGSlider.Value, value);
+            DebounceSlider(ref _cts_startTextColor, () =>
+                _viewModel.OnStartTextColorChanged(
+                    (int)StartTextColorRSlider.Value, (int)StartTextColorGSlider.Value, value));
         }
 
         private void StartMenuItem_Changed(object sender, RoutedEventArgs e)
@@ -509,7 +557,9 @@ namespace CrystalFrame.Dashboard
             StartBorderColorRValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateStartBorderColorPreview();
-            _viewModel.OnStartBorderColorChanged(value, (int)StartBorderColorGSlider.Value, (int)StartBorderColorBSlider.Value);
+            DebounceSlider(ref _cts_startBorderColor, () =>
+                _viewModel.OnStartBorderColorChanged(value,
+                    (int)StartBorderColorGSlider.Value, (int)StartBorderColorBSlider.Value));
         }
 
         private void StartBorderColorG_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -518,7 +568,9 @@ namespace CrystalFrame.Dashboard
             StartBorderColorGValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateStartBorderColorPreview();
-            _viewModel.OnStartBorderColorChanged((int)StartBorderColorRSlider.Value, value, (int)StartBorderColorBSlider.Value);
+            DebounceSlider(ref _cts_startBorderColor, () =>
+                _viewModel.OnStartBorderColorChanged(
+                    (int)StartBorderColorRSlider.Value, value, (int)StartBorderColorBSlider.Value));
         }
 
         private void StartBorderColorB_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -527,7 +579,9 @@ namespace CrystalFrame.Dashboard
             StartBorderColorBValue.Text = value.ToString();
             if (!_isDetailInitialized) return;
             UpdateStartBorderColorPreview();
-            _viewModel.OnStartBorderColorChanged((int)StartBorderColorRSlider.Value, (int)StartBorderColorGSlider.Value, value);
+            DebounceSlider(ref _cts_startBorderColor, () =>
+                _viewModel.OnStartBorderColorChanged(
+                    (int)StartBorderColorRSlider.Value, (int)StartBorderColorGSlider.Value, value));
         }
 
         // ── Theme presets ─────────────────────────────────────────────────────────
