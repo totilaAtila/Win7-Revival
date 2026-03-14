@@ -168,6 +168,11 @@ void IpcBridge::HandleMessage(const std::string& json) {
                 m_callback->OnShutdown();
             }
         }
+        else if (type == "Ping") {
+            // Task 6 heartbeat: reply immediately so the Dashboard knows Core is alive.
+            CF_LOG(Debug, "IPC: Ping received — sending Pong");
+            SendMessage("{\"type\":\"Pong\",\"data\":{}}\n");
+        }
         else {
             CF_LOG(Warning, "Unknown IPC message type: " << type);
         }

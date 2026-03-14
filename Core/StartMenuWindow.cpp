@@ -829,10 +829,14 @@ void StartMenuWindow::LoadNodeIcons(std::vector<MenuNode>& nodes) {
     }
 }
 
-// Walk the tree and release every HICON handle, then clear it to nullptr.
+// Walk the tree and clear every hIcon pointer to nullptr.
+// NOTE: tree icons are always loaded through m_iconCache (LoadNodeIcons uses
+// m_iconCache.GetIcon / GetStockIcon), so DestroyIcon must NOT be called here —
+// m_iconCache.ReleaseAll() is the sole owner and will call DestroyIcon once.
+// This function exists only to null out dangling pointers after the cache is cleared.
 void StartMenuWindow::FreeNodeIcons(std::vector<MenuNode>& nodes) {
     for (auto& node : nodes) {
-        if (node.hIcon) { DestroyIcon(node.hIcon); node.hIcon = nullptr; }
+        node.hIcon = nullptr;
         if (node.isFolder) FreeNodeIcons(node.children);
     }
 }
@@ -2834,8 +2838,11 @@ void StartMenuWindow::UnpinItem(int index) {
     if (index < 0 || index >= static_cast<int>(m_dynamicPinnedItems.size())) return;
     if (!m_iconsLoaded.load(std::memory_order_acquire)) return; // Wait until icons done
 
-    if (m_dynamicPinnedItems[static_cast<size_t>(index)].hIcon)
-        DestroyIcon(m_dynamicPinnedItems[static_cast<size_t>(index)].hIcon);
+    // Fix P1: hIcon is always cache-owned (LoadIconsAsync uses m_iconCache.GetIcon;
+    // PinItemFromAllPrograms now also uses the cache — see below).
+    // Never call DestroyIcon here: m_iconCache.ReleaseAll() is the single owner
+    // and calling it again would leave a dangling handle in the cache.
+    m_dynamicPinnedItems[static_cast<size_t>(index)].hIcon = nullptr;
     m_dynamicPinnedItems.erase(m_dynamicPinnedItems.begin() + index);
     SavePinnedItems();
 
@@ -2868,19 +2875,27 @@ void StartMenuWindow::PinItemFromAllPrograms(int apIndex) {
     di.shortName = node.name.size() >= 3 ? node.name.substr(0, 3) : node.name;
     di.command   = node.lnkPath.empty() ? node.name : node.lnkPath;
     di.iconColor = RGB(64, 64, 68);
-    di.hIcon     = node.hIcon ? CopyIcon(node.hIcon) : nullptr;
+    // Fix P1/P2: use m_iconCache instead of CopyIcon so the handle is cache-owned.
+    // This ensures UnpinItem never double-destroys it and RefreshProgramTree's
+    // ReleaseAll() covers it without leaking.
+    // The .lnkPath key matches what LoadNodeIcons stored, so it's already cached.
+    if (!node.lnkPath.empty())
+        di.hIcon = m_iconCache.GetIcon(node.lnkPath, /*small=*/false);
+    else if (!di.command.empty())
+        di.hIcon = m_iconCache.GetIcon(di.command, /*small=*/false);
+
     m_dynamicPinnedItems.push_back(di);
     SavePinnedItems();
 
-    // If the icon wasn't already loaded (edge case), kick off a quick load
-    if (!di.hIcon && !di.command.empty()) {
+    // If the icon wasn't already loaded (edge case — e.g. lnkPath not in cache
+    // yet), route the async fallback through the cache too.
+    if (!m_dynamicPinnedItems.back().hIcon && !di.command.empty()) {
         std::wstring cmd = di.command;
         DynamicPinnedItem* ptr = &m_dynamicPinnedItems.back();
         std::thread([this, ptr, cmd]() {
-            SHFILEINFOW sfi = {};
-            if (SHGetFileInfoW(cmd.c_str(), 0, &sfi, sizeof(sfi),
-                               SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
-                ptr->hIcon = sfi.hIcon;
+            // Use the cache so the handle is owned + deduped correctly.
+            HICON icon = m_iconCache.GetIcon(cmd, /*small=*/false);
+            if (icon) ptr->hIcon = icon;
             if (m_hwnd) PostMessage(m_hwnd, WM_ICONS_LOADED, 0, 0);
         }).detach();
     }
