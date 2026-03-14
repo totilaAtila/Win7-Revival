@@ -257,6 +257,9 @@ private:
     // can rebuild the tree without touching the watcher thread's resources.
     std::thread          m_watcherThread;
     std::atomic<bool>    m_watcherRunning{false};
+    // Manual-reset event signalled by StopFolderWatcher() so the watcher can
+    // wake immediately from an INFINITE WaitForMultipleObjects call.
+    HANDLE               m_watcherStopEvent = nullptr;
 
     // Posted to m_hwnd by the icon thread when loading is done → triggers repaint.
     static constexpr UINT WM_ICONS_LOADED    = WM_USER + 101;

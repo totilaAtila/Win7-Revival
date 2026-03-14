@@ -306,25 +306,31 @@ namespace CrystalFrame.Dashboard
 
                 if (_awaitingPong)
                 {
-                    // Previous Ping was not answered.
+                    // Previous Ping was not answered within the timeout window.
                     var elapsed = (DateTime.UtcNow - _lastPongTime).TotalMilliseconds;
                     if (elapsed > HeartbeatTimeoutMs)
                     {
                         ++missedBeats;
                         Debug.WriteLine($"IPC heartbeat: no Pong for {elapsed:F0}ms (missed={missedBeats})");
 
+                        // Fix P2: only disconnect + raise CoreRestartRequested after
+                        // TWO consecutive missed beats.  On the first miss we leave
+                        // _awaitingPong = true and loop again so the next iteration
+                        // can re-evaluate; this makes missedBeats >= 2 reachable.
                         if (missedBeats >= 2)
                         {
                             Debug.WriteLine("IPC heartbeat: Core unresponsive — requesting restart");
                             CoreRestartRequested?.Invoke(this, EventArgs.Empty);
                             missedBeats = 0;
-                        }
 
-                        // Force the reconnect loop to notice the dead connection.
-                        CleanupConnection();
-                        IsConnected = false;
-                        ConnectionChanged?.Invoke(this, false);
-                        break;
+                            // Force the reconnect loop to notice the dead connection.
+                            CleanupConnection();
+                            IsConnected = false;
+                            ConnectionChanged?.Invoke(this, false);
+                            break;
+                        }
+                        // First miss: stay in the loop; _awaitingPong remains true
+                        // so the next iteration immediately re-checks the timeout.
                     }
                 }
                 else

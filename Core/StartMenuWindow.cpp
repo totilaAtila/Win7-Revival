@@ -2520,6 +2520,15 @@ const wchar_t* StartMenuWindow::GetTitle() {
 // menu window so the UI thread rebuilds the programs tree exactly once, rather
 // than rebuilding the entire tree on every menu open.
 void StartMenuWindow::StartFolderWatcher() {
+    // Fix P1: create the stop event here so StopFolderWatcher() can signal it
+    // and wake the thread immediately from an INFINITE wait.
+    m_watcherStopEvent = CreateEventW(nullptr, /*manualReset=*/TRUE,
+                                      /*initialState=*/FALSE, nullptr);
+    if (!m_watcherStopEvent) {
+        CF_LOG(Warning, "StartFolderWatcher: failed to create stop event");
+        return;
+    }
+
     m_watcherRunning.store(true, std::memory_order_relaxed);
 
     m_watcherThread = std::thread([this]() {
@@ -2540,11 +2549,8 @@ void StartMenuWindow::StartFolderWatcher() {
         };
 
         // Open directory handles for both folders.
-        HANDLE hDirs[2] = { INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE };
-        HANDLE hEvents[3]; // [0..1] = change events, [2] = stop event
-
-        HANDLE hStopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-        hEvents[2] = hStopEvent;
+        HANDLE hDirs[2]   = { INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE };
+        HANDLE hEvents[3] = {};  // [0..dirCount-1] = change events, [dirCount] = stop
 
         int dirCount = 0;
         for (int i = 0; i < 2; ++i) {
@@ -2556,11 +2562,15 @@ void StartMenuWindow::StartFolderWatcher() {
                 FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
                 nullptr);
             if (h != INVALID_HANDLE_VALUE) {
-                hDirs[dirCount] = h;
+                hDirs[dirCount]   = h;
                 hEvents[dirCount] = CreateEventW(nullptr, TRUE, FALSE, nullptr);
                 ++dirCount;
             }
         }
+
+        // Place the shared stop event after the dir events.
+        hEvents[dirCount] = m_watcherStopEvent;
+        DWORD waitCount   = static_cast<DWORD>(dirCount) + 1;
 
         // Overlapped buffers for ReadDirectoryChangesW
         const DWORD kBufSize = 4096;
@@ -2582,18 +2592,14 @@ void StartMenuWindow::StartFolderWatcher() {
         };
         for (int i = 0; i < dirCount; ++i) issueRead(i);
 
-        DWORD waitCount = static_cast<DWORD>(dirCount) + 1; // dirs + stop
-        // Move stop event to correct index
-        hEvents[dirCount] = hStopEvent;
-
         bool needsRefresh = false;
         while (m_watcherRunning.load(std::memory_order_relaxed)) {
-            // Wait up to 500ms; batch rapid changes to avoid flooding messages.
+            // INFINITE when idle; 200 ms batch window when changes accumulated.
             DWORD res = WaitForMultipleObjects(waitCount, hEvents, FALSE,
-                needsRefresh ? 200 : INFINITE);
+                needsRefresh ? 200u : INFINITE);
 
             if (res == WAIT_TIMEOUT) {
-                // Batch delay elapsed — post refresh if changes were detected.
+                // Batch delay elapsed — post one refresh message.
                 if (needsRefresh && m_hwnd) {
                     PostMessageW(m_hwnd, WM_APP_REFRESH_TREE, 0, 0);
                     needsRefresh = false;
@@ -2604,7 +2610,7 @@ void StartMenuWindow::StartFolderWatcher() {
             if (res == WAIT_FAILED) break;
 
             int idx = static_cast<int>(res - WAIT_OBJECT_0);
-            if (idx >= dirCount) break; // stop event or error
+            if (idx >= dirCount) break; // stop event fired → exit cleanly
 
             // Drain the change buffer and re-arm.
             DWORD bytes = 0;
@@ -2613,20 +2619,27 @@ void StartMenuWindow::StartFolderWatcher() {
             issueRead(idx);
         }
 
-        // Cleanup
+        // Cleanup: cancel pending overlapped I/O, then close dir + event handles.
+        // Do NOT close m_watcherStopEvent — that belongs to the owning object.
         for (int i = 0; i < dirCount; ++i) {
             CancelIo(hDirs[i]);
             CloseHandle(hDirs[i]);
             CloseHandle(hEvents[i]);
         }
-        CloseHandle(hStopEvent);
     });
 }
 
 void StartMenuWindow::StopFolderWatcher() {
     m_watcherRunning.store(false, std::memory_order_relaxed);
+    // Fix P1: signal the stop event so the thread wakes from INFINITE wait.
+    if (m_watcherStopEvent) SetEvent(m_watcherStopEvent);
     if (m_watcherThread.joinable())
         m_watcherThread.join();
+    // Safe to close now — the thread has exited and no longer references it.
+    if (m_watcherStopEvent) {
+        CloseHandle(m_watcherStopEvent);
+        m_watcherStopEvent = nullptr;
+    }
 }
 
 // ── Task 3/5: RefreshProgramTree — rebuild on UI thread after watcher fires ───
@@ -2642,11 +2655,26 @@ void StartMenuWindow::RefreshProgramTree() {
 
     m_iconsLoaded.store(false, std::memory_order_relaxed);
 
-    // Release all icons from the old tree (via cache).
+    // Fix P2: clear the All-Programs navigation stack before swapping the tree.
+    // m_apNavStack holds raw pointers into old m_programTree nodes; if we don't
+    // clear it, CurrentApNodes() will dereference dangling pointers after the
+    // swap, causing crashes / use-after-free.
+    m_apNavStack.clear();
+    m_apScrollOffset   = 0;
+    m_hoveredApIndex   = -1;
+    m_keySelApIndex    = -1;
+    CloseSubMenu();
+
+    // Release all cached icons (dedup cache covers tree + pinned + right-col).
     m_iconCache.ReleaseAll();
     for (auto& item : m_dynamicPinnedItems) item.hIcon = nullptr;
-    for (int i = 0; i < RIGHT_ITEM_COUNT; ++i)   m_rightIcons[i] = nullptr;
-    for (auto& ri : m_recentItems) { ri.hIcon = nullptr; }
+    for (int i = 0; i < RIGHT_ITEM_COUNT; ++i) m_rightIcons[i] = nullptr;
+
+    // Fix P3: recent icons are loaded outside IconCache — destroy them explicitly
+    // before nulling, otherwise each refresh leaks one GDI handle per entry.
+    for (auto& ri : m_recentItems) {
+        if (ri.hIcon) { DestroyIcon(ri.hIcon); ri.hIcon = nullptr; }
+    }
 
     // Rebuild the tree under the mutex so LoadIconsAsync (new thread) can
     // safely start reading it without racing with us.
