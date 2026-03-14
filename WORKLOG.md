@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-03-05 (session 17 — fluidity + pinned list + ClearType + right-click context menu fix + _wtoul portability)
+Last updated: 2026-03-14 (session 18 — GDI leaks, thread safety, renderer fallback, file watcher, IPC debounce & heartbeat)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -110,6 +110,44 @@ New requirement (non-negotiable, §10):
 2. Rebuild `CrystalFrame.Core.dll` cu CMake (pentru static CRT + crash handler activ).
 3. Test publish → verifică că `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log` apare la prima pornire.
 4. ✅ S6 implementat în această sesiune — iconițe reale din sistem (detalii în Session 9 S6 note de mai jos).
+
+---
+
+### Session 18 — GDI leaks, thread safety, renderer fallback, file watcher, IPC debounce & heartbeat (2026-03-14)
+
+**Branch:** `claude/fix-gdi-leaks-performance-9DAd2`
+**PR:** #75 (merged)
+
+**Obiectiv:** Rezolvarea a 7 probleme de calitate/robustețe identificate în WORKLOG: scurgeri GDI, thread safety, fallback renderer, file watcher, debounce IPC, heartbeat IPC, și refactorizare IconCache.
+
+#### Task 1 & 7 — IconCache + curățare GDI (`AllProgramsEnumerator.h`, `StartMenuWindow.cpp`)
+- Adăugat clasa `IconCache`: mapează căi fișiere → `HICON`; fiecare cale unică e încărcată o singură dată; `ReleaseAll()` apelează `DestroyIcon` pe toate handle-urile.
+- `LoadNodeIcons` și `LoadIconsAsync` rutează toate încărcările de iconițe prin `m_iconCache`, eliminând handle-uri duplicate când itemii pinned și nodurile din arbore partajează același `.lnk`.
+- `Shutdown()` apelează `m_iconCache.ReleaseAll()` ca punct unic de cleanup GDI.
+
+#### Task 2 — Debounce slidere IPC (`MainWindow.xaml.cs`)
+- Adăugat `DebounceSlider()`: anulează orice `Task.Delay` în desfășurare, așteaptă 50 ms, apoi trimite comanda IPC o singură dată. Aplicat la toate cele 9 slidere (opacitate + culori RGB). Core primește maxim ~20 comenzi/s în loc de sute.
+
+#### Task 3 — Thread safety (`StartMenuWindow.h/.cpp`)
+- Adăugat `std::mutex m_treeMutex` care protejează `m_programTree` între thread-ul de încărcare iconițe (scrie `hIcon`) și `RefreshProgramTree` (înlocuiește arborele). Atomicul `m_iconsLoaded` cu acquire/release continuă să protejeze citirile din paint.
+
+#### Task 4 — Fallback renderer (`Renderer.h/.cpp`)
+- `Initialize()` nu mai returnează `false` când `SetWindowCompositionAttribute` lipsește; setează `m_wcaUnavailable = true` și continuă.
+- `ApplyTransparencyWithColor` / `RestoreWindow` folosesc `SetLayeredWindowAttributes` (`WS_EX_LAYERED + LWA_ALPHA`) ca fallback pentru transparență de bază pe build-uri Windows 11 / VM-uri unde SWCA nu e disponibil.
+
+#### Task 5 — File watcher (`StartMenuWindow.h/.cpp`)
+- `StartFolderWatcher()`: thread background folosește `ReadDirectoryChangesW` pe ambele foldere Start Menu cu o fereastră de batch de 200 ms pentru a coagula schimbările rapide (ex. burst instalator).
+- `WM_APP_REFRESH_TREE` + `RefreshProgramTree()`: join pe thread-ul vechi de iconițe, eliberare iconițe via cache, rebuild arbore sub `m_treeMutex`, resetare `m_iconsLoaded`, pornire thread nou de încărcare iconițe.
+
+#### Task 6 — IPC heartbeat & Core restart (`IpcClient.cs`, `CoreProcessManager.cs`)
+- `HeartbeatLoopAsync()`: trimite `Ping` la fiecare 5 s; dacă nu vine `Pong` în 3 s pentru 2 bătăi consecutive, forțează închiderea pipe-ului și emite `CoreRestartRequested`.
+- `CoreProcessManager` se abonează la `CoreRestartRequested` și apelează `StartCore()` pentru a relansa automat `Core.exe`.
+
+#### Fix-uri review Codex (commit `8802288`)
+- **P1** — Thread watcher blocat la shutdown: adăugat `m_watcherStopEvent` (HANDLE membru); `StopFolderWatcher()` apelează `SetEvent()` înainte de `join()`.
+- **P1** — Use-after-free la refresh cu All Programs deschis: `m_apNavStack` (pointeri raw în arborele vechi) e curățat înainte de swap în `RefreshProgramTree()`.
+- **P2** — Iconițe recent folosite scurgeau GDI la fiecare refresh: `DestroyIcon()` apelat explicit înainte de nullare (nu sunt în `IconCache`).
+- **P2** — `missedBeats >= 2` nu era niciodată atins: disconnect/restart mutat în interiorul ramei `>= 2`; prima ratare continuă bucla.
 
 ---
 
