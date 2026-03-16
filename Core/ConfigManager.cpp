@@ -36,25 +36,26 @@ bool ConfigManager::Initialize() {
 }
 
 bool ConfigManager::Load() {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    
+    // Read file WITHOUT holding the mutex — file I/O can be slow (disk/network).
     std::ifstream file(m_configPath);
     if (!file.is_open()) {
         return false;
     }
-    
-    // Simple JSON parsing (manual, no dependencies)
+
+    // Parse into a local Config so we hold the lock only for the final swap.
+    Config tempConfig;
+
     std::string line;
     while (std::getline(file, line)) {
         // Remove whitespace
         line.erase(std::remove_if(line.begin(), line.end(), ::isspace), line.end());
-        
+
         if (line.find("\"taskbarOpacity\":") != std::string::npos) {
             size_t pos = line.find(':');
             if (pos != std::string::npos) {
                 std::string value = line.substr(pos + 1);
                 value.erase(std::remove(value.begin(), value.end(), ','), value.end());
-                try { m_config.taskbarOpacity = std::clamp(std::stoi(value), 0, 100); }
+                try { tempConfig.taskbarOpacity = std::clamp(std::stoi(value), 0, 100); }
                 catch (const std::exception&) { CF_LOG(Warning, "Invalid taskbarOpacity in config, using default"); }
             }
         }
@@ -63,29 +64,34 @@ bool ConfigManager::Load() {
             if (pos != std::string::npos) {
                 std::string value = line.substr(pos + 1);
                 value.erase(std::remove(value.begin(), value.end(), ','), value.end());
-                try { m_config.startOpacity = std::clamp(std::stoi(value), 0, 100); }
+                try { tempConfig.startOpacity = std::clamp(std::stoi(value), 0, 100); }
                 catch (const std::exception&) { CF_LOG(Warning, "Invalid startOpacity in config, using default"); }
             }
         }
         else if (line.find("\"taskbarEnabled\":") != std::string::npos) {
-            m_config.taskbarEnabled = (line.find("true") != std::string::npos);
+            tempConfig.taskbarEnabled = (line.find("true") != std::string::npos);
         }
         else if (line.find("\"startEnabled\":") != std::string::npos) {
-            m_config.startEnabled = (line.find("true") != std::string::npos);
+            tempConfig.startEnabled = (line.find("true") != std::string::npos);
         }
         else if (line.find("\"taskbarBlur\":") != std::string::npos) {
-            m_config.taskbarBlur = (line.find("true") != std::string::npos);
+            tempConfig.taskbarBlur = (line.find("true") != std::string::npos);
         }
         else if (line.find("\"startBlur\":") != std::string::npos) {
-            m_config.startBlur = (line.find("true") != std::string::npos);
+            tempConfig.startBlur = (line.find("true") != std::string::npos);
         }
     }
-    
+
     file.close();
-    
-    CF_LOG(Info, "Config loaded: Taskbar=" << m_config.taskbarOpacity 
+
+    // Lock only for the in-memory swap — GetConfig() on other threads is not blocked
+    // during file I/O.
+    { std::lock_guard<std::mutex> lock(m_mutex);
+      m_config = tempConfig; }
+
+    CF_LOG(Info, "Config loaded: Taskbar=" << m_config.taskbarOpacity
                  << ", Start=" << m_config.startOpacity);
-    
+
     return true;
 }
 

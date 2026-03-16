@@ -72,7 +72,7 @@ bool ResolveShortcutTarget(const std::wstring& path,
         }
 
         // Resolve the link (SLR_NO_UI suppresses any UI on broken shortcuts)
-        psl->Resolve(nullptr, SLR_NO_UI | SLR_UPDATE);
+        psl->Resolve(nullptr, SLR_NO_UI | SLR_NOSEARCH | SLR_NOTRACK);
 
         wchar_t targetBuf[MAX_PATH] = {};
         hr = psl->GetPath(targetBuf, MAX_PATH, nullptr, SLGP_RAWPATH);

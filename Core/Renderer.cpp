@@ -204,14 +204,16 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
     if (m_wcaUnavailable || !m_setWindowCompositionAttribute) {
         LONG exStyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
         if (enabled && opacity > 0) {
-            SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+            if (!(exStyle & WS_EX_LAYERED))
+                SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
             // Match the opacity inversion used by the SWCA path.
             BYTE alpha = static_cast<BYTE>(((100 - opacity) * 255) / 100);
             SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
             CF_LOG(Debug, "[" << windowType << "] Fallback: SetLayeredWindowAttributes alpha=" << (int)alpha);
         } else {
             // Restore: remove layered style if transparency was disabled.
-            SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
+            if (exStyle & WS_EX_LAYERED)
+                SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
             CF_LOG(Debug, "[" << windowType << "] Fallback: transparency disabled");
         }
         return;

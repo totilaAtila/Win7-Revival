@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-03-16 (session 19 — 6 Dashboard/Core finisări + custom icon picker + recent fix + docs)
+Last updated: 2026-03-16 (session 20 — Start Menu perf + quality: font cache, operator fix, shortcut resolve, timer, ConfigManager, Renderer)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -1042,6 +1042,25 @@ Request:
 - Current behavior / bug:
 - Acceptance criteria (measurable):
 - Tests to run (from TESTING.md + new ones):
+---
+
+### Session 20 — Start Menu performance & quality sweep (2026-03-16)
+
+**Branch:** claude/check-critical-files-LKz3Z
+
+**Obiectiv:** Fix build error + implement prioritized perf/quality improvements from critical file analysis.
+
+**Modificări:**
+1. **Build fix:** Forward-declared `ActivateForPopup()` — used at line 617 but defined at line 3197, causing `C3861` on MSVC.
+2. **P1 — Operator precedence bug (HIGH):** Added missing parentheses in hover animation condition (`StartMenuWindow.cpp:2437`). Without fix, `&&` bound tighter than `||` causing the 16ms timer to run continuously even with no hover change → wasted CPU.
+3. **P2 — Font cache (HIGH):** Replaced ~15× `CreateFontW`/`DeleteObject` per paint cycle with 9 cached `HFONT` members created once in `Initialize()`, destroyed in `Shutdown()`. Eliminates ~1500 GDI allocations/sec during hover animations.
+4. **P3 — Network shortcut freeze (HIGH):** Changed `IShellLink::Resolve` flags from `SLR_UPDATE` to `SLR_NOSEARCH | SLR_NOTRACK` in `AllProgramsEnumerator.cpp`. Prevents blocking on offline network shares during tree build.
+5. **P4 — Timer interval (MEDIUM):** Changed hover animation timer from 10ms (100 FPS) to 16ms (~60 FPS) to match standard refresh rate. ~40% fewer paint cycles.
+6. **P5 — ConfigManager mutex (MEDIUM):** Moved file I/O outside the lock in `Load()`. Now `GetConfig()` on other threads is not blocked during disk reads.
+7. **P9 — Renderer guard (LOW):** Added `WS_EX_LAYERED` flag check before `SetWindowLongW` calls in `Renderer.cpp` to avoid redundant style changes.
+8. **Removed dead code:** Unused `boldF` font in `PaintSubMenu`, unused `boldFont` in `PaintAllProgramsView`.
+9. **Deleted `plan.md`** — analysis complete, all actionable items implemented.
+
 ---
 
 ### Session 19 — 6 finisări Dashboard + Core + custom icon picker + docs (2026-03-16)
