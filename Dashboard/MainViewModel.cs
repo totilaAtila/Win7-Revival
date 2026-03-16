@@ -532,7 +532,7 @@ namespace CrystalFrame.Dashboard
                     OnStartTextColorChanged(255, 255, 255);
                     OnStartBorderColorChanged(80, 130, 190);
                     OnStartOpacityChanged(85);
-                    OnStartBlurChanged(false);
+                    OnStartBlurChanged(true);
                     break;
                 case "AeroGlass":
                     OnStartBgColorChanged(20, 40, 80);

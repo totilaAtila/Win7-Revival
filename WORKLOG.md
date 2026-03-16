@@ -1,12 +1,11 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-03-14 (session 18 — GDI leaks, thread safety, renderer fallback, file watcher, IPC debounce & heartbeat)
+Last updated: 2026-03-16 (session 19 — 6 Dashboard/Core finisări + custom icon picker + recent fix + docs)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
 - Non-negotiables + architecture/roles: Agents.md
 - Manual test suites + milestones: TESTING.md
-- Start menu fixes plan (existing work): PLAN.md
 
 ---
 
@@ -1043,6 +1042,99 @@ Request:
 - Current behavior / bug:
 - Acceptance criteria (measurable):
 - Tests to run (from TESTING.md + new ones):
+---
+
+### Session 19 — 6 finisări Dashboard + Core + custom icon picker + docs (2026-03-16)
+
+**Branch:** main (direct push)
+
+**Obiectiv:** Implementare 6 finisări UI/UX planificate + custom icon picker pentru pinned apps + fix recent programs (COM init) + actualizare docs.
+
+---
+
+#### Fix 1 — Label “Core” lipsă (`Dashboard/MainWindow.xaml`)
+- Adăugat `<TextBlock Text=”Core” .../>` înainte de `CoreRunningToggle`, identic stilistic cu labelul “Startup” existent.
+
+#### Fix 2 — Tooltips (`Dashboard/MainWindow.xaml`)
+- Adăugat `<ToolTipService.ToolTip>` la toate cele 25 de controale interactive: toggle-uri header, toggle-uri panel Taskbar/Start Menu, slidere opacity și RGB, checkbox-uri right column items, butoane preseturi.
+- Pattern WinUI 3: element child `<ToolTipService.ToolTip>text</ToolTipService.ToolTip>` înăuntrul controlului.
+
+#### Fix 3 — Right Column Items: checkboxes fără efect (`Core/StartMenuWindow.cpp`)
+- Adăugat lambda `GetRightItemMenuIndex(rightIdx)` care mapează indexul din `s_rightItems[]` → indexul în `m_menuItems[]` (-1 = mereu vizibil):
+  - `s_rightItems[0]` Documents → `m_menuItems[3]`
+  - `s_rightItems[1]` Pictures → `m_menuItems[4]`
+  - `s_rightItems[6]` Control Panel → `m_menuItems[0]`
+  - `s_rightItems[7]` Devices & Printers → `m_menuItems[1]`
+  - `s_rightItems[8]` Default Programs → `m_menuItems[2]`
+- Lambda duplicată în `PaintWin7RightColumn()` (skip render) și `GetRightItemAtPoint()` (skip hit-test) pentru consistență.
+
+#### Fix 4 — ClassicWin7 preset fără blur (`Dashboard/MainViewModel.cs`)
+- `ApplyPreset(“ClassicWin7”)`: `OnStartBlurChanged(false)` → `OnStartBlurChanged(true)`. Presetul Classic Win7 includea blur (Aero) în Windows 7 original.
+
+#### Fix 5 — Recent programs: statice + fără right-click remove (`Core/StartMenuWindow.cpp`, `StartMenuWindow.h`)
+- **5a** — Refresh la fiecare Show(): `LoadRecentPrograms()` apelat în `Show()` (fără mutex — pe UI thread după ce `LoadIconsAsync` e terminat).
+- **5b** — Right-click “Remove from list”: extins `WM_RBUTTONDOWN` să detecteze recent items (index ≥ pinnedCount); nou `ShowRecentContextMenu(ri, screenPt)` → `RemoveRecentItem(ri)`.
+- `RemoveRecentItem()`: adaugă path (lowercase) în `m_recentExcluded` set; erase item; `SaveRecentExcluded()`.
+- `LoadRecentPrograms()`: skip dacă path (lowercase) ∈ `m_recentExcluded`.
+- Persistare excluse: `%LOCALAPPDATA%\CrystalFrame\recent_excluded.json` (array JSON de stringuri).
+- `LoadRecentExcluded()` + `SaveRecentExcluded()` noi; `LoadRecentExcluded()` apelat în constructor.
+- Header: adăugat `#include <set>`, câmp `std::set<std::wstring> m_recentExcluded`, declarații metode noi.
+
+#### Fix 6 — Folder titles bold (ne-autentic Win7) (`Core/StartMenuWindow.cpp`)
+- `PaintAllProgramsView()`: înlocuit `boldFont` cu `nameFont` pentru noduri folder (linii ~1184, ~1189).
+- `PaintSubMenu()`: înlocuit `boldF` cu `itemF` pentru noduri folder (linii ~1952, ~1955).
+- Win7 original nu folosea bold pentru foldere în All Programs — doar iconița diferenția tipul.
+
+---
+
+#### Fix 7 — COM init în LoadIconsAsync (`Core/StartMenuWindow.cpp`)
+- Adăugat `CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)` la începutul `LoadIconsAsync()` și `CoUninitialize()` la final.
+- Fără COM init, `SHGetKnownFolderPath` (pentru iconițele right column) și `SHGetFileInfoW` (pentru iconițele recent) eșuau silențios pe thread-ul background — cauza principală pentru care lista recent programs era goală.
+- Același pattern ca în `BuildAllProgramsTree()` (din `AllProgramsEnumerator.cpp`).
+
+---
+
+#### Feature: Custom icon picker pentru pinned apps (`Core/StartMenuWindow.h`, `StartMenuWindow.cpp`)
+
+**Motivație:** utilizatorul putea pina aplicații dar nu putea personaliza iconița afișată — toate arătau iconița din shell sau un pătrat colorat fallback.
+
+**Implementare:**
+- `DynamicPinnedItem` — 3 câmpuri noi:
+  - `std::wstring customIconPath` — calea DLL/EXE selectată (ex: `C:\Windows\System32\imageres.dll`)
+  - `int customIconIndex = -1` — indexul iconiței în fișier
+  - `HICON hCustomIcon = nullptr` — iconița extrasă; owned direct (nu prin `m_iconCache`)
+- `ShowPinnedContextMenu()` — adăugat item nou “Select custom icon…” (cmd=2).
+- `SelectCustomIconForPinnedItem(int index)` — metodă nouă:
+  - Deschide `PickIconDlg()` (shell32.dll, via `shlobj.h`) pornind la `imageres.dll`
+  - La confirmare: extrage iconița cu `ExtractIconExW()`, stochează în `hCustomIcon`
+  - Eliberează eventuala iconiță custom anterioară (`DestroyIcon`)
+  - `SavePinnedItems()` + `InvalidateRect()`
+- `PaintProgramsList()` — preferință: `hCustomIcon > hIcon > square fallback`.
+- `UnpinItem()` — `DestroyIcon(hCustomIcon)` înainte de erase.
+- `Shutdown()` — `DestroyIcon(hCustomIcon)` pentru toți itemii.
+- `SavePinnedItems()` — persistare `”iconPath”` și `”iconIdx”` în JSON (câmpuri opționale).
+- `LoadPinnedItems()` — parsare `”iconPath”` și `”iconIdx”`; re-extragere iconiță via `ExtractIconExW()` la startup.
+
+---
+
+#### Docs: README.md actualizat
+- Arhitectură: corectat “IPC (Named Pipes)” → “P/Invoke (direct DLL calls)”; corectat “CrystalFrame.Core.exe” → “CrystalFrame.Core.dll”.
+- Diagrama Mermaid simplificată și corectată.
+- Features: adăugate custom icon picker, recent remove, right column visibility, theme presets, multi-monitor.
+- Removed: “search box” (eliminat în sesiunea anterioară).
+- Roadmap: mutat multi-monitor, blur/acrylic, color presets din Planned → Done.
+- Usage: adăugat tabel “Start Menu right-click actions”.
+- Troubleshooting: adăugat secțiune “Recent programs list is empty”.
+- Versiune bump: 2.1 → 2.2.
+
+#### Docs: PLAN.md șters
+- Planul din PLAN.md a fost implementat integral. Fișierul nu mai este necesar.
+
+#### Docs: WORKLOG.md actualizat
+- Referința la PLAN.md eliminată din secțiunea “Ground truth”.
+
+---
+
 ## 10) Non-negotiables (repeat here so they are never “forgotten”)
 - Start Menu: visually + functional identical to Windows 7. (everything but Search Bar. Not needed)
 - All menus/submenus: 100% functional (no dead UI).

@@ -5,31 +5,12 @@
 #include <mutex>
 #include <string>
 #include <map>
+#include <set>
 #include <thread>
 #include <vector>
 #include "AllProgramsEnumerator.h"   // MenuNode, BuildAllProgramsTree, IconCache
 
 namespace CrystalFrame {
-
-/// <summary>
-/// Submenu item (kept for API compatibility)
-/// </summary>
-struct SubMenuItem {
-    const wchar_t* name;
-    const wchar_t* command;
-};
-
-/// <summary>
-/// Recommended section item configuration (kept for Dashboard API compatibility;
-/// not rendered in Win7 mode — Win7 left column has no "Recommended" section).
-/// </summary>
-struct MenuItem {
-    const wchar_t* name;
-    const wchar_t* icon;
-    bool visible;
-    SubMenuItem* submenuItems;
-    int submenuCount;
-};
 
 /// <summary>
 /// Recently used program, populated from the Windows UserAssist registry at startup.
@@ -73,6 +54,12 @@ struct Win7RightItem {
 ///   AllPrograms  — "All Programs" tree from AllProgramsEnumerator
 enum class LeftViewMode { Programs, AllPrograms };
 
+/// Right-column recommended/shortcut menu item (visibility + display name).
+struct RecommendedMenuItem {
+    const wchar_t* name;
+    bool           visible = true;
+};
+
 /// <summary>
 /// Custom Start Menu window — Windows 7-style two-column layout.
 ///
@@ -88,7 +75,11 @@ struct DynamicPinnedItem {
     std::wstring shortName;
     std::wstring command;
     COLORREF     iconColor = RGB(64, 64, 68);
-    HICON        hIcon     = nullptr;  // loaded async; pointer-sized, safe concurrent write
+    HICON        hIcon     = nullptr;  // loaded async via IconCache; cache-owned
+    // Custom icon set via "Select custom icon" context menu; owned (not in cache).
+    std::wstring customIconPath;       // DLL/EXE path; empty = no custom icon
+    int          customIconIndex = -1; // icon index inside the file
+    HICON        hCustomIcon = nullptr;// extracted icon; DestroyIcon() when removed
 };
 
 class StartMenuWindow {
@@ -154,21 +145,6 @@ private:
     COLORREF m_bgColor   = RGB(32, 32, 36);
     COLORREF m_textColor = RGB(255, 255, 255);
 
-    // Recommended section items (visibility controlled by Dashboard; not painted in Win7 mode)
-    MenuItem m_menuItems[7] = {
-        {L"Control Panel",  L"", true,  nullptr, 0},
-        {L"Device Manager", L"", true,  nullptr, 0},
-        {L"Installed Apps", L"", true,  nullptr, 0},
-        {L"Documents",      L"", true,  nullptr, 0},
-        {L"Pictures",       L"", true,  nullptr, 0},
-        {L"Videos",         L"", true,  nullptr, 0},
-        {L"Recent Files",   L"", true,  nullptr, 0}
-    };
-
-    // Persisted custom names for recommended items
-    std::wstring m_customMenuNames[7];
-    std::wstring m_customTitle;
-
     // ── Left-column view mode ───────────────────────────────────────────────
     LeftViewMode m_viewMode = LeftViewMode::Programs;
 
@@ -216,9 +192,32 @@ private:
     // Shown below pinned items; max RECENT_COUNT entries, sorted by last-run time.
     std::vector<RecentItem> m_recentItems;
 
+    // Paths explicitly removed by the user via right-click "Remove from list".
+    // Persisted to %LOCALAPPDATA%\CrystalFrame\recent_excluded.json.
+    std::set<std::wstring> m_recentExcluded;
+
     // Dynamic pinned list (replaces static s_pinnedItems at runtime).
     // Loaded from JSON at Initialize(); saved on every pin/unpin.
     std::vector<DynamicPinnedItem> m_dynamicPinnedItems;
+
+    // Recommended/shortcut items for the right column (visibility + name).
+    // Indices: 0=ControlPanel 1=DeviceManager 2=InstalledApps
+    //          3=Documents 4=Pictures 5=Videos 6=RecentFiles
+    RecommendedMenuItem m_menuItems[7] = {
+        { L"Control Panel",   true },
+        { L"Device Manager",  true },
+        { L"Installed Apps",  true },
+        { L"Documents",       true },
+        { L"Pictures",        true },
+        { L"Videos",          true },
+        { L"Recent Files",    true },
+    };
+
+    // Per-item custom display names (empty = use default from m_menuItems[i].name).
+    std::wstring m_customMenuNames[7];
+
+    // Optional custom title override (empty = "CrystalFrame").
+    std::wstring m_customTitle;
 
     // Cached menu position — computed once at Initialize() and refreshed on
     // WM_SETTINGCHANGE / WM_DISPLAYCHANGE so Show() never calls FindWindowW.
@@ -455,6 +454,9 @@ private:
     void PinItemFromAllPrograms(int apIndex);
     void ShowPinnedContextMenu(int pinnedIndex, POINT screenPt);
     void ShowAllProgramsContextMenu(int apIndex, POINT screenPt);
+    void ShowRecentContextMenu(int recentIndex, POINT screenPt);
+    void RemoveRecentItem(int recentIndex);
+    void SelectCustomIconForPinnedItem(int index);
 
     // ── Position cache ────────────────────────────────────────────────────────
     void CacheMenuPosition();
@@ -462,6 +464,8 @@ private:
     // ── Persistence ──────────────────────────────────────────────────────────
     void LoadCustomNames();
     void SaveCustomNames();
+    void LoadRecentExcluded();
+    void SaveRecentExcluded();
 
     // ── Power menu (Sleep / Shut down / Restart popup) ───────────────────────
     void ShowPowerMenu();

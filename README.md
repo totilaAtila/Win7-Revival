@@ -1,8 +1,8 @@
 # CrystalFrame
 
-**Windows 11 Overlay Utility** — Transparent, color-customizable overlays for the Taskbar and Start Menu without modifying system files.
+**Windows 11 Customization Utility** — A transparent, color-customizable overlay for the Taskbar and a complete, functional revival of the Windows 7 Start Menu.
 
-![Version](https://img.shields.io/badge/version-2.1-blue)
+![Version](https://img.shields.io/badge/version-2.2-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%2011-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Build](https://github.com/totilaAtila/Win7-Revival/actions/workflows/build.yml/badge.svg)
@@ -14,14 +14,21 @@
 ## Features
 
 - **Taskbar Overlay** — Semi-transparent color overlay over the Windows 11 Taskbar
-- **Start Menu Overlay** — Overlay activates only when the Start Menu is open
-- **RGB Color Control** — Independent R/G/B sliders for background and text color per panel
+- **Windows 7 Start Menu Revival** — A complete, from-scratch reimplementation of the classic Windows 7 Start Menu, replacing the native Windows 11 menu.
+  - Two-column layout with pinned/recent programs and system links.
+  - Recent programs auto-refresh on every open (Windows UserAssist registry).
+  - Right-click pinned items to unpin or pick a custom icon (shell icon picker).
+  - Right-click recent items to remove from list (persisted exclusion list).
+  - Fully functional "All Programs" tree with folder drill-down.
+  - Keyboard navigation, mouse-wheel scroll, and hover-to-open submenus.
+  - Dynamic pinned list with right-click context menus to pin/unpin/pin-to-taskbar.
+  - Right-column item visibility controlled per-item from the Dashboard.
+  - Power/session control submenu (Sleep, Shut down, Restart).
+- **Theme Presets** — One-click Classic Win7 / Aero Glass / Dark themes
+- **RGB Color Control** — Independent R/G/B sliders for background, text, and border color
 - **Opacity Control** — 0–100% adjustable per panel
-- **Enable/Disable per panel** — Toggle Taskbar and Start Menu overlays independently
 - **Blur / Acrylic effect** — Optional acrylic blur behind the overlay (per panel)
-- **Theme Presets** — One-click presets: Classic Win7, Aero Glass, Dark
-- **Border / Accent Color** — Separate color control for the Start Menu border
-- **Menu Items** — Show or hide individual items in the Start Menu right column
+- **Multi-monitor** — Taskbar overlay on all connected displays (all edges supported)
 - **Run at Startup** — Optional auto-start via Windows registry; starts silently in System Tray
 - **System Tray icon** — Minimize to tray; right-click menu (Open / Exit); double-click to restore
 - **System Theme Support** — Follows Windows light/dark theme automatically
@@ -33,33 +40,37 @@
 
 ## Architecture
 
-```
-CrystalFrame.Dashboard.exe  (C# .NET 8, WinUI 3)
-        │  P/Invoke (direct calls)
-        ▼
-CrystalFrame.Core.dll  (C++20, Win32)
+```mermaid
+graph TD
+    subgraph Dashboard [CrystalFrame.Dashboard.exe — C# .NET 8, WinUI 3]
+        A[MainWindow + NavigationView]
+    end
+
+    subgraph Core [CrystalFrame.Core.dll — C++20, Win32]
+        G[Start Menu Window]
+        H[Taskbar Overlay]
+    end
+
+    Dashboard -- P/Invoke (direct DLL calls) --> Core
 ```
 
-**CrystalFrame.Core** — Native DLL (C++20)
-- DirectComposition rendering (hardware-accelerated)
-- Shell target detection (Taskbar / Start Menu via UI Automation)
-- Overlay window management (click-through, layered)
-- Configuration persistence (`%LOCALAPPDATA%\CrystalFrame\config.json`)
-- Explorer restart recovery (WinEvent hook)
+**CrystalFrame.Core.dll** — Native DLL (C++20)
+- Manages the custom Windows 7 Start Menu window (GDI painting, state, navigation).
+- Provides the transparent Taskbar overlay and handles low-level hooks.
+- Exports a C API (`CoreApi.h`) consumed by the Dashboard via P/Invoke.
 
-**CrystalFrame.Dashboard** — Settings UI (C# .NET 8, WinUI 3)
-- Single compact window (460×560 px), fixed size — no scroll on the window itself
-- Slim header: Core Engine status, Core ON/OFF toggle, Run at Startup toggle
-- Tab strip: **Taskbar** | **Start Menu** — all settings in-window, scrollable per tab
-- Real-time status indicators (detection dot, connection status)
+**CrystalFrame.Dashboard.exe** — Settings UI (C# .NET 8, WinUI 3)
+- Single-window compact settings panel with `NavigationView` (Taskbar / Start Menu panels).
+- Loads `CrystalFrame.Core.dll` in-process via P/Invoke — no external process or named pipes.
+- Manages Core lifecycle (start/stop toggle) and forwards all settings in real time.
 
 ### Technology Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Core engine | C++20, DirectComposition, Direct2D, Win32 API |
-| Dashboard UI | C# .NET 8, WinUI 3, XAML |
-| Core↔Dashboard | P/Invoke (direct DLL calls, no IPC) |
+| Core engine | C++20, Win32 API, GDI |
+| Dashboard UI | C# .NET 8, WinUI 3, XAML, NavigationView |
+| Core↔Dashboard | P/Invoke (direct DLL calls) |
 | Build | CMake (Core), dotnet CLI / MSBuild (Dashboard) |
 
 ---
@@ -85,17 +96,17 @@ cmake --build build --config Release
 **Dashboard (C#):**
 ```cmd
 cd Dashboard
-dotnet build -p:Platform=x64 --configuration Release
+dotnet build -r win-x64 --no-self-contained
 ```
 
 ### Run
 
 ```cmd
-Dashboard\bin\x64\Release\net8.0-windows10.0.22621.0\CrystalFrame.Dashboard.exe
+Dashboard\bin\x64\Release\net8.0-windows10.0.22621.0\win-x64\CrystalFrame.Dashboard.exe
 ```
 
 The Dashboard automatically locates and loads `CrystalFrame.Core.dll` from the same directory.
-Click **Core Engine** toggle → ON to start the overlay engine.
+Click the **Core** toggle → ON to start the overlay engine.
 
 ---
 
@@ -106,8 +117,8 @@ Click **Core Engine** toggle → ON to start the overlay engine.
 | Control | Action |
 |---------|--------|
 | Core status dot | Green = engine running, Gray = stopped |
-| Core Engine toggle | Start / stop the overlay engine |
 | Startup toggle | Enable / disable Windows registry autostart |
+| Core toggle | Start / stop the overlay engine |
 
 ### Taskbar tab
 
@@ -115,23 +126,31 @@ Click **Core Engine** toggle → ON to start the overlay engine.
 |---------|--------|
 | Taskbar Overlay toggle | Enable / disable the Taskbar overlay |
 | Transparency slider | 0–100% opacity |
+| Blur (acrylic) toggle | Enable acrylic blur behind the overlay |
 | R / G / B sliders | Background color |
 | Color preview bar | Live preview of the selected color |
-| Blur (acrylic) toggle | Enable acrylic blur behind the overlay |
 
 ### Start Menu tab
 
 | Control | Action |
 |---------|--------|
-| Start Menu Overlay toggle | Enable / disable the Start Menu overlay |
+| Start Menu toggle | Enable / disable the Start Menu replacement |
+| Keep Open for Preview | Pin the menu open to preview effects in real time |
 | Transparency slider | 0–100% opacity |
-| Blur (acrylic) toggle | Enable acrylic blur behind the overlay |
+| Blur (acrylic) toggle | Enable acrylic blur behind the Start Menu |
 | Background Color sliders | R / G / B for the menu background |
 | Text Color sliders | R / G / B for menu text |
-| Menu Items checkboxes | Show / hide individual right-column items |
-| Keep Start Menu Open | Pin the menu open to preview effects in real time |
 | Border / Accent Color | R / G / B for the menu border |
+| Right Column Items | Show / hide individual right-column items |
 | Theme Presets | Classic Win7 / Aero Glass / Dark — one-click apply |
+
+### Start Menu right-click actions
+
+| Target | Action |
+|--------|--------|
+| Pinned item | Unpin from Start Menu / Select custom icon |
+| Recent item | Remove from list |
+| All Programs item | Pin to Start Menu / Pin to Taskbar |
 
 ---
 
@@ -142,9 +161,13 @@ Click **Core Engine** toggle → ON to start the overlay engine.
 - If Taskbar not detected: restart Windows Explorer (Task Manager → Windows Explorer → Restart)
 - Logs: `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log`
 
-**Start Menu not detected**
-- Expected on some Windows builds; Taskbar overlay continues to work normally
-- Start overlay enables automatically when detection succeeds
+**Start Menu not appearing**
+- Ensure the Start Menu toggle is ON in the Start Menu tab
+- Click the Windows Start button to trigger the hook
+
+**Recent programs list is empty**
+- Recent items are loaded from the Windows UserAssist registry
+- Open a few applications, then re-open the Start Menu — the list refreshes on every open
 
 ---
 
@@ -163,21 +186,24 @@ Click **Core Engine** toggle → ON to start the overlay engine.
 
 ### Done
 - Taskbar overlay (all edges + auto-hide support)
-- Start Menu overlay (auto-detect open/close)
-- Per-channel RGB color control
-- Config persistence (JSON)
+- Start Menu replacement (Win7 two-column layout, fully functional)
+- Per-channel RGB color control (background + text + border/accent per panel)
+- Config persistence (JSON in `%LOCALAPPDATA%\CrystalFrame\`)
 - Explorer restart recovery
 - Run at Startup (registry) — starts hidden in System Tray when launched at boot
 - System theme (light/dark) support
-- Compact single-window settings panel (460×560 px) with tab strip (Taskbar / Start Menu)
 - System tray icon — minimize to tray; right-click menu (Open / Exit); double-click to restore
-- Win7-style Start Menu — two-column layout (programs list + system links), All Programs hierarchical tree with folder drill-down, keyboard navigation (Up/Down/Enter/Esc), mouse-wheel scroll, hover-to-open lateral submenus, search box, power menu
+- All Programs hierarchical tree with folder drill-down, keyboard nav, mouse-wheel scroll, hover submenus
+- Dynamic pinned list — pin/unpin/pin-to-taskbar via right-click; custom icon picker
+- Recent programs — auto-refresh on open; right-click "Remove from list"
+- Multi-monitor Taskbar overlay
+- Blur / Acrylic effect per panel
+- Theme presets (Classic Win7 / Aero Glass / Dark)
+- Right-column item visibility per-item
+- Compact single-window Dashboard with NavigationView (Taskbar / Start Menu panels)
 
 ### Planned
-- **Multi-monitor support** — overlay on non-primary displays
-- **Material effects** — blur / acrylic behind overlays
 - **Global hotkey** — toggle overlays without opening Dashboard
-- **Color presets** — quick-select common themes (Aero Glass, Dark, etc.)
 - **Auto-update check** — notify when a new GitHub release is available
 
 ---

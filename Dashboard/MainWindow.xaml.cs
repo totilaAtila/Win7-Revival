@@ -47,8 +47,8 @@ namespace CrystalFrame.Dashboard
             var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
             _appWindow   = AppWindow.GetFromWindowId(windowId);
 
-            // Dimensiune fixă, compactă — nu se mai auto-redimensionează la infinit
-            _appWindow.Resize(new SizeInt32(460, 560));
+            // Dimensiune fixă — NavigationView lateral necesită lățime mai mare
+            _appWindow.Resize(new SizeInt32(500, 590));
 
             if (_appWindow.Presenter is OverlappedPresenter presenter)
             {
@@ -64,7 +64,7 @@ namespace CrystalFrame.Dashboard
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
 
             RootGrid.DataContext = _viewModel;
-            RootGrid.Loaded += (s, e) => UpdateTabHighlight();
+            RootGrid.Loaded += (s, e) => { NavView.SelectedItem = NavTaskbar; };
 
             _appWindow.Closing += OnAppWindowClosing;
 
@@ -182,32 +182,22 @@ namespace CrystalFrame.Dashboard
             });
         }
 
-        // ── Tab navigation ────────────────────────────────────────────────────────
+        // ── NavigationView ────────────────────────────────────────────────────────
 
-        private void Tab_Taskbar_Click(object sender, RoutedEventArgs e) => SwitchTab("Taskbar");
-        private void Tab_Start_Click(object sender, RoutedEventArgs e)   => SwitchTab("StartMenu");
+        private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+        {
+            if (args.SelectedItem is NavigationViewItem item)
+                SwitchTab(item.Tag?.ToString() ?? "Taskbar");
+        }
 
         private void SwitchTab(string tab)
         {
             _activeTab = tab;
             TaskbarPanel.Visibility   = tab == "Taskbar"   ? Visibility.Visible : Visibility.Collapsed;
             StartMenuPanel.Visibility = tab == "StartMenu" ? Visibility.Visible : Visibility.Collapsed;
-            UpdateTabHighlight();
         }
 
-        private void UpdateTabHighlight()
-        {
-            var accent   = new SolidColorBrush(Color.FromArgb(255, 0, 120, 212));
-            bool isDark  = Application.Current.RequestedTheme == ApplicationTheme.Dark;
-            var inactive = isDark
-                ? new SolidColorBrush(Color.FromArgb(0, 0, 0, 0))
-                : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
-
-            TabTaskbarText.Foreground   = _activeTab == "Taskbar"   ? accent : (SolidColorBrush)Application.Current.Resources["TextFillColorPrimaryBrush"];
-            TabStartMenuText.Foreground = _activeTab == "StartMenu" ? accent : (SolidColorBrush)Application.Current.Resources["TextFillColorPrimaryBrush"];
-            TabTaskbarText.FontWeight   = _activeTab == "Taskbar"   ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
-            TabStartMenuText.FontWeight = _activeTab == "StartMenu" ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
-        }
+        private void UpdateTabHighlight() { /* NavigationView handles selection highlighting */ }
 
         // ── Core toggles ──────────────────────────────────────────────────────────
 

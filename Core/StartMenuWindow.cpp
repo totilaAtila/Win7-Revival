@@ -147,6 +147,7 @@ StartMenuWindow::StartMenuWindow() {
     }
 
     LoadCustomNames();
+    LoadRecentExcluded();
 }
 
 StartMenuWindow::~StartMenuWindow() {
@@ -244,8 +245,11 @@ void StartMenuWindow::Shutdown() {
 
     // Null out all dangling hIcon references so FreeNodeIcons / the loops below
     // are no-ops (icons already destroyed by the cache).
-    for (auto& item : m_dynamicPinnedItems)
+    // hCustomIcon is NOT cache-owned — destroy it here.
+    for (auto& item : m_dynamicPinnedItems) {
+        if (item.hCustomIcon) { DestroyIcon(item.hCustomIcon); item.hCustomIcon = nullptr; }
         item.hIcon = nullptr;
+    }
     for (int i = 0; i < RIGHT_ITEM_COUNT; ++i)
         m_rightIcons[i] = nullptr;
     FreeNodeIcons(m_programTree);   // safe: hIcon already nullptr after cache clear
@@ -281,6 +285,13 @@ void StartMenuWindow::Shutdown() {
 //     code only iterates it after m_iconsLoaded == true (acquire).
 void StartMenuWindow::LoadIconsAsync() {
     CF_LOG(Info, "LoadIconsAsync: start");
+
+    // Initialize COM on this thread so SHGetKnownFolderPath, SHGetFileInfoW,
+    // and any shell namespace calls work correctly.
+    HRESULT hrCom = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    // S_OK and S_FALSE both require a balancing CoUninitialize(); RPC_E_CHANGED_MODE
+    // means another thread already set the model — no balance needed, calls still work.
+    bool comInited = SUCCEEDED(hrCom);
 
     // S6.1 — Pinned app icons (32×32). Use IconCache to avoid duplicate handles
     // when a pinned item's command matches a path already loaded for the tree.
@@ -331,6 +342,8 @@ void StartMenuWindow::LoadIconsAsync() {
     // visible to any thread that subsequently reads with acquire ordering.
     m_iconsLoaded.store(true, std::memory_order_release);
     CF_LOG(Info, "LoadIconsAsync: done — requesting repaint");
+
+    if (comInited) CoUninitialize();
 
     // If the Start Menu window already exists, request a repaint so real icons
     // replace the colored-square fallbacks immediately.
@@ -553,6 +566,9 @@ void StartMenuWindow::Show(int /*x*/, int /*y*/) {
 
     // Refresh cached position in case the taskbar moved since last open.
     CacheMenuPosition();
+
+    // Refresh recent programs so newly-launched apps appear immediately.
+    { std::lock_guard<std::mutex> lk(m_treeMutex); LoadRecentPrograms(); }
 
     // Apply transparency once if not yet done (lazy: skip on every Show()).
     if (!m_transparencyApplied) {
@@ -976,6 +992,13 @@ void StartMenuWindow::LoadRecentPrograms() {
                 displayName.resize(displayName.size() - 4);
         }
 
+        // Skip if user removed this from the recent list
+        {
+            std::wstring lowerPath = e.path;
+            for (auto& c : lowerPath) c = static_cast<wchar_t>(towlower(c));
+            if (m_recentExcluded.count(lowerPath)) continue;
+        }
+
         // Skip if already in pinned list (case-insensitive name match)
         bool alreadyPinned = false;
         for (const auto& pin : m_dynamicPinnedItems) {
@@ -1048,12 +1071,14 @@ void StartMenuWindow::PaintProgramsList(HDC hdc, const RECT& cr) {
             DeleteObject(hBr);
         }
 
-        // Icon — real system icon when available, colored square fallback
+        // Icon — custom icon > system icon > colored square fallback
         int iconCX = MARGIN + PROG_ICON_SZ / 2 + 4;
         int iconCY = itemY + PROG_ITEM_H / 2;
-        if (iconsReady && item.hIcon) {
+        HICON effectiveIcon = item.hCustomIcon ? item.hCustomIcon
+                            : (iconsReady ? item.hIcon : nullptr);
+        if (effectiveIcon) {
             DrawIconEx(hdc, iconCX - PROG_ICON_SZ / 2, iconCY - PROG_ICON_SZ / 2,
-                       item.hIcon, PROG_ICON_SZ, PROG_ICON_SZ, 0, nullptr, DI_NORMAL);
+                       effectiveIcon, PROG_ICON_SZ, PROG_ICON_SZ, 0, nullptr, DI_NORMAL);
         } else {
             DrawIconSquare(hdc, iconCX, iconCY, PROG_ICON_SZ,
                            item.iconColor, item.shortName.c_str());
@@ -1181,12 +1206,12 @@ void StartMenuWindow::PaintAllProgramsView(HDC hdc, const RECT& cr) {
             // Real system icon from shell
             DrawIconEx(hdc, iconCX - PROG_ICON_SZ / 2, iconCY - PROG_ICON_SZ / 2,
                        node.hIcon, PROG_ICON_SZ, PROG_ICON_SZ, 0, nullptr, DI_NORMAL);
-            SelectObject(hdc, node.isFolder ? boldFont : nameFont);
+            SelectObject(hdc, nameFont);
         } else if (node.isFolder) {
             // Folder fallback: amber square with "›" glyph
             DrawIconSquare(hdc, iconCX, iconCY, PROG_ICON_SZ,
                            RGB(210, 150, 20), L"\u203a");
-            SelectObject(hdc, boldFont);
+            SelectObject(hdc, nameFont);
         } else {
             // Shortcut fallback: teal square with "»" glyph
             DrawIconSquare(hdc, iconCX, iconCY, PROG_ICON_SZ,
@@ -1371,9 +1396,26 @@ void StartMenuWindow::PaintWin7RightColumn(HDC hdc, const RECT& cr) {
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     SelectObject(hdc, itemF);
 
+    // Map s_rightItems index → m_menuItems index (-1 = always visible)
+    auto GetRightItemMenuIndex = [](int ri) -> int {
+        switch (ri) {
+            case 0: return 3;  // Documents → m_menuItems[3]
+            case 1: return 4;  // Pictures  → m_menuItems[4]
+            case 6: return 0;  // Control Panel → m_menuItems[0]
+            case 7: return 1;  // Devices & Printers → m_menuItems[1]
+            case 8: return 2;  // Default Programs → m_menuItems[2]
+            default: return -1;
+        }
+    };
+
     int y = RC_HDR_H + 2;
     for (int i = 0; i < RIGHT_ITEM_COUNT; ++i) {
         const Win7RightItem& item = s_rightItems[i];
+
+        if (!item.isSeparator) {
+            int mi = GetRightItemMenuIndex(i);
+            if (mi >= 0 && !m_menuItems[mi].visible) continue;
+        }
 
         if (item.isSeparator) {
             // Draw a subtle horizontal line centred in the separator row
@@ -1665,9 +1707,27 @@ int StartMenuWindow::GetRightItemAtPoint(POINT pt) {
     if (pt.x <= DIVIDER_X) return -1;      // left column
     if (pt.y >= BOTTOM_BAR_Y) return -1;   // bottom bar handled separately
 
+    // Must match PaintWin7RightColumn's visibility logic
+    auto GetRightItemMenuIndex = [](int ri) -> int {
+        switch (ri) {
+            case 0: return 3;
+            case 1: return 4;
+            case 6: return 0;
+            case 7: return 1;
+            case 8: return 2;
+            default: return -1;
+        }
+    };
+
     int y = RC_HDR_H + 2;
     for (int i = 0; i < RIGHT_ITEM_COUNT; ++i) {
         const Win7RightItem& item = s_rightItems[i];
+
+        if (!item.isSeparator) {
+            int mi = GetRightItemMenuIndex(i);
+            if (mi >= 0 && !m_menuItems[mi].visible) continue;
+        }
+
         int rowH = item.isSeparator ? RC_SEP_H : RC_ITEM_H;
 
         if (!item.isSeparator) {
@@ -1949,10 +2009,10 @@ void StartMenuWindow::PaintSubMenu(HDC hdc, const RECT& cr) {
         if (iconsReady && child.hIcon) {
             DrawIconEx(hdc, iconCX - SM_ICON_SZ / 2, iconCY - SM_ICON_SZ / 2,
                        child.hIcon, SM_ICON_SZ, SM_ICON_SZ, 0, nullptr, DI_NORMAL);
-            SelectObject(hdc, child.isFolder ? boldF : itemF);
+            SelectObject(hdc, itemF);
         } else if (child.isFolder) {
             DrawIconSquare(hdc, iconCX, iconCY, SM_ICON_SZ, RGB(210, 150, 20), L"\u203a");
-            SelectObject(hdc, boldF);
+            SelectObject(hdc, itemF);
         } else {
             DrawIconSquare(hdc, iconCX, iconCY, SM_ICON_SZ, RGB(30, 140, 130), L"\u00bb");
             SelectObject(hdc, itemF);
@@ -2466,9 +2526,12 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
 
         if (m_viewMode == LeftViewMode::Programs) {
             int p = GetProgItemAtPoint(pt);
-            // Only show context menu on pinned items (not on recent items)
-            if (p >= 0 && p < static_cast<int>(m_dynamicPinnedItems.size()))
+            int pinnedCount = static_cast<int>(m_dynamicPinnedItems.size());
+            if (p >= 0 && p < pinnedCount) {
                 ShowPinnedContextMenu(p, screenPt);
+            } else if (p >= pinnedCount && p < pinnedCount + static_cast<int>(m_recentItems.size())) {
+                ShowRecentContextMenu(p - pinnedCount, screenPt);
+            }
         } else if (m_viewMode == LeftViewMode::AllPrograms) {
             int ap = GetApItemAtPoint(pt);
             if (ap >= 0) {
@@ -2775,14 +2838,30 @@ void StartMenuWindow::LoadPinnedItems() {
             while (std::getline(f, line)) {
                 if (line.find(L'{') != std::wstring::npos) { cur = {}; inItem = true; }
                 if (inItem) {
-                    auto n = extractStr(line, L"name");   if (!n.empty()) cur.name = n;
-                    auto s = extractStr(line, L"short");  if (!s.empty()) cur.shortName = s;
-                    auto c = extractStr(line, L"cmd");    if (!c.empty()) cur.command = c;
-                    auto col = extractNum(line, L"color"); if (col) cur.iconColor = col;
+                    auto n = extractStr(line, L"name");     if (!n.empty()) cur.name = n;
+                    auto s = extractStr(line, L"short");    if (!s.empty()) cur.shortName = s;
+                    auto c = extractStr(line, L"cmd");      if (!c.empty()) cur.command = c;
+                    auto ip = extractStr(line, L"iconPath"); if (!ip.empty()) cur.customIconPath = ip;
+                    auto col = extractNum(line, L"color");  if (col) cur.iconColor = col;
+                    auto idx = extractNum(line, L"iconIdx");
+                    // iconIdx can be 0 legitimately, so check if key exists
+                    {
+                        std::wstring kq = L"\"iconIdx\":";
+                        if (line.find(kq) != std::wstring::npos)
+                            cur.customIconIndex = static_cast<int>(idx);
+                    }
                 }
                 if (inItem && line.find(L'}') != std::wstring::npos) {
-                    if (!cur.name.empty() && !cur.command.empty())
+                    if (!cur.name.empty() && !cur.command.empty()) {
+                        // Re-extract custom icon if path was persisted
+                        if (!cur.customIconPath.empty() && cur.customIconIndex >= 0) {
+                            HICON hLarge = nullptr;
+                            if (ExtractIconExW(cur.customIconPath.c_str(),
+                                               cur.customIconIndex, &hLarge, nullptr, 1) > 0 && hLarge)
+                                cur.hCustomIcon = hLarge;
+                        }
                         m_dynamicPinnedItems.push_back(cur);
+                    }
                     inItem = false;
                 }
             }
@@ -2824,10 +2903,22 @@ void StartMenuWindow::SavePinnedItems() {
             else if (ch == L'"') escaped += L"\\\"";
             else escaped += ch;
         }
+        // Escape backslashes in customIconPath too
+        std::wstring escapedIconPath;
+        for (wchar_t ch : item.customIconPath) {
+            if (ch == L'\\') escapedIconPath += L"\\\\";
+            else if (ch == L'"') escapedIconPath += L"\\\"";
+            else escapedIconPath += ch;
+        }
+
         f << L"  {\"name\":\"" << item.name
           << L"\",\"short\":\"" << item.shortName
           << L"\",\"cmd\":\"" << escaped
-          << L"\",\"color\":" << static_cast<DWORD>(item.iconColor) << L"}";
+          << L"\",\"color\":" << static_cast<DWORD>(item.iconColor);
+        if (!item.customIconPath.empty())
+            f << L",\"iconPath\":\"" << escapedIconPath
+              << L"\",\"iconIdx\":" << item.customIconIndex;
+        f << L"}";
         if (i + 1 < m_dynamicPinnedItems.size()) f << L",";
         f << L"\n";
     }
@@ -2838,11 +2929,11 @@ void StartMenuWindow::UnpinItem(int index) {
     if (index < 0 || index >= static_cast<int>(m_dynamicPinnedItems.size())) return;
     if (!m_iconsLoaded.load(std::memory_order_acquire)) return; // Wait until icons done
 
-    // Fix P1: hIcon is always cache-owned (LoadIconsAsync uses m_iconCache.GetIcon;
-    // PinItemFromAllPrograms now also uses the cache — see below).
-    // Never call DestroyIcon here: m_iconCache.ReleaseAll() is the single owner
-    // and calling it again would leave a dangling handle in the cache.
-    m_dynamicPinnedItems[static_cast<size_t>(index)].hIcon = nullptr;
+    // Fix P1: hIcon is always cache-owned — never call DestroyIcon.
+    // hCustomIcon is NOT cache-owned — always call DestroyIcon before erase.
+    auto& dying = m_dynamicPinnedItems[static_cast<size_t>(index)];
+    if (dying.hCustomIcon) { DestroyIcon(dying.hCustomIcon); dying.hCustomIcon = nullptr; }
+    dying.hIcon = nullptr;
     m_dynamicPinnedItems.erase(m_dynamicPinnedItems.begin() + index);
     SavePinnedItems();
 
@@ -2916,6 +3007,7 @@ void StartMenuWindow::ShowPinnedContextMenu(int pinnedIndex, POINT screenPt) {
     HMENU menu = CreatePopupMenu();
     if (!menu) return;
     AppendMenuW(menu, MF_STRING, 1, L"Unpin from Start Menu");
+    AppendMenuW(menu, MF_STRING, 2, L"Select custom icon\u2026");
 
     ActivateForPopup(m_hwnd);
     int cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
@@ -2925,6 +3017,122 @@ void StartMenuWindow::ShowPinnedContextMenu(int pinnedIndex, POINT screenPt) {
 
     if (cmd == 1)
         UnpinItem(pinnedIndex);
+    else if (cmd == 2)
+        SelectCustomIconForPinnedItem(pinnedIndex);
+}
+
+void StartMenuWindow::ShowRecentContextMenu(int recentIndex, POINT screenPt) {
+    if (recentIndex < 0 || recentIndex >= static_cast<int>(m_recentItems.size())) return;
+
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return;
+    AppendMenuW(menu, MF_STRING, 1, L"Remove from list");
+
+    ActivateForPopup(m_hwnd);
+    int cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
+                             screenPt.x, screenPt.y, 0, m_hwnd, NULL);
+    PostMessage(m_hwnd, WM_NULL, 0, 0);
+    DestroyMenu(menu);
+
+    if (cmd == 1)
+        RemoveRecentItem(recentIndex);
+}
+
+void StartMenuWindow::RemoveRecentItem(int recentIndex) {
+    if (recentIndex < 0 || recentIndex >= static_cast<int>(m_recentItems.size())) return;
+
+    // Normalize path to lowercase for case-insensitive exclusion
+    std::wstring path = m_recentItems[static_cast<size_t>(recentIndex)].exePath;
+    std::wstring lowerPath = path;
+    for (auto& c : lowerPath) c = static_cast<wchar_t>(towlower(c));
+
+    m_recentExcluded.insert(lowerPath);
+
+    // Free icon before erasing
+    if (m_recentItems[static_cast<size_t>(recentIndex)].hIcon)
+        DestroyIcon(m_recentItems[static_cast<size_t>(recentIndex)].hIcon);
+
+    m_recentItems.erase(m_recentItems.begin() + recentIndex);
+    SaveRecentExcluded();
+    InvalidateRect(m_hwnd, NULL, FALSE);
+}
+
+void StartMenuWindow::LoadRecentExcluded() {
+    m_recentExcluded.clear();
+
+    PWSTR lap = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
+    std::wstring path = std::wstring(lap) + L"\\CrystalFrame\\recent_excluded.json";
+    CoTaskMemFree(lap);
+
+    std::wifstream f(path);
+    if (!f.is_open()) return;
+
+    std::wstring line;
+    while (std::getline(f, line)) {
+        size_t q1 = line.find(L'\"');
+        if (q1 == std::wstring::npos) continue;
+        size_t q2 = line.find(L'\"', q1 + 1);
+        if (q2 == std::wstring::npos) continue;
+        std::wstring entry = line.substr(q1 + 1, q2 - q1 - 1);
+        if (!entry.empty())
+            m_recentExcluded.insert(entry);
+    }
+}
+
+void StartMenuWindow::SaveRecentExcluded() {
+    PWSTR lap = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
+    std::wstring dir = std::wstring(lap) + L"\\CrystalFrame";
+    CoTaskMemFree(lap);
+    CreateDirectoryW(dir.c_str(), NULL);
+
+    std::wofstream f(dir + L"\\recent_excluded.json");
+    if (!f.is_open()) return;
+
+    f << L"[\n";
+    bool first = true;
+    for (const auto& entry : m_recentExcluded) {
+        if (!first) f << L",\n";
+        f << L"  \"" << entry << L"\"";
+        first = false;
+    }
+    f << L"\n]\n";
+}
+
+void StartMenuWindow::SelectCustomIconForPinnedItem(int index) {
+    if (index < 0 || index >= static_cast<int>(m_dynamicPinnedItems.size())) return;
+
+    // Start the PickIconDlg at imageres.dll (same default as Windows desktop Properties)
+    wchar_t iconPath[MAX_PATH] = L"C:\\Windows\\System32\\imageres.dll";
+    int iconIndex = 0;
+
+    // PickIconDlg is exported from shell32.dll; shlobj.h declares it
+    if (!PickIconDlg(m_hwnd, iconPath, MAX_PATH, &iconIndex))
+        return;  // user cancelled
+
+    // Extract the large (32×32) icon from the selected file and index
+    HICON hLarge = nullptr;
+    UINT nGot = ExtractIconExW(iconPath, iconIndex, &hLarge, nullptr, 1);
+    if (nGot == 0 || !hLarge) {
+        // Fallback: try small icon
+        HICON hSmall = nullptr;
+        ExtractIconExW(iconPath, iconIndex, nullptr, &hSmall, 1);
+        hLarge = hSmall;
+    }
+    if (!hLarge) return;  // extraction failed
+
+    auto& item = m_dynamicPinnedItems[static_cast<size_t>(index)];
+
+    // Release previous custom icon
+    if (item.hCustomIcon) { DestroyIcon(item.hCustomIcon); item.hCustomIcon = nullptr; }
+
+    item.hCustomIcon    = hLarge;
+    item.customIconPath = iconPath;
+    item.customIconIndex = iconIndex;
+
+    SavePinnedItems();
+    InvalidateRect(m_hwnd, NULL, FALSE);
 }
 
 void StartMenuWindow::ShowAllProgramsContextMenu(int apIndex, POINT screenPt) {
