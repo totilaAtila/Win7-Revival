@@ -405,16 +405,20 @@ void StartMenuWindow::LoadAvatarAsync() {
             }
         }
 
-        // 3. Fallback: %ProgramData%\Microsoft\User Account Pictures\{username}.png
+        // 3. Fallback: %ProgramData%\Microsoft\User Account Pictures\{username}.dat/.png/.jpg
         if (!picPath[0]) {
             wchar_t pd[MAX_PATH] = {};
             if (GetEnvironmentVariableW(L"ProgramData", pd, MAX_PATH) > 0) {
-                std::wstring uname(m_username);
-                std::wstring fp = std::wstring(pd) + L"\\Microsoft\\User Account Pictures\\"
-                                  + uname + L".png";
-                DWORD attr = GetFileAttributesW(fp.c_str());
-                if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY))
-                    wcsncpy_s(picPath, fp.c_str(), MAX_PATH - 1);
+                std::wstring base = std::wstring(pd) + L"\\Microsoft\\User Account Pictures\\"
+                                    + std::wstring(m_username);
+                for (const wchar_t* ext : { L".dat", L".png", L".jpg", L".jpeg" }) {
+                    std::wstring fp = base + ext;
+                    DWORD attr = GetFileAttributesW(fp.c_str());
+                    if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
+                        wcsncpy_s(picPath, fp.c_str(), MAX_PATH - 1);
+                        break;
+                    }
+                }
             }
         }
 
