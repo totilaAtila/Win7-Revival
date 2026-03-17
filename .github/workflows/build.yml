@@ -43,7 +43,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: CrystalFrame.Core
+          name: GlassBar.Core
           path: Core/build/bin/Release/CrystalFrame.Core.dll
           if-no-files-found: warn
 
@@ -51,6 +51,6 @@ jobs:
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: CrystalFrame.Dashboard
+          name: GlassBar.Dashboard
           path: Dashboard/bin/x64/Release/net8.0-windows10.0.22621.0/
           if-no-files-found: warn
