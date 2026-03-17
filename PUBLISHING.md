@@ -122,7 +122,7 @@ $newVersion = "1.0.1"
 
 1. **Mergi pe GitHub:**
    ```
-   https://github.com/totilaAtila/Win7-Revival/releases/new
+   https://github.com/totilaAtila/GlassBar/releases/new
    ```
 
 2. **Create tag:**
@@ -130,7 +130,7 @@ $newVersion = "1.0.1"
    - Target: `main` branch
 
 3. **Release details:**
-   - Release title: `CrystalFrame v1.0.0`
+   - Release title: `GlassBar v1.0.0`
    - Description: Copy din `.\publish\RELEASE_NOTES_v1.0.0.md`
 
 4. **Upload files:**
@@ -161,7 +161,7 @@ gh auth login
 gh release create v1.0.0 `
     .\publish\CrystalFrame-v1.0.0.zip `
     .\publish\CrystalFrame-v1.0.0-Standalone.zip `
-    --title "CrystalFrame v1.0.0" `
+    --title "GlassBar v1.0.0" `
     --notes-file .\publish\RELEASE_NOTES_v1.0.0.md
 ```
 
@@ -181,7 +181,7 @@ git push origin "v$version"
 # 3. Create GitHub release
 gh release create "v$version" `
     .\publish\*.zip `
-    --title "CrystalFrame v$version" `
+    --title "GlassBar v$version" `
     --notes-file ".\publish\RELEASE_NOTES_v$version.md" `
     --latest
 ```
@@ -299,7 +299,7 @@ git push origin v1.0.0
 
 # 4. Create GitHub release (manual sau CLI)
 gh release create v1.0.0 .\publish\*.zip `
-    --title "CrystalFrame v1.0.0" `
+    --title "GlassBar v1.0.0" `
     --notes-file .\publish\RELEASE_NOTES_v1.0.0.md `
     --latest
 
