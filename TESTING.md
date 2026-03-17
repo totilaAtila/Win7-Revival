@@ -1,4 +1,4 @@
-# Testing Guide - CrystalFrame Engine
+# Testing Guide - GlassBar Engine
 
 Quick testing scenarios to validate all functionality.
 
