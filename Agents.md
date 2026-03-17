@@ -1,4 +1,4 @@
-# Agents.md — CrystalFrame Engine (Windows 11)
+# Agents.md — GlassBar Engine (Windows 11)
 
 ## 1) Scopul proiectului
 CrystalFrame este un utilitar pentru Windows 11 care aplică un **overlay extern** (fără injection / fără patching Explorer) peste:
