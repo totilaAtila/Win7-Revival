@@ -80,6 +80,10 @@ private:
     // Instance pointer for static callbacks
     static StartMenuHook* s_instance;
 
+    // Win key state machine — deferred suppression for combo detection
+    bool m_winDown  = false;  // Win key is currently held
+    bool m_winCombo = false;  // another key was pressed while Win was held
+
     // Helper methods
     void FindStartButton();
     bool IsClickOnStartButton(POINT pt);

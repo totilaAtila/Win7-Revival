@@ -141,13 +141,49 @@ LRESULT CALLBACK StartMenuHook::KeyboardHookProc(int nCode, WPARAM wParam, LPARA
         KBDLLHOOKSTRUCT* kbd = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
 
         // Suppress Windows key KEYUP too - without this, the native Start opens on key release
-        if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
-            if (kbd->vkCode == VK_LWIN || kbd->vkCode == VK_RWIN) {
-                return 1; // Suppress Windows key up
+        const bool isWin  = (kbd->vkCode == VK_LWIN || kbd->vkCode == VK_RWIN);
+        const bool isDown = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
+        const bool isUp   = (wParam == WM_KEYUP   || wParam == WM_SYSKEYUP);
+
+        if (isWin) {
+            if (isDown) {
+                // Mark Win as held — do NOT suppress KEYDOWN so Windows can process Win+combos
+                s_instance->m_winDown  = true;
+                s_instance->m_winCombo = false;
+                return CallNextHookEx(NULL, nCode, wParam, lParam);
+            }
+            if (isUp) {
+                bool wasCombo = s_instance->m_winCombo;
+                s_instance->m_winDown  = false;
+                s_instance->m_winCombo = false;
+                if (!wasCombo) {
+                    // Solo Win press — show custom Start Menu and suppress KEYUP
+                    // (suppressing KEYUP prevents native Start Menu from opening)
+                    int x = 0, y = 0;
+                    if (s_instance->m_startButtonHwnd) {
+                        RECT startRect;
+                        if (GetWindowRect(s_instance->m_startButtonHwnd, &startRect)) {
+                            x = startRect.left;
+                            y = startRect.top;
+                        }
+                    } else {
+                        y = GetSystemMetrics(SM_CYSCREEN) - 48;
+                    }
+                    CF_LOG(Debug, "Windows key solo press - showing custom Start Menu");
+                    s_instance->ShowStartMenu(x, y);
+                    return 1;
+                }
+                // Win+combo (Win+D, Win+E, Win+L etc.) — let KEYUP through for Windows to complete
+                CF_LOG(Debug, "Windows key combo KEYUP - passing through");
+                return CallNextHookEx(NULL, nCode, wParam, lParam);
             }
         }
 
-        if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
+        // Non-Win key pressed while Win is held = combo (Win+D, Win+E, etc.)
+        if (s_instance->m_winDown && isDown)
+            s_instance->m_winCombo = true;
+
+        if (isDown) {
             // Navigation / dismiss keys — forward to Start Menu window via PostMessage
             // so that WM_KEYDOWN reaches HandleMessage even though the window is
             // non-activating (WS_EX_NOACTIVATE + SW_SHOWNOACTIVATE).
@@ -163,29 +199,6 @@ LRESULT CALLBACK StartMenuHook::KeyboardHookProc(int nCode, WPARAM wParam, LPARA
                     }
                     return 1; // Suppress — handled by the menu window
                 }
-            }
-            // Check for Windows key press (Left or Right)
-            else if (kbd->vkCode == VK_LWIN || kbd->vkCode == VK_RWIN) {
-                CF_LOG(Debug, "Windows key pressed - showing custom Start Menu");
-
-                // Get Start button position
-                int x = 0, y = 0;
-                if (s_instance->m_startButtonHwnd) {
-                    RECT startRect;
-                    if (GetWindowRect(s_instance->m_startButtonHwnd, &startRect)) {
-                        x = startRect.left;
-                        y = startRect.top;
-                    }
-                } else {
-                    // Default to bottom-left corner
-                    y = GetSystemMetrics(SM_CYSCREEN) - 48; // Above taskbar
-                    x = 0;
-                }
-
-                s_instance->ShowStartMenu(x, y);
-
-                // Suppress Windows key down - don't pass to Windows
-                return 1;
             }
         }
     }

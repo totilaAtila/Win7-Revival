@@ -1,6 +1,6 @@
 
 # WORKLOG — Win7-Revival / CrystalFrame
-Last updated: 2026-03-16 (session 20 — Start Menu perf + quality: font cache, operator fix, shortcut resolve, timer, ConfigManager, Renderer)
+Last updated: 2026-03-17 (session 21 — CPU idle optimization, hover repaint fix, Win key combos, AeroGlass preset)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -109,6 +109,43 @@ New requirement (non-negotiable, §10):
 2. Rebuild `CrystalFrame.Core.dll` cu CMake (pentru static CRT + crash handler activ).
 3. Test publish → verifică că `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log` apare la prima pornire.
 4. ✅ S6 implementat în această sesiune — iconițe reale din sistem (detalii în Session 9 S6 note de mai jos).
+
+---
+
+### Session 21 — CPU idle optimization, hover repaint fix, Win key combos, AeroGlass preset (2026-03-17)
+
+**Branch:** `imbunatatiri-viteza-si-tema-aeroglassmodif`
+
+**Motivație:** Consum CPU măsurat: 1–1.2% idle, peak 5% la hover rapid în Start Menu. Win key combinations (Win+D, Win+E etc.) complet nefuncționale. Tema AeroGlass cu valori implicite nepotrivite.
+
+#### Fix 1 — CPU idle: ShellTargetLocator poll 250ms → 500ms (`Core/ShellTargetLocator.cpp:344`)
+- Thread-ul `MonitorStart` pollingiza `DetectStart()` la fiecare 250ms indiferent de starea aplicației.
+- Schimbat `Sleep(250)` → `Sleep(500)`: latența de detecție a meniului Start crește de la max 250ms la max 500ms (imperceptibil practic), consumul baseline se înjumătățește.
+
+#### Fix 2 — CPU hover peak: double-repaint în WM_MOUSEMOVE (`Core/StartMenuWindow.cpp`)
+- **Problema:** la hover rapid între iteme, `m_hoverAnimAlpha` era resetat la 0 la fiecare schimbare de item chiar și cu timer-ul de 16ms deja activ → animație reluată de la 0 continuu. În plus, `InvalidateRect(hwnd, NULL, FALSE)` era emis imediat la finalul WM_MOUSEMOVE *și* de timer la 16ms → double-repaint full-window la frecvența mouse-ului (125–1000Hz).
+- **Fix A:** `m_hoverAnimAlpha = 0` și `SetTimer` la 16ms se execută doar dacă timer-ul NU rulează deja. La hover rapid, animația continuă de la alpha-ul curent în loc să se reseteze.
+- **Fix B:** `InvalidateRect` de la finalul WM_MOUSEMOVE este condiționat: se sare dacă `m_hoverAnimTimer` este activ — timer-ul de 16ms asigură repaint-ul.
+
+#### Fix 3 — Win key combinations: state machine deferred suppression (`Core/StartMenuHook.h/.cpp`)
+- **Problema:** hook-ul suprima *toate* evenimentele Win key (KEYDOWN + KEYUP) necondiționat → Win+D, Win+E, Win+L, Win+R etc. complet nefuncționale.
+- **Soluție — state machine:**
+  - `m_winDown` + `m_winCombo` adăugate ca membri în `StartMenuHook`.
+  - Win KEYDOWN: **nu mai e suprrimat** — trece prin `CallNextHookEx` (Windows îl marchează ca held, necesar pentru combo-uri). Se setează `m_winDown = true`.
+  - Orice altă tastă KEYDOWN cu `m_winDown` activ → `m_winCombo = true`.
+  - Win KEYUP cu `m_winCombo = false` → suprimat + `ShowStartMenu()` (comportament solo Win key).
+  - Win KEYUP cu `m_winCombo = true` → trece prin `CallNextHookEx` → Windows execută nativ Win+D/E/L/R etc.
+- Pattern standard folosit de Open-Shell/Classic Shell.
+
+#### Fix 4 — AeroGlass preset: Transparency 55→16, Blur true→false (`Dashboard/MainViewModel.cs:541-542`)
+- Valorile implicite ale temei Aero Glass actualizate: transparență mai mare (16 vs 55) și blur acrilic dezactivat implicit.
+
+**Fișiere modificate:**
+- `Core/ShellTargetLocator.cpp`
+- `Core/StartMenuWindow.cpp`
+- `Core/StartMenuHook.h`
+- `Core/StartMenuHook.cpp`
+- `Dashboard/MainViewModel.cs`
 
 ---
 

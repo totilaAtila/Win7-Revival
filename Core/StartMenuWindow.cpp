@@ -2430,7 +2430,7 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
             narrow != m_hoveredArrow      ||
             hadKeySel) {
 
-            // S-C: entering a new hover target — restart fade-in animation
+            // S-C: entering a new hover target — start/continue fade-in animation
             bool anyNewHover = (nProg >= 0 || nApRow || nAp >= 0 || nrc >= 0);
             bool hadHover    = (m_hoveredProgIndex >= 0 || m_hoveredApRow ||
                                 m_hoveredApIndex >= 0 || m_hoveredRightIndex >= 0);
@@ -2438,7 +2438,9 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
                                 nApRow != m_hoveredApRow     ||
                                 nAp    != m_hoveredApIndex   ||
                                 nrc    != m_hoveredRightIndex)) {
-                m_hoverAnimAlpha = 0;
+                // Reset alpha only if not mid-animation (rapid hover: continue from current alpha)
+                if (!m_hoverAnimTimer)
+                    m_hoverAnimAlpha = 0;
                 if (!m_hoverAnimTimer)
                     m_hoverAnimTimer = SetTimer(m_hwnd, HOVER_ANIM_TIMER_ID, 16, NULL);
             } else if (!anyNewHover && hadHover) {
@@ -2458,7 +2460,9 @@ LRESULT StartMenuWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
                 m_keySelApRow     = false;
                 m_keySelApIndex   = -1;
             }
-            InvalidateRect(m_hwnd, NULL, FALSE);
+            // Skip immediate repaint if anim timer is already running — it repaints at 16ms
+            if (!m_hoverAnimTimer)
+                InvalidateRect(m_hwnd, NULL, FALSE);
         }
         return 0;
     }

@@ -340,8 +340,8 @@ void ShellTargetLocator::MonitorStart() {
         lastState.confidence = newState.confidence;
         lastState.detected = newState.detected;
 
-        // Poll every 250ms
-        Sleep(250);
+        // Poll every 500ms — adequate latency for start menu detection, halves idle CPU cost
+        Sleep(500);
     }
     
     CF_LOG(Info, "Start Menu monitoring thread stopped");
