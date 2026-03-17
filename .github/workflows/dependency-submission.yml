@@ -30,6 +30,7 @@ jobs:
           cat /tmp/packages.json
 
       - name: Submit dependency snapshot
+        continue-on-error: true   # GitHub API /dependency-graph/snapshots returns 500 intermittently
         uses: actions/github-script@v7
         env:
           PACKAGES_JSON: /tmp/packages.json
