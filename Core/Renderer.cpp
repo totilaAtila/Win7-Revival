@@ -12,6 +12,26 @@ Renderer::~Renderer() {
 }
 
 bool Renderer::Initialize() {
+    // Detect Windows build number via RtlGetVersion (ntdll) — more reliable than
+    // GetVersionEx which is shimmed on newer Windows versions.
+    typedef NTSTATUS(WINAPI* RtlGetVersionFn)(PRTL_OSVERSIONINFOW);
+    HMODULE hNtdll = GetModuleHandleW(L"ntdll.dll");
+    if (hNtdll) {
+        auto rtlGetVersion = reinterpret_cast<RtlGetVersionFn>(
+            GetProcAddress(hNtdll, "RtlGetVersion"));
+        if (rtlGetVersion) {
+            RTL_OSVERSIONINFOW osvi = {};
+            osvi.dwOSVersionInfoSize = sizeof(osvi);
+            rtlGetVersion(&osvi);
+            m_buildNumber = osvi.dwBuildNumber;
+        }
+    }
+    // Windows 11 24H2 = build 26100; 25H2 expected ~27xxx
+    CF_LOG(Info, "Windows build number: " << m_buildNumber
+                 << (m_buildNumber >= 27000 ? " (25H2+ — adaptive AccentFlags enabled)"
+                   : m_buildNumber >= 26100 ? " (24H2)"
+                   : " (pre-24H2)"));
+
     // Load SetWindowCompositionAttribute from user32.dll
     HMODULE hUser32 = GetModuleHandleW(L"user32.dll");
     if (!hUser32) {
@@ -235,12 +255,25 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
         // GradientColor format: ABGR
         DWORD gradientColor = (alpha << 24) | (b << 16) | (g << 8) | r;
         accent.GradientColor = gradientColor;
-        accent.AccentFlags = 2;
+
+        // AccentFlags strategy varies by Windows build.
+        // On Windows 25H2+ (build >= 27000) the taskbar window (Shell_TrayWnd) silently
+        // ignores AccentFlags = 2. Using 0x20 (draw gradient on entire client area) or
+        // 0 (no border restriction) has better compatibility with newer builds.
+        // On older builds AccentFlags = 2 is the correct value.
+        if (m_buildNumber >= 27000) {
+            // 25H2+: use 0x20 (full-window gradient, no border clipping)
+            accent.AccentFlags = 0x20;
+            CF_LOG(Debug, "[" << windowType << "] Win25H2+ AccentFlags=0x20");
+        } else {
+            accent.AccentFlags = 2;
+        }
 
         CF_LOG(Debug, "[" << windowType << "] Applying "
                      << (useBlur ? "ACRYLIC" : "TRANSPARENTGRADIENT")
                      << ": opacity=" << opacity << "%, GradientColor=0x"
-                     << std::hex << gradientColor << std::dec);
+                     << std::hex << gradientColor << std::dec
+                     << ", AccentFlags=0x" << accent.AccentFlags);
     } else {
         accent.AccentState = ACCENT_DISABLED;
         accent.GradientColor = 0;

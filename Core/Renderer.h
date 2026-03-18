@@ -73,6 +73,9 @@ private:
     // Task 4: when SWCA is unavailable (some Win11 builds / VMs), fall back to
     // SetLayeredWindowAttributes for basic alpha transparency without blur.
     bool m_wcaUnavailable = false;
+    // Windows build number detected at Initialize() via RtlGetVersion.
+    // Used to select the correct AccentFlags strategy per OS generation.
+    DWORD m_buildNumber = 0;
 
     std::vector<HWND> m_hwndTaskbars;
     HWND m_hwndStart = nullptr;
