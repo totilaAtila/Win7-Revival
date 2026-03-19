@@ -2,7 +2,7 @@
 #include "Diagnostics.h"
 #include <sstream>
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 IpcBridge::IpcBridge() {
 }
@@ -26,7 +26,7 @@ bool IpcBridge::Initialize(IIpcCallback* callback) {
 
         // Create named pipe
         m_hPipe = CreateNamedPipeW(
-            L"\\\\.\\pipe\\CrystalFrame",
+            L"\\\\.\\pipe\\GlassBar",
             PIPE_ACCESS_DUPLEX,  // Bidirectional
             PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
             1,  // Max 1 instance (single Dashboard)
@@ -303,4 +303,4 @@ bool IpcBridge::ParseBool(const std::string& json, const std::string& key) {
     return false;
 }
 
-} // namespace CrystalFrame
+} // namespace GlassBar
