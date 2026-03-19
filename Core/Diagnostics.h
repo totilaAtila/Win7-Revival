@@ -8,7 +8,7 @@
 #include <sstream>
 #include <iomanip>
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 enum class LogLevel {
     Debug,
@@ -51,12 +51,12 @@ private:
     do { \
         std::ostringstream oss; \
         oss << __VA_ARGS__; \
-        CrystalFrame::Logger::Instance().Log( \
-            CrystalFrame::LogLevel::level, \
+        GlassBar::Logger::Instance().Log( \
+            GlassBar::LogLevel::level, \
             oss.str(), \
             __FILE__, \
             __LINE__ \
         ); \
     } while(0)
 
-} // namespace CrystalFrame
+} // namespace GlassBar
