@@ -26,35 +26,35 @@ jobs:
 
       - name: Publish Dashboard (self-contained x64)
         run: >
-          dotnet publish Dashboard/CrystalFrame.Dashboard.csproj
+          dotnet publish Dashboard/GlassBar.Dashboard.csproj
           -c Release -p:Platform=x64 -r win-x64
           --self-contained true
-          -o publish/CrystalFrame-${{ github.ref_name }}
+          -o publish/GlassBar-${{ github.ref_name }}
 
       - name: Copy Core DLL to publish folder
         shell: pwsh
         run: |
-          Copy-Item Core/build/bin/Release/CrystalFrame.Core.dll `
-                    publish/CrystalFrame-${{ github.ref_name }}/
+          Copy-Item Core/build/bin/Release/GlassBar.Core.dll `
+                    publish/GlassBar-${{ github.ref_name }}/
 
       - name: Zip release
         shell: pwsh
         run: |
           Compress-Archive `
-            -Path "publish/CrystalFrame-${{ github.ref_name }}/*" `
-            -DestinationPath "CrystalFrame-${{ github.ref_name }}-win-x64.zip"
+            -Path "publish/GlassBar-${{ github.ref_name }}/*" `
+            -DestinationPath "GlassBar-${{ github.ref_name }}-win-x64.zip"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "CrystalFrame ${{ github.ref_name }}"
+          name: "GlassBar ${{ github.ref_name }}"
           draft: false
           prerelease: true
           body: |
             ## ⚠️ Early Development Release
 
-            CrystalFrame este în dezvoltare activă. Această versiune poate conține
+            GlassBar este în dezvoltare activă. Această versiune poate conține
             bugs cunoscuți, în special la funcționalitatea **Start Menu**.
 
             ### Ce funcționează
@@ -66,8 +66,8 @@ jobs:
 
             ### Instalare
             1. Extrage zip-ul
-            2. Rulează `CrystalFrame.Dashboard.exe`
+            2. Rulează `GlassBar.Dashboard.exe`
             3. Activează Core Engine din toggle
 
             Raportează probleme la [Issues](../../issues).
-          files: CrystalFrame-${{ github.ref_name }}-win-x64.zip
+          files: GlassBar-${{ github.ref_name }}-win-x64.zip
