@@ -1,4 +1,4 @@
-# CrystalFrame Build Script
+# GlassBar Build Script
 # Compiles Core (C++) and Dashboard (C#) into a single distributable package
 
 param(
@@ -22,7 +22,7 @@ $DashboardDir = Join-Path $ScriptDir "Dashboard"
 $CoreBuildDir = Join-Path $CoreDir "build"
 $CoreOutputDir = Join-Path $CoreBuildDir "bin\$Configuration"
 
-Write-Host "=== CrystalFrame Build ===" -ForegroundColor Cyan
+Write-Host "=== GlassBar Build ===" -ForegroundColor Cyan
 Write-Host "Configuration: $Configuration"
 Write-Host "Platform: $Platform"
 Write-Host ""
@@ -86,7 +86,7 @@ if (-not $SkipCore) {
     }
 
     # Verify Core.dll exists
-    $CoreDll = Join-Path $CoreOutputDir "CrystalFrame.Core.dll"
+    $CoreDll = Join-Path $CoreOutputDir "GlassBar.Core.dll"
     if (-not (Test-Path $CoreDll)) {
         throw "Core.dll not found at: $CoreDll"
     }
@@ -131,7 +131,7 @@ if (-not $SkipDashboard) {
 Write-Host "=== Build Verification ===" -ForegroundColor Cyan
 
 $DashboardOutputDir = Join-Path $DashboardDir "bin\$Platform\$Configuration\net8.0-windows10.0.22621.0"
-$DashboardExe = Join-Path $DashboardOutputDir "CrystalFrame.Dashboard.exe"
+$DashboardExe = Join-Path $DashboardOutputDir "GlassBar.Dashboard.exe"
 
 if (Test-Path $DashboardExe) {
     Write-Host "Dashboard.exe: $DashboardExe" -ForegroundColor Green
