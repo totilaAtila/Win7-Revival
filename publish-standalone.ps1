@@ -1,4 +1,4 @@
-# CrystalFrame Standalone Publish Script
+# GlassBar Standalone Publish Script
 # Creates a self-contained package that includes .NET runtime (no dependencies needed)
 
 param(
@@ -6,7 +6,7 @@ param(
     [string]$OutputDir = ".\publish"
 )
 
-Write-Host "=== CrystalFrame Standalone Publish ===" -ForegroundColor Cyan
+Write-Host "=== GlassBar Standalone Publish ===" -ForegroundColor Cyan
 Write-Host "Version: $Version" -ForegroundColor Green
 Write-Host "This will create a larger package that includes .NET runtime" -ForegroundColor Yellow
 
@@ -44,7 +44,7 @@ Pop-Location
 Write-Host "`n[2/4] Publishing Dashboard (self-contained)..." -ForegroundColor Yellow
 Push-Location Dashboard
 
-$publishPath = Join-Path ".." (Join-Path $OutputDir "CrystalFrame-v$Version-Standalone")
+$publishPath = Join-Path ".." (Join-Path $OutputDir "GlassBar-v$Version-Standalone")
 
 dotnet publish `
     -c Release `
@@ -65,21 +65,21 @@ Pop-Location
 
 # Step 3: Copy Core.dll
 Write-Host "`n[3/4] Copying Core.dll..." -ForegroundColor Yellow
-$coreSource = ".\Core\build\bin\Release\CrystalFrame.Core.dll"
+$coreSource = ".\Core\build\bin\Release\GlassBar.Core.dll"
 Copy-Item $coreSource -Destination $publishPath -Force
 
 # Step 4: Create documentation
 Write-Host "`n[4/4] Creating documentation..." -ForegroundColor Yellow
 
 @"
-CrystalFrame v$Version (Standalone)
+GlassBar v$Version (Standalone)
 ====================================
 
 This is a STANDALONE package - no .NET installation required!
 
 Installation:
-1. Extract all files to a folder (e.g., C:\Program Files\CrystalFrame)
-2. Run CrystalFrame.Dashboard.exe
+1. Extract all files to a folder (e.g., C:\Program Files\GlassBar)
+2. Run GlassBar.Dashboard.exe
 3. Click "Start Core" to activate
 
 Requirements:
@@ -100,12 +100,12 @@ Features:
 Build Date: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 Platform: Windows x64 (Self-Contained)
 
-GitHub: https://github.com/totilaAtila/Win7-Revival
+GitHub: https://github.com/totilaAtila/GlassBar
 "@ | Out-File -FilePath (Join-Path $publishPath "README.txt") -Encoding UTF8
 
 # Create ZIP
 Write-Host "`nCreating ZIP archive..." -ForegroundColor Yellow
-$zipPath = Join-Path $OutputDir "CrystalFrame-v$Version-Standalone.zip"
+$zipPath = Join-Path $OutputDir "GlassBar-v$Version-Standalone.zip"
 if (Test-Path $zipPath) {
     Remove-Item $zipPath -Force
 }
