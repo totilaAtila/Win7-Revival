@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(CrystalFrame.Core)
+project(GlassBar.Core)
 
 # C++20 required
 set(CMAKE_CXX_STANDARD 20)
@@ -32,10 +32,10 @@ set(HEADERS
 )
 
 # Create shared library (DLL)
-add_library(CrystalFrame.Core SHARED ${SOURCES} ${HEADERS})
+add_library(GlassBar.Core SHARED ${SOURCES} ${HEADERS})
 
 # Link libraries
-target_link_libraries(CrystalFrame.Core
+target_link_libraries(GlassBar.Core
     # Windows libraries
     user32.lib
     gdi32.lib
@@ -47,7 +47,7 @@ target_link_libraries(CrystalFrame.Core
 
 # Compiler options for MSVC
 if(MSVC)
-    target_compile_options(CrystalFrame.Core PRIVATE
+    target_compile_options(GlassBar.Core PRIVATE
         /W4                 # Warning level 4
         /permissive-        # Standards conformance
         # /MP removed - causes heap errors on some systems
@@ -58,11 +58,11 @@ if(MSVC)
 
     # Static CRT: embed runtime into the DLL so VCRUNTIME140.dll / MSVCP140.dll
     # are not required in the publish folder or on the target machine.
-    set_property(TARGET CrystalFrame.Core PROPERTY
+    set_property(TARGET GlassBar.Core PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
     # Definitions
-    target_compile_definitions(CrystalFrame.Core PRIVATE
+    target_compile_definitions(GlassBar.Core PRIVATE
         UNICODE
         _UNICODE
         CRYSTALFRAME_EXPORTS  # Export symbols for DLL
@@ -70,14 +70,14 @@ if(MSVC)
 endif()
 
 # Set output directory
-set_target_properties(CrystalFrame.Core PROPERTIES
+set_target_properties(GlassBar.Core PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
 # Installation
-install(TARGETS CrystalFrame.Core
+install(TARGETS GlassBar.Core
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION bin
     ARCHIVE DESTINATION lib
