@@ -631,5 +631,57 @@ namespace CrystalFrame.Dashboard
             }
             finally { _isDetailInitialized = true; }
         }
+
+        // ── Global theme presets (Taskbar panel) ──────────────────────────────────
+
+        private void TaskbarPresetWin7Aero_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_isDetailInitialized) return;
+            _viewModel.ApplyGlobalTheme("Win7Aero");
+            SyncAllSlidersFromViewModel();
+        }
+
+        private void TaskbarPresetDark_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_isDetailInitialized) return;
+            _viewModel.ApplyGlobalTheme("Dark");
+            SyncAllSlidersFromViewModel();
+        }
+
+        /// <summary>
+        /// Syncs all UI sliders (Taskbar + Start Menu) from the ViewModel after a global
+        /// theme is applied. Suppresses ValueChanged events during the update via the
+        /// _isDetailInitialized guard.
+        /// </summary>
+        private void SyncAllSlidersFromViewModel()
+        {
+            _isDetailInitialized = false;
+            try
+            {
+                // Taskbar
+                TaskbarOpacitySlider.Value = _viewModel.TaskbarOpacity;
+                TaskbarColorRSlider.Value  = _viewModel.TaskbarColorR;
+                TaskbarColorGSlider.Value  = _viewModel.TaskbarColorG;
+                TaskbarColorBSlider.Value  = _viewModel.TaskbarColorB;
+                // Start Menu
+                StartOpacitySlider.Value      = _viewModel.StartOpacity;
+                StartBlurToggle.IsOn          = _viewModel.StartBlur;
+                StartBgColorRSlider.Value     = _viewModel.StartBgColorR;
+                StartBgColorGSlider.Value     = _viewModel.StartBgColorG;
+                StartBgColorBSlider.Value     = _viewModel.StartBgColorB;
+                StartTextColorRSlider.Value   = _viewModel.StartTextColorR;
+                StartTextColorGSlider.Value   = _viewModel.StartTextColorG;
+                StartTextColorBSlider.Value   = _viewModel.StartTextColorB;
+                StartBorderColorRSlider.Value = _viewModel.StartBorderColorR;
+                StartBorderColorGSlider.Value = _viewModel.StartBorderColorG;
+                StartBorderColorBSlider.Value = _viewModel.StartBorderColorB;
+                UpdateOpacityText();
+                UpdateTaskbarColorPreview();
+                UpdateStartBgColorPreview();
+                UpdateStartTextColorPreview();
+                UpdateStartBorderColorPreview();
+            }
+            finally { _isDetailInitialized = true; }
+        }
     }
 }

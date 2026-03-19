@@ -1,6 +1,6 @@
 
 # WORKLOG — GlassBar
-Last updated: 2026-03-17 (session 21 — CPU idle optimization, hover repaint fix, Win key combos, AeroGlass preset)
+Last updated: 2026-03-19 (session 22 — Windows 25H2 compatibility, Mica fix, universal transparency fallback, global theme presets)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -1188,6 +1188,129 @@ Request:
 
 #### Docs: WORKLOG.md actualizat
 - Referința la PLAN.md eliminată din secțiunea “Ground truth”.
+
+---
+
+---
+
+### Session 22 — Windows 25H2 compatibility, Mica fix, universal transparency fallback, global theme presets (2026-03-19)
+
+**Branch:** `claude/fix-taskbar-transparency-QtLMx`
+
+---
+
+#### Detectare versiune Windows (build number) — `Core/Renderer.cpp`
+
+**Problemă:** `SetWindowCompositionAttribute` (SWCA) este o API nededocumentată ale cărei
+comportament se schimbă de la o versiune Windows la alta. Codul anterior nu detecta
+versiunea OS și aplica aceeași strategie indiferent de build.
+
+**Fix:** La `Renderer::Initialize()`, build-ul Windows este detectat via `RtlGetVersion`
+din `ntdll.dll` (evită shimming-ul lui `GetVersionEx`) și stocat în `m_buildNumber`.
+Log-ul arată la pornire build-ul detectat și strategia activă:
+```
+[Info] Windows build number: 26100 (24H2)
+[Info] Windows build number: 27050 (25H2+ — adaptive AccentFlags enabled)
+```
+
+**Fișiere:** `Core/Renderer.h` (`m_buildNumber`), `Core/Renderer.cpp` (`Initialize()`)
+
+---
+
+#### Fix bug: Taskbar devine opac cu Windows Transparency Effects ON — `Core/Renderer.cpp`
+
+**Problemă:** Pe Windows 22H2+, când utilizatorul activează “Transparency effects” din
+Settings → Personalization → Colors, DWM aplică **Mica Alt** pe `Shell_TrayWnd`. Mica Alt
+are prioritate față de SWCA, suprascriind efectele GlassBar și făcând taskbar-ul opac.
+
+**Root cause:** `DWMWA_SYSTEMBACKDROP_TYPE` (atribut adăugat în Windows 11 22H2, build
+≥ 22621) setează backdropul sistemului pe fereastra taskbar-ului. Valoarea implicită cu
+Transparency Effects ON este `DWMSBT_MAINWINDOW` (Mica Alt), care ia prioritate față de
+SWCA cu `ACCENT_ENABLE_TRANSPARENTGRADIENT`.
+
+**Fix:** Înaintea fiecărui apel SWCA pe ferestre taskbar (nu Start Menu), GlassBar apelează:
+```cpp
+DWORD backdropNone = 1; // DWMSBT_NONE
+DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */,
+                      &backdropNone, sizeof(backdropNone));
+```
+Apelul este cross-process (Shell_TrayWnd e deținut de Explorer); DWM îl acceptă sau îl
+ignoră silențios — în ambele cazuri este inofensiv. Dacă este acceptat, Mica Alt este
+dezactivat înainte ca SWCA să aplice efectul GlassBar.
+
+**Fișiere:** `Core/Renderer.cpp` (`ApplyTransparencyWithColor`)
+
+---
+
+#### Strategie adaptivă AccentFlags pe 25H2+ — `Core/Renderer.cpp`
+
+**Problemă:** Pe Windows 25H2 (build ≥ 27000), SWCA cu `AccentFlags = 2` este ignorat
+silențios pe `Shell_TrayWnd`. Efectele de transparență nu se aplică vizual.
+
+**Fix:** Pe build-uri ≥ 27000, AccentFlags este setat la `0x20` (gradient pe întreaga
+suprafață a ferestrei, fără clipare la border), care are compatibilitate mai bună cu
+build-urile noi:
+```cpp
+accent.AccentFlags = (m_buildNumber >= 27000) ? 0x20 : 2;
+```
+
+**Fișiere:** `Core/Renderer.cpp` (`ApplyTransparencyWithColor`)
+
+---
+
+#### Fallback universal SetLayeredWindowAttributes pe 25H2+ (no-blur) — `Core/Renderer.cpp`
+
+**Problemă:** Pe 25H2+, chiar și cu AccentFlags=0x20, SWCA poate eșua silențios pe
+taskbar (returnează TRUE dar fără efect vizual). Utilizatorul nu are niciun fel de
+transparență funcțională.
+
+**Fix:** Pe build-uri ≥ 27000, pentru taskbar **fără blur**, GlassBar folosește
+`SetLayeredWindowAttributes` (cu `WS_EX_LAYERED`) ca mecanism primar în loc de SWCA:
+
+1. Apelează SWCA cu `ACCENT_DISABLED` pentru a reseta orice stare DWM existentă
+2. Adaugă `WS_EX_LAYERED` pe fereastra taskbar
+3. Aplică `SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA)`
+4. Returnează early (nu apelează SWCA gradient) → evită double-transparency
+
+Această cale garantează transparență alfa de bază pe orice versiune Windows care suportă
+ferestre layered (Win2000+). Efectul de blur (acrylic) pe 25H2+ rămâne best-effort via SWCA.
+
+`RestoreWindow()` actualizat pentru a elimina `WS_EX_LAYERED` dacă a fost adăugat de
+calea de fallback.
+
+**Fișiere:** `Core/Renderer.cpp` (`ApplyTransparencyWithColor`, `RestoreWindow`)
+
+---
+
+#### Global theme presets (Win7 Aero + Dark) — Dashboard
+
+**Cerință:** Două butoane de temă globală în panoul Taskbar care aplică simultan pe
+**Taskbar + Start Menu** (bg color, text color, border color, opacity=50, blur=off).
+
+**Valori:**
+
+| Temă | Taskbar bg | Start bg | Start text | Start border | Opacity |
+|---|---|---|---|---|---|
+| Win7 Aero | R=20, G=40, B=80 | R=20, G=40, B=80 | 255,255,255 | 60,100,160 | 50 |
+| Dark | R=18, G=18, B=22 | R=18, G=18, B=22 | 200,200,200 | 60,60,65 | 50 |
+
+Culorile corespund preset-ului **”Aero Glass”** și **”Dark”** din panoul Start Menu,
+cu opacitate standardizată la 50 pentru ambele componente.
+
+**Implementare:**
+- `Dashboard/MainWindow.xaml`: card nou **THEME PRESETS** în `TaskbarPanel` cu butoanele
+  “Win7 Aero” și “Dark”; subtitlu “Applies to Taskbar + Start Menu”
+- `Dashboard/MainViewModel.cs`: metodă nouă `ApplyGlobalTheme(name)` care apelează
+  `OnTaskbarColorChanged`, `OnTaskbarOpacityChanged`, `OnStartBgColorChanged`,
+  `OnStartTextColorChanged`, `OnStartBorderColorChanged`, `OnStartOpacityChanged`,
+  `OnStartBlurChanged`
+- `Dashboard/MainWindow.xaml.cs`: click handlers `TaskbarPresetWin7Aero_Click`,
+  `TaskbarPresetDark_Click`; metodă nouă `SyncAllSlidersFromViewModel()` care sincronizează
+  atât slidere Taskbar cât și Start Menu după aplicarea temei (folosind guard-ul
+  `_isDetailInitialized` pentru a suprima event-urile `ValueChanged` intermediate)
+
+**Fișiere:** `Dashboard/MainWindow.xaml`, `Dashboard/MainViewModel.cs`,
+`Dashboard/MainWindow.xaml.cs`
 
 ---
 

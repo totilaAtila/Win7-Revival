@@ -201,6 +201,68 @@ For 1 minute:
 
 ---
 
+---
+
+## Milestone M7: Windows Compatibility + Global Theme Presets (Session 22)
+
+### TC-M7-01: Windows Transparency Effects conflict (22H2+)
+**Pre-condition:** Windows 11 22H2+, "Transparency effects" ON in Settings → Personalization → Colors
+
+**Steps:**
+1. Start GlassBar, enable Taskbar transparency (opacity 50, blur OFF)
+2. Verify taskbar is transparent (semi-transparent overlay visible)
+3. Go to Windows Settings → Personalization → Colors → toggle "Transparency effects" ON
+4. Verify taskbar remains transparent (NOT opaque)
+
+**Expected:** ✓ Taskbar stays transparent regardless of Windows Transparency Effects setting
+**Log verification:** Look for `DwmSetWindowAttribute DWMWA_SYSTEMBACKDROP_TYPE=NONE attempted`
+
+### TC-M7-02: Windows build detection
+**Steps:**
+1. Start GlassBar
+2. Check log: `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log`
+3. Look for: `Windows build number: XXXXX`
+
+**Expected:** ✓ Build number logged at startup with correct classification (pre-24H2 / 24H2 / 25H2+)
+
+### TC-M7-03: 25H2+ universal fallback (no-blur)
+**Pre-condition:** Windows build ≥ 27000 (25H2+)
+
+**Steps:**
+1. Enable Taskbar transparency, blur OFF, opacity 50
+2. Verify taskbar shows basic alpha transparency (semi-transparent)
+
+**Expected:** ✓ Basic transparency via `SetLayeredWindowAttributes` — taskbar is NOT opaque
+**Log verification:** Look for `Win25H2+ layered fallback: alpha=`
+
+### TC-M7-04: Win7 Aero global theme preset
+**Steps:**
+1. Navigate to Taskbar panel in Dashboard
+2. Click "Win7 Aero" button (THEME PRESETS card)
+3. Verify Taskbar sliders: opacity=50, R=20, G=40, B=80
+4. Navigate to Start Menu panel
+5. Verify Start Menu sliders: bg R=20/G=40/B=80, text R=255/G=255/B=255, border R=60/G=100/B=160, opacity=50, blur=OFF
+
+**Expected:** ✓ Both panels show correct values; effects applied immediately on taskbar and Start Menu
+
+### TC-M7-05: Dark global theme preset
+**Steps:**
+1. Click "Dark" button in Taskbar panel → THEME PRESETS card
+2. Verify Taskbar: opacity=50, R=18, G=18, B=22
+3. Navigate to Start Menu panel
+4. Verify Start Menu: bg R=18/G=18/B=22, text R=200/G=200/B=200, border R=60/G=60/B=65, opacity=50, blur=OFF
+
+**Expected:** ✓ Both panels show correct values; dark charcoal effect applied
+
+### TC-M7-06: Theme preset slider sync
+**Steps:**
+1. Click "Win7 Aero" while on Taskbar panel
+2. Verify Taskbar color preview box updates to dark blue
+3. Switch to Start Menu panel
+4. Verify all Start Menu sliders reflect the new values (not stale)
+
+**Expected:** ✓ All sliders and preview boxes update immediately after theme button click
+
 ## Bug Reporting
 
 If you find an issue:

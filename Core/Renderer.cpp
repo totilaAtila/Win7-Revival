@@ -1,6 +1,8 @@
 #include "Renderer.h"
 #include "Diagnostics.h"
 #include <algorithm>
+#include <dwmapi.h>
+#pragma comment(lib, "dwmapi.lib")
 
 namespace CrystalFrame {
 
@@ -239,6 +241,46 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
         return;
     }
 
+    // For taskbar windows on Windows 22H2+ (build >= 22621): disable system backdrop
+    // (Mica / Mica Alt) that DWM applies when "Transparency effects" is ON in Settings.
+    // Without this, Mica takes priority over SWCA and the taskbar appears opaque.
+    // DWMWA_SYSTEMBACKDROP_TYPE = 38 (attribute added in Windows 11 22H2).
+    // DWMSBT_NONE = 1 — no system backdrop.
+    // Called cross-process on Shell_TrayWnd; DWM may accept or silently reject — harmless.
+    if (!isStartMenu && m_buildNumber >= 22621) {
+        DWORD backdropNone = 1;
+        DwmSetWindowAttribute(hwnd, 38, &backdropNone, sizeof(backdropNone));
+        CF_LOG(Debug, "[TASKBAR] DwmSetWindowAttribute DWMWA_SYSTEMBACKDROP_TYPE=NONE attempted (build " << m_buildNumber << ")");
+    }
+
+    // For Windows 25H2+ taskbar without blur: use SetLayeredWindowAttributes as the
+    // primary transparency mechanism. SWCA may be silently ignored on Shell_TrayWnd
+    // in builds >= 27000. This path returns early to avoid double-transparency conflict.
+    if (!isStartMenu && !useBlur && m_buildNumber >= 27000) {
+        LONG exStyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
+        if (enabled && opacity > 0) {
+            // Reset any existing SWCA accent state first.
+            ACCENT_POLICY resetAccent = {};
+            resetAccent.AccentState = ACCENT_DISABLED;
+            WINDOWCOMPOSITIONATTRIBDATA resetData = {};
+            resetData.Attrib  = WCA_ACCENT_POLICY;
+            resetData.pvData  = &resetAccent;
+            resetData.cbData  = sizeof(resetAccent);
+            m_setWindowCompositionAttribute(hwnd, &resetData);
+            // Apply layered alpha.
+            if (!(exStyle & WS_EX_LAYERED))
+                SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+            BYTE alpha = static_cast<BYTE>(((100 - opacity) * 255) / 100);
+            SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
+            CF_LOG(Debug, "[TASKBAR] Win25H2+ layered fallback: alpha=" << (int)alpha);
+        } else {
+            if (exStyle & WS_EX_LAYERED)
+                SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
+            CF_LOG(Debug, "[TASKBAR] Win25H2+ layered fallback: disabled");
+        }
+        return;
+    }
+
     ACCENT_POLICY accent = {};
 
     if (enabled && opacity > 0) {
@@ -323,6 +365,11 @@ void Renderer::RestoreWindow(HWND hwnd) {
     BOOL result = m_setWindowCompositionAttribute(hwnd, &data);
     CF_LOG(Info, "RestoreWindow result: " << result
                  << " for HWND 0x" << std::hex << reinterpret_cast<uintptr_t>(hwnd) << std::dec);
+
+    // Clean up WS_EX_LAYERED that may have been added by the 25H2+ layered fallback path.
+    LONG exStyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
+    if (exStyle & WS_EX_LAYERED)
+        SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
 }
 
 void Renderer::RefreshTransparency() {
