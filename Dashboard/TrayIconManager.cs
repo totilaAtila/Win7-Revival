@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace CrystalFrame.Dashboard
+namespace GlassBar.Dashboard
 {
     /// <summary>
     /// Manages a system tray icon via Win32 Shell_NotifyIcon + window subclassing.
@@ -177,7 +177,7 @@ namespace CrystalFrame.Dashboard
             var nid = BuildNid();
             nid.uFlags = NIF_MESSAGE | NIF_TIP;
             if (_hIcon != IntPtr.Zero) nid.uFlags |= NIF_ICON;
-            nid.szTip  = "CrystalFrame";
+            nid.szTip  = "GlassBar";
             Shell_NotifyIconW(NIM_ADD, ref nid);
             _added = true;
         }
@@ -221,7 +221,7 @@ namespace CrystalFrame.Dashboard
 
             try
             {
-                AppendMenuW(hMenu, MF_STRING,    (IntPtr)CMD_SHOW, "Open CrystalFrame");
+                AppendMenuW(hMenu, MF_STRING,    (IntPtr)CMD_SHOW, "Open GlassBar");
                 AppendMenuW(hMenu, MF_SEPARATOR, IntPtr.Zero,      null!);
                 AppendMenuW(hMenu, MF_STRING,    (IntPtr)CMD_EXIT, "Exit");
 
