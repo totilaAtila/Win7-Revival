@@ -5,7 +5,7 @@
 #include <DbgHelp.h>
 #pragma comment(lib, "DbgHelp.lib")
 
-using namespace CrystalFrame;
+using namespace GlassBar;
 
 // ---------------------------------------------------------------------------
 // Unhandled-exception crash handler
@@ -13,13 +13,13 @@ using namespace CrystalFrame;
 // etc.) that escapes all try/catch blocks, writes a minidump and a plain-text
 // crash entry so post-mortem analysis is always possible.
 // ---------------------------------------------------------------------------
-static LONG WINAPI CrystalFrameExceptionFilter(EXCEPTION_POINTERS* pei)
+static LONG WINAPI GlassBarExceptionFilter(EXCEPTION_POINTERS* pei)
 {
-    // Resolve the CrystalFrame data directory (same folder used by the logger).
+    // Resolve the GlassBar data directory (same folder used by the logger).
     wchar_t appDataBuf[MAX_PATH] = {};
     std::wstring crashDir;
     if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appDataBuf))) {
-        crashDir = std::wstring(appDataBuf) + L"\\CrystalFrame";
+        crashDir = std::wstring(appDataBuf) + L"\\GlassBar";
     } else {
         crashDir = L".";
     }
@@ -49,7 +49,7 @@ static LONG WINAPI CrystalFrameExceptionFilter(EXCEPTION_POINTERS* pei)
 
     // --- Crash log entry -------------------------------------------------
     // Written with raw Win32 so it works even if Logger never initialised.
-    std::wstring logPath = crashDir + L"\\CrystalFrame.log";
+    std::wstring logPath = crashDir + L"\\GlassBar.log";
     HANDLE hLog = CreateFileW(logPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ,
                               nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hLog != INVALID_HANDLE_VALUE) {
@@ -83,22 +83,22 @@ static LONG WINAPI CrystalFrameExceptionFilter(EXCEPTION_POINTERS* pei)
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
-// Get log file path in AppData\Local\CrystalFrame
+// Get log file path in AppData\Local\GlassBar
 std::wstring GetLogFilePath() {
     wchar_t path[MAX_PATH];
     
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
         std::wstring logPath(path);
-        logPath += L"\\CrystalFrame";
+        logPath += L"\\GlassBar";
         
         // Create directory if it doesn't exist
         CreateDirectoryW(logPath.c_str(), NULL);
         
-        logPath += L"\\CrystalFrame.log";
+        logPath += L"\\GlassBar.log";
         return logPath;
     }
     
-    return L".\\CrystalFrame.log";
+    return L".\\GlassBar.log";
 }
 
 int WINAPI wWinMain(
@@ -113,7 +113,7 @@ int WINAPI wWinMain(
     
     // Install crash handler as early as possible — before Logger, COM, or any
     // subsystem that could itself fault on a bad machine state.
-    SetUnhandledExceptionFilter(CrystalFrameExceptionFilter);
+    SetUnhandledExceptionFilter(GlassBarExceptionFilter);
 
     // Set DPI awareness for accurate positioning
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -121,7 +121,7 @@ int WINAPI wWinMain(
     // Initialize logger
     Logger::Instance().Initialize(GetLogFilePath());
     CF_LOG(Info, "===================================");
-    CF_LOG(Info, "  CrystalFrame Engine v1.0");
+    CF_LOG(Info, "  GlassBar Engine v1.0");
     CF_LOG(Info, "  Windows 11 Overlay Utility");
     CF_LOG(Info, "===================================");
     
@@ -131,7 +131,7 @@ int WINAPI wWinMain(
         CF_LOG(Error, "CoInitializeEx failed: 0x" << std::hex << hr);
         MessageBoxW(nullptr, 
                    L"Failed to initialize COM. Application will exit.",
-                   L"CrystalFrame Error",
+                   L"GlassBar Error",
                    MB_OK | MB_ICONERROR);
         return 1;
     }
@@ -140,13 +140,13 @@ int WINAPI wWinMain(
     
     // Create and run core
     {
-        auto core = std::make_unique<CrystalFrameCore>(hInstance);
+        auto core = std::make_unique<GlassBarCore>(hInstance);
         
         if (!core->Initialize()) {
             CF_LOG(Error, "Core initialization failed");
             MessageBoxW(nullptr,
-                       L"CrystalFrame failed to initialize. Check CrystalFrame.log for details.",
-                       L"CrystalFrame Error",
+                       L"GlassBar failed to initialize. Check GlassBar.log for details.",
+                       L"GlassBar Error",
                        MB_OK | MB_ICONERROR);
             exitCode = 1;
         } else {
@@ -162,7 +162,7 @@ int WINAPI wWinMain(
     CoUninitialize();
     
     CF_LOG(Info, "===================================");
-    CF_LOG(Info, "  CrystalFrame Engine Exited");
+    CF_LOG(Info, "  GlassBar Engine Exited");
     CF_LOG(Info, "  Exit Code: " << exitCode);
     CF_LOG(Info, "===================================");
     
