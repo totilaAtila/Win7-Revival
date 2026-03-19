@@ -7,7 +7,7 @@
 #include "StartMenuHook.h"
 #include "StartMenuWindow.h"
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 class Core : public IShellTargetCallback {
 public:
@@ -78,4 +78,4 @@ private:
     void OnCustomStartMenuRequested(int x, int y);
 };
 
-} // namespace CrystalFrame
+} // namespace GlassBar
