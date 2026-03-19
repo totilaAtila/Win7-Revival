@@ -20,12 +20,12 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore NuGet packages
-        run: dotnet restore Dashboard/CrystalFrame.Dashboard.csproj
+        run: dotnet restore Dashboard/GlassBar.Dashboard.csproj
 
       - name: List NuGet packages (JSON)
         id: list
         run: |
-          dotnet list Dashboard/CrystalFrame.Dashboard.csproj package \
+          dotnet list Dashboard/GlassBar.Dashboard.csproj package \
             --include-transitive --format json > /tmp/packages.json
           cat /tmp/packages.json
 
@@ -77,8 +77,8 @@ jobs:
               },
               scanned: new Date().toISOString(),
               manifests: {
-                'Dashboard/CrystalFrame.Dashboard.csproj': {
-                  name:     'Dashboard/CrystalFrame.Dashboard.csproj',
+                'Dashboard/GlassBar.Dashboard.csproj': {
+                  name:     'Dashboard/GlassBar.Dashboard.csproj',
                   resolved: resolved
                 }
               }
