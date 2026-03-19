@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 
-namespace CrystalFrame.Dashboard
+namespace GlassBar.Dashboard
 {
     public class MainViewModel : INotifyPropertyChanged
     {
