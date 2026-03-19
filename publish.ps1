@@ -1,4 +1,4 @@
-# CrystalFrame Publish Script
+# GlassBar Publish Script
 # Creates a distributable package ready for deployment
 
 param(
@@ -6,7 +6,7 @@ param(
     [string]$OutputDir = ".\publish"
 )
 
-Write-Host "=== CrystalFrame Publish ===" -ForegroundColor Cyan
+Write-Host "=== GlassBar Publish ===" -ForegroundColor Cyan
 Write-Host "Version: $Version" -ForegroundColor Green
 
 # Step 1: Clean and build Release
@@ -19,7 +19,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # Step 2: Create publish directory
 Write-Host "`n[2/5] Creating publish directory..." -ForegroundColor Yellow
-$publishPath = Join-Path $OutputDir "CrystalFrame-v$Version"
+$publishPath = Join-Path $OutputDir "GlassBar-v$Version"
 if (Test-Path $publishPath) {
     Remove-Item $publishPath -Recurse -Force
 }
@@ -38,7 +38,7 @@ Copy-Item "$dashboardSource\*" -Destination $publishPath -Recurse -Force
 
 # Step 4: Copy Core.dll (C++ component)
 Write-Host "`n[4/5] Copying Core.dll..." -ForegroundColor Yellow
-$coreSource = ".\Core\build\bin\Release\CrystalFrame.Core.dll"
+$coreSource = ".\Core\build\bin\Release\GlassBar.Core.dll"
 if (-not (Test-Path $coreSource)) {
     Write-Host "Error: Core.dll not built." -ForegroundColor Red
     exit 1
@@ -50,12 +50,12 @@ Write-Host "`n[5/5] Creating documentation..." -ForegroundColor Yellow
 
 # Create README.txt
 @"
-CrystalFrame v$Version
+GlassBar v$Version
 =====================
 
 Installation:
-1. Extract all files to a folder (e.g., C:\Program Files\CrystalFrame)
-2. Run CrystalFrame.Dashboard.exe
+1. Extract all files to a folder (e.g., C:\Program Files\GlassBar)
+2. Run GlassBar.Dashboard.exe
 3. Click "Start Core" to activate the custom taskbar
 
 Requirements:
@@ -76,23 +76,23 @@ Controls:
 - Right-click menu items: Rename items
 
 Configuration:
-- Settings stored in: %LocalAppData%\CrystalFrame\
-- Menu names: %LocalAppData%\CrystalFrame\menu_names.json
+- Settings stored in: %LocalAppData%\GlassBar\
+- Menu names: %LocalAppData%\GlassBar\menu_names.json
 
 Troubleshooting:
 - If taskbar doesn't change: Restart Explorer (Ctrl+Shift+Esc > Restart Windows Explorer)
 - If Core won't start: Run Dashboard as Administrator
-- Logs located in: %LocalAppData%\CrystalFrame\logs\
+- Logs located in: %LocalAppData%\GlassBar\logs\
 
 Support:
-- GitHub: https://github.com/totilaAtila/Win7-Revival
-- Issues: https://github.com/totilaAtila/Win7-Revival/issues
+- GitHub: https://github.com/totilaAtila/GlassBar
+- Issues: https://github.com/totilaAtila/GlassBar/issues
 
 "@ | Out-File -FilePath (Join-Path $publishPath "README.txt") -Encoding UTF8
 
 # Create version info
 @"
-CrystalFrame v$Version
+GlassBar v$Version
 Build Date: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 Platform: Windows x64
 Framework: .NET 8.0
@@ -100,7 +100,7 @@ Framework: .NET 8.0
 
 # Step 6: Create ZIP archive
 Write-Host "`nCreating ZIP archive..." -ForegroundColor Yellow
-$zipPath = Join-Path $OutputDir "CrystalFrame-v$Version.zip"
+$zipPath = Join-Path $OutputDir "GlassBar-v$Version.zip"
 if (Test-Path $zipPath) {
     Remove-Item $zipPath -Force
 }
