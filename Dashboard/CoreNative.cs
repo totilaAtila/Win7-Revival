@@ -1,15 +1,15 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace CrystalFrame.Dashboard
+namespace GlassBar.Dashboard
 {
     /// <summary>
-    /// P/Invoke declarations for CrystalFrame.Core.dll
+    /// P/Invoke declarations for GlassBar.Core.dll
     /// Direct native calls - no IPC needed
     /// </summary>
     public static class CoreNative
     {
-        private const string DllName = "CrystalFrame.Core.dll";
+        private const string DllName = "GlassBar.Core.dll";
 
         [StructLayout(LayoutKind.Sequential)]
         public struct CoreStatus
