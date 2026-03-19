@@ -1,7 +1,7 @@
 #include "Diagnostics.h"
 #include <iostream>
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 Logger& Logger::Instance() {
     static Logger instance;
@@ -26,7 +26,7 @@ void Logger::Initialize(const std::wstring& logFilePath) {
     
     // Write startup header
     m_logFile << L"\n========================================\n";
-    m_logFile << L"CrystalFrame Core Starting\n";
+    m_logFile << L"GlassBar Core Starting\n";
     m_logFile << L"Timestamp: " << GetTimestamp() << L"\n";
     m_logFile << L"========================================\n";
     m_logFile.flush();
@@ -37,7 +37,7 @@ void Logger::Shutdown() {
     
     if (m_initialized && m_logFile.is_open()) {
         m_logFile << L"\n========================================\n";
-        m_logFile << L"CrystalFrame Core Shutdown\n";
+        m_logFile << L"GlassBar Core Shutdown\n";
         m_logFile << L"Timestamp: " << GetTimestamp() << L"\n";
         m_logFile << L"========================================\n";
         m_logFile.flush();
@@ -129,4 +129,4 @@ std::wstring Logger::GetThreadId() {
     return oss.str();
 }
 
-} // namespace CrystalFrame
+} // namespace GlassBar
