@@ -9,7 +9,7 @@ using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
 
-namespace CrystalFrame.Dashboard
+namespace GlassBar.Dashboard
 {
     public sealed partial class DetailWindow : Window
     {
