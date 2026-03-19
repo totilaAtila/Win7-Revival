@@ -522,6 +522,32 @@ namespace CrystalFrame.Dashboard
             _core.SetStartMenuBorderColor(r, g, b);
         }
 
+        // Global theme: applies matching colors to both Taskbar and Start Menu, opacity 50.
+        public void ApplyGlobalTheme(string name)
+        {
+            switch (name)
+            {
+                case "Win7Aero":  // Aero Glass blue — translucent, opacity 50
+                    OnTaskbarColorChanged(20, 40, 80);
+                    OnTaskbarOpacityChanged(50);
+                    OnStartBgColorChanged(20, 40, 80);
+                    OnStartTextColorChanged(255, 255, 255);
+                    OnStartBorderColorChanged(60, 100, 160);
+                    OnStartOpacityChanged(50);
+                    OnStartBlurChanged(false);
+                    break;
+                case "Dark":      // Dark charcoal — modern dark theme, opacity 50
+                    OnTaskbarColorChanged(18, 18, 22);
+                    OnTaskbarOpacityChanged(50);
+                    OnStartBgColorChanged(18, 18, 22);
+                    OnStartTextColorChanged(200, 200, 200);
+                    OnStartBorderColorChanged(60, 60, 65);
+                    OnStartOpacityChanged(50);
+                    OnStartBlurChanged(false);
+                    break;
+            }
+        }
+
         // S-F: apply theme preset
         public void ApplyPreset(string name)
         {

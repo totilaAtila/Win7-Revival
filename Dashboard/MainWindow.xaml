@@ -203,6 +203,29 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Card: Theme Presets -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="6">
+                            <StackPanel Padding="10,8" Spacing="6">
+                                <TextBlock Text="THEME PRESETS" FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           CharacterSpacing="75"/>
+                                <TextBlock Text="Applies to Taskbar + Start Menu" FontSize="10"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Button x:Name="TaskbarPresetWin7AeroButton" Content="Win7 Aero"
+                                            Click="TaskbarPresetWin7Aero_Click" FontSize="11" Padding="8,4">
+                                        <ToolTipService.ToolTip>Translucent blue — sets Taskbar + Start Menu, opacity 50</ToolTipService.ToolTip>
+                                    </Button>
+                                    <Button x:Name="TaskbarPresetDarkButton" Content="Dark"
+                                            Click="TaskbarPresetDark_Click" FontSize="11" Padding="8,4">
+                                        <ToolTipService.ToolTip>Dark charcoal — sets Taskbar + Start Menu, opacity 50</ToolTipService.ToolTip>
+                                    </Button>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
                     </StackPanel>
 
                     <!-- ════════════════════════════════════════════════════════
