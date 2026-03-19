@@ -3,12 +3,12 @@ param(
     [string]$Version = "1.0.0"
 )
 
-Write-Host "=== CrystalFrame Standalone Publish (Quick) ===" -ForegroundColor Cyan
+Write-Host "=== GlassBar Standalone Publish (Quick) ===" -ForegroundColor Cyan
 Write-Host "Version: $Version" -ForegroundColor Green
 Write-Host "Using existing build..." -ForegroundColor Yellow
 
 # Check if Core.dll exists
-$coreSource = ".\Core\build\bin\Release\CrystalFrame.Core.dll"
+$coreSource = ".\Core\build\bin\Release\GlassBar.Core.dll"
 if (-not (Test-Path $coreSource)) {
     Write-Host "`nError: Core.dll not found. Run build.ps1 first!" -ForegroundColor Red
     Write-Host "Run: .\build.ps1" -ForegroundColor Yellow
@@ -19,7 +19,7 @@ if (-not (Test-Path $coreSource)) {
 Write-Host "`nPublishing Dashboard (self-contained)..." -ForegroundColor Yellow
 Push-Location Dashboard
 
-$publishPath = Join-Path ".." "publish\CrystalFrame-v$Version-Standalone"
+$publishPath = Join-Path ".." "publish\GlassBar-v$Version-Standalone"
 
 dotnet publish `
     -c Release `
@@ -45,14 +45,14 @@ Copy-Item $coreSource -Destination $publishPath -Force
 # Create README
 Write-Host "Creating documentation..." -ForegroundColor Yellow
 @"
-CrystalFrame v$Version (Standalone)
+GlassBar v$Version (Standalone)
 ====================================
 
 This is a STANDALONE package - no .NET installation required!
 
 Installation:
 1. Extract all files to a folder
-2. Run CrystalFrame.Dashboard.exe
+2. Run GlassBar.Dashboard.exe
 3. Click "Start Core" to activate
 
 Requirements:
@@ -61,12 +61,12 @@ Requirements:
 
 Build Date: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 
-GitHub: https://github.com/totilaAtila/Win7-Revival
+GitHub: https://github.com/totilaAtila/GlassBar
 "@ | Out-File -FilePath (Join-Path $publishPath "README.txt") -Encoding UTF8
 
 # Create ZIP
 Write-Host "`nCreating ZIP archive..." -ForegroundColor Yellow
-$zipPath = ".\publish\CrystalFrame-v$Version-Standalone.zip"
+$zipPath = ".\publish\GlassBar-v$Version-Standalone.zip"
 if (Test-Path $zipPath) {
     Remove-Item $zipPath -Force
 }
