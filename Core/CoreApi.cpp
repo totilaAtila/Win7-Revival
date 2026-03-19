@@ -9,7 +9,7 @@
 #pragma comment(lib, "DbgHelp.lib")
 
 namespace {
-    std::unique_ptr<CrystalFrame::Core> g_core;
+    std::unique_ptr<GlassBar::Core> g_core;
 }
 
 // ---------------------------------------------------------------------------
@@ -19,12 +19,12 @@ namespace {
 // crash entry so post-mortem analysis is always possible.
 // Installed by CoreInitialize() so it is active for the lifetime of the DLL.
 // ---------------------------------------------------------------------------
-static LONG WINAPI CrystalFrameExceptionFilter(EXCEPTION_POINTERS* pei)
+static LONG WINAPI GlassBarExceptionFilter(EXCEPTION_POINTERS* pei)
 {
     wchar_t appDataBuf[MAX_PATH] = {};
     std::wstring crashDir;
     if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appDataBuf))) {
-        crashDir = std::wstring(appDataBuf) + L"\\CrystalFrame";
+        crashDir = std::wstring(appDataBuf) + L"\\GlassBar";
     } else {
         crashDir = L".";
     }
@@ -52,7 +52,7 @@ static LONG WINAPI CrystalFrameExceptionFilter(EXCEPTION_POINTERS* pei)
     }
 
     // --- Crash log entry (raw Win32 — works even if Logger never initialised) ---
-    std::wstring logPath = crashDir + L"\\CrystalFrame.log";
+    std::wstring logPath = crashDir + L"\\GlassBar.log";
     HANDLE hLog = CreateFileW(logPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ,
                               nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hLog != INVALID_HANDLE_VALUE) {
@@ -95,20 +95,20 @@ CRYSTALFRAME_API bool CoreInitialize() {
 
         // Install crash handler before any other subsystem so even early
         // faults produce a minidump and log entry.
-        SetUnhandledExceptionFilter(CrystalFrameExceptionFilter);
+        SetUnhandledExceptionFilter(GlassBarExceptionFilter);
 
         // Initialize logger first
         wchar_t localAppData[MAX_PATH];
         if (SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, localAppData) == S_OK) {
-            std::wstring logDir = std::wstring(localAppData) + L"\\CrystalFrame";
+            std::wstring logDir = std::wstring(localAppData) + L"\\GlassBar";
             CreateDirectoryW(logDir.c_str(), nullptr); // Create dir if not exists
-            std::wstring logPath = logDir + L"\\CrystalFrame.log";
-            CrystalFrame::Logger::Instance().Initialize(logPath);
+            std::wstring logPath = logDir + L"\\GlassBar.log";
+            GlassBar::Logger::Instance().Initialize(logPath);
         }
 
         CF_LOG(Info, "=== CoreInitialize called ===");
 
-        g_core = std::make_unique<CrystalFrame::Core>();
+        g_core = std::make_unique<GlassBar::Core>();
         bool success = g_core->Initialize();
 
         if (!success) {
@@ -137,7 +137,7 @@ CRYSTALFRAME_API void CoreShutdown() {
         }
 
         // Shutdown logger
-        CrystalFrame::Logger::Instance().Shutdown();
+        GlassBar::Logger::Instance().Shutdown();
     }
     catch (const std::exception& ex) {
         CF_LOG(Error, "Core shutdown exception: " << ex.what());
