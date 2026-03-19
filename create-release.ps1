@@ -1,4 +1,4 @@
-# CrystalFrame GitHub Release Creator
+# GlassBar GitHub Release Creator
 # Creates both packages and prepares for GitHub Release
 
 param(
@@ -10,7 +10,7 @@ param(
 )
 
 if ($ReleaseName -eq "") {
-    $ReleaseName = "CrystalFrame v$Version"
+    $ReleaseName = "GlassBar v$Version"
 }
 
 Write-Host "=== Creating GitHub Release ===" -ForegroundColor Cyan
@@ -60,13 +60,13 @@ $recentCommits
 
 **Choose the right version for you:**
 
-### CrystalFrame-v$Version.zip (Recommended - Smaller)
+### GlassBar-v$Version.zip (Recommended - Smaller)
 - **Size:** ~15-20 MB
 - **Requires:** .NET 8 Runtime installed
 - **Best for:** Users who already have .NET 8 or don't mind installing it
 - [Download .NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
 
-### CrystalFrame-v$Version-Standalone.zip (No Dependencies)
+### GlassBar-v$Version-Standalone.zip (No Dependencies)
 - **Size:** ~70-90 MB
 - **Requires:** Nothing! Includes .NET runtime
 - **Best for:** Users who want a simple drag-and-drop installation
@@ -74,8 +74,8 @@ $recentCommits
 ## 🚀 Installation
 
 1. Download your preferred ZIP file
-2. Extract to a folder (e.g., ``C:\Program Files\CrystalFrame``)
-3. Run ``CrystalFrame.Dashboard.exe``
+2. Extract to a folder (e.g., ``C:\Program Files\GlassBar``)
+3. Run ``GlassBar.Dashboard.exe``
 4. Click "Start Core" to activate
 
 ## 💡 Usage
@@ -93,11 +93,11 @@ $recentCommits
 
 ## 🐛 Known Issues
 
-None currently reported. Please report issues at: https://github.com/totilaAtila/Win7-Revival/issues
+None currently reported. Please report issues at: https://github.com/totilaAtila/GlassBar/issues
 
 ## 🔧 Configuration
 
-Settings are stored in: ``%LocalAppData%\CrystalFrame\``
+Settings are stored in: ``%LocalAppData%\GlassBar\``
 - ``config.json`` - Main configuration
 - ``menu_names.json`` - Custom menu item names
 
@@ -107,7 +107,7 @@ See commit history for detailed changes.
 
 ---
 
-**Full Changelog:** [View on GitHub](https://github.com/totilaAtila/Win7-Revival/commits/main)
+**Full Changelog:** [View on GitHub](https://github.com/totilaAtila/GlassBar/commits/main)
 "@
 }
 
@@ -125,13 +125,13 @@ Get-ChildItem ".\publish\*.zip" | ForEach-Object {
 Write-Host "`nRelease notes saved to: $releaseNotesPath" -ForegroundColor Yellow
 
 Write-Host "`n=== Next Steps ===" -ForegroundColor Yellow
-Write-Host "1. Go to: https://github.com/totilaAtila/Win7-Revival/releases/new" -ForegroundColor White
+Write-Host "1. Go to: https://github.com/totilaAtila/GlassBar/releases/new" -ForegroundColor White
 Write-Host "2. Create a new tag: v$Version" -ForegroundColor White
 Write-Host "3. Release title: $ReleaseName" -ForegroundColor White
 Write-Host "4. Copy release notes from: $releaseNotesPath" -ForegroundColor White
 Write-Host "5. Upload both ZIP files:" -ForegroundColor White
-Write-Host "   - CrystalFrame-v$Version.zip" -ForegroundColor Cyan
-Write-Host "   - CrystalFrame-v$Version-Standalone.zip" -ForegroundColor Cyan
+Write-Host "   - GlassBar-v$Version.zip" -ForegroundColor Cyan
+Write-Host "   - GlassBar-v$Version-Standalone.zip" -ForegroundColor Cyan
 Write-Host "6. Click 'Publish release'" -ForegroundColor White
 
 Write-Host "`nOr use GitHub CLI (gh):" -ForegroundColor Yellow
