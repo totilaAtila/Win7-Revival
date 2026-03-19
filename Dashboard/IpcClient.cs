@@ -7,7 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CrystalFrame.Dashboard
+namespace GlassBar.Dashboard
 {
     public class StatusData
     {
@@ -112,7 +112,7 @@ namespace CrystalFrame.Dashboard
             {
                 try
                 {
-                    _pipe = new NamedPipeClientStream(".", "CrystalFrame", PipeDirection.InOut);
+                    _pipe = new NamedPipeClientStream(".", "GlassBar", PipeDirection.InOut);
                     await _pipe.ConnectAsync(5000);
                     
                     _reader = new StreamReader(_pipe, Encoding.UTF8);
