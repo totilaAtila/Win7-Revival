@@ -29,11 +29,11 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore NuGet packages
-        run: dotnet restore Dashboard/CrystalFrame.Dashboard.csproj
+        run: dotnet restore Dashboard/GlassBar.Dashboard.csproj
 
       - name: Build Dashboard
         run: >
-          dotnet build Dashboard/CrystalFrame.Dashboard.csproj
+          dotnet build Dashboard/GlassBar.Dashboard.csproj
           --configuration Release
           --no-restore
           -p:Platform=x64
@@ -44,7 +44,7 @@ jobs:
         if: success()
         with:
           name: GlassBar.Core
-          path: Core/build/bin/Release/CrystalFrame.Core.dll
+          path: Core/build/bin/Release/GlassBar.Core.dll
           if-no-files-found: warn
 
       - name: Upload Dashboard
