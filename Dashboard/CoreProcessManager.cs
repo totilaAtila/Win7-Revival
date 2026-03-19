@@ -3,17 +3,17 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace CrystalFrame.Dashboard
+namespace GlassBar.Dashboard
 {
     /// <summary>
-    /// Manages the lifecycle of CrystalFrame.Core.exe.
+    /// Manages the lifecycle of GlassBar.Core.exe.
     /// Dashboard is the single user-facing entry point; Core runs as an
     /// independent background process that persists after Dashboard closes.
     /// </summary>
     public class CoreProcessManager : IDisposable
     {
-        private const string CoreProcessName = "CrystalFrame.Core";
-        private const string CoreExeName = "CrystalFrame.Core.exe";
+        private const string CoreProcessName = "GlassBar.Core";
+        private const string CoreExeName = "GlassBar.Core.exe";
         private const int ShutdownTimeoutMs = 3000;
 
         private readonly IpcClient _ipc;
