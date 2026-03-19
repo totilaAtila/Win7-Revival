@@ -4,7 +4,7 @@
 #include <atomic>
 #include <mutex>
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 struct Config {
     int taskbarOpacity = 75;      // 0-100
@@ -44,4 +44,4 @@ private:
     bool EnsureDirectoryExists(const std::wstring& path);
 };
 
-} // namespace CrystalFrame
+} // namespace GlassBar
