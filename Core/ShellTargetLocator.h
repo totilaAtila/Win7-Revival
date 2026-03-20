@@ -6,7 +6,7 @@
 #include <mutex>
 #include <vector>
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 enum class Edge {
     Bottom,
@@ -109,4 +109,4 @@ inline const char* EdgeToString(Edge edge) {
     }
 }
 
-} // namespace CrystalFrame
+} // namespace GlassBar

@@ -2,7 +2,7 @@
 #include <Windows.h>
 #include <functional>
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 /// <summary>
 /// Hooks Windows key and Start button clicks to trigger custom Start Menu
@@ -90,4 +90,4 @@ private:
     void ShowStartMenu(int x, int y);
 };
 
-} // namespace CrystalFrame
+} // namespace GlassBar

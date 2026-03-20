@@ -24,7 +24,7 @@
 #pragma comment(lib, "msimg32.lib")       // S-G: AlphaBlend
 #pragma comment(lib, "comdlg32.lib")      // GetOpenFileNameW
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 // ── File-scope helpers ────────────────────────────────────────────────────────
 
@@ -705,7 +705,7 @@ void StartMenuWindow::ResetAvatar() {
 void StartMenuWindow::LoadCustomAvatarPath() {
     PWSTR lap = nullptr;
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
-    std::wstring path = std::wstring(lap) + L"\\CrystalFrame\\avatar.json";
+    std::wstring path = std::wstring(lap) + L"\\GlassBar\\avatar.json";
     CoTaskMemFree(lap);
 
     std::wifstream f(path);
@@ -738,7 +738,7 @@ void StartMenuWindow::LoadCustomAvatarPath() {
 void StartMenuWindow::SaveCustomAvatarPath() {
     PWSTR lap = nullptr;
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
-    std::wstring dir = std::wstring(lap) + L"\\CrystalFrame";
+    std::wstring dir = std::wstring(lap) + L"\\GlassBar";
     CoTaskMemFree(lap);
     CreateDirectoryW(dir.c_str(), NULL);
 
@@ -765,7 +765,7 @@ bool StartMenuWindow::CreateMenuWindow() {
     m_hwnd = CreateWindowExW(
         WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
         WINDOW_CLASS,
-        L"CrystalFrame Start Menu",
+        L"GlassBar Start Menu",
         WS_POPUP,
         0, 0, WIDTH, HEIGHT,
         NULL, NULL,
@@ -2760,7 +2760,7 @@ const wchar_t* StartMenuWindow::GetMenuItemName(int index) {
 
 const wchar_t* StartMenuWindow::GetTitle() {
     if (!m_customTitle.empty()) return m_customTitle.c_str();
-    return L"CrystalFrame";
+    return L"GlassBar";
 }
 
 // ── Task 5: File-system watcher ───────────────────────────────────────────────
@@ -2984,7 +2984,7 @@ void StartMenuWindow::CacheMenuPosition() {
 
 // ── Pinned list — dynamic, persisted ─────────────────────────────────────────
 
-/// JSON path: %LOCALAPPDATA%\CrystalFrame\pinned_apps.json
+/// JSON path: %LOCALAPPDATA%\GlassBar\pinned_apps.json
 /// Format: [{"name":"…","short":"…","cmd":"…","color":0xRRGGBB}, …]
 void StartMenuWindow::LoadPinnedItems() {
     m_dynamicPinnedItems.clear();
@@ -2993,7 +2993,7 @@ void StartMenuWindow::LoadPinnedItems() {
     PWSTR lap = nullptr;
     bool loaded = false;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) {
-        std::wstring path = std::wstring(lap) + L"\\CrystalFrame\\pinned_apps.json";
+        std::wstring path = std::wstring(lap) + L"\\GlassBar\\pinned_apps.json";
         CoTaskMemFree(lap);
         std::wifstream f(path);
         if (f.is_open()) {
@@ -3067,7 +3067,7 @@ void StartMenuWindow::LoadPinnedItems() {
 void StartMenuWindow::SavePinnedItems() {
     PWSTR lap = nullptr;
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
-    std::wstring dir = std::wstring(lap) + L"\\CrystalFrame";
+    std::wstring dir = std::wstring(lap) + L"\\GlassBar";
     CoTaskMemFree(lap);
     CreateDirectoryW(dir.c_str(), NULL);
 
@@ -3244,7 +3244,7 @@ void StartMenuWindow::LoadRecentExcluded() {
 
     PWSTR lap = nullptr;
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
-    std::wstring path = std::wstring(lap) + L"\\CrystalFrame\\recent_excluded.json";
+    std::wstring path = std::wstring(lap) + L"\\GlassBar\\recent_excluded.json";
     CoTaskMemFree(lap);
 
     std::wifstream f(path);
@@ -3265,7 +3265,7 @@ void StartMenuWindow::LoadRecentExcluded() {
 void StartMenuWindow::SaveRecentExcluded() {
     PWSTR lap = nullptr;
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
-    std::wstring dir = std::wstring(lap) + L"\\CrystalFrame";
+    std::wstring dir = std::wstring(lap) + L"\\GlassBar";
     CoTaskMemFree(lap);
     CreateDirectoryW(dir.c_str(), NULL);
 
@@ -3353,7 +3353,7 @@ void StartMenuWindow::ShowAllProgramsContextMenu(int apIndex, POINT screenPt) {
 void StartMenuWindow::LoadCustomNames() {
     PWSTR lap = nullptr;
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
-    std::wstring path = std::wstring(lap) + L"\\CrystalFrame\\menu_names.json";
+    std::wstring path = std::wstring(lap) + L"\\GlassBar\\menu_names.json";
     CoTaskMemFree(lap);
 
     std::wifstream f(path);
@@ -3384,7 +3384,7 @@ void StartMenuWindow::LoadCustomNames() {
 void StartMenuWindow::SaveCustomNames() {
     PWSTR lap = nullptr;
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &lap))) return;
-    std::wstring dir = std::wstring(lap) + L"\\CrystalFrame";
+    std::wstring dir = std::wstring(lap) + L"\\GlassBar";
     CoTaskMemFree(lap);
     CreateDirectoryW(dir.c_str(), NULL);
 
@@ -3494,4 +3494,4 @@ LRESULT CALLBACK StartMenuWindow::EditDialogProc(HWND hwnd, UINT msg,
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-} // namespace CrystalFrame
+} // namespace GlassBar

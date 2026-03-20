@@ -42,11 +42,11 @@
 
 ```mermaid
 graph TD
-    subgraph Dashboard [CrystalFrame.Dashboard.exe — C# .NET 8, WinUI 3]
+    subgraph Dashboard [GlassBar.Dashboard.exe — C# .NET 8, WinUI 3]
         A[MainWindow + NavigationView]
     end
 
-    subgraph Core [CrystalFrame.Core.dll — C++20, Win32]
+    subgraph Core [GlassBar.Core.dll — C++20, Win32]
         G[Start Menu Window]
         H[Taskbar Overlay]
     end
@@ -54,14 +54,14 @@ graph TD
     Dashboard -- P/Invoke (direct DLL calls) --> Core
 ```
 
-**CrystalFrame.Core.dll** — Native DLL (C++20)
+**GlassBar.Core.dll** — Native DLL (C++20)
 - Manages the custom Windows 7 Start Menu window (GDI painting, state, navigation).
 - Provides the transparent Taskbar overlay and handles low-level hooks.
 - Exports a C API (`CoreApi.h`) consumed by the Dashboard via P/Invoke.
 
-**CrystalFrame.Dashboard.exe** — Settings UI (C# .NET 8, WinUI 3)
+**GlassBar.Dashboard.exe** — Settings UI (C# .NET 8, WinUI 3)
 - Single-window compact settings panel with `NavigationView` (Taskbar / Start Menu panels).
-- Loads `CrystalFrame.Core.dll` in-process via P/Invoke — no external process or named pipes.
+- Loads `GlassBar.Core.dll` in-process via P/Invoke — no external process or named pipes.
 - Manages Core lifecycle (start/stop toggle) and forwards all settings in real time.
 
 ### Technology Stack
@@ -102,10 +102,10 @@ dotnet build -r win-x64 --no-self-contained
 ### Run
 
 ```cmd
-Dashboard\bin\x64\Release\net8.0-windows10.0.22621.0\win-x64\CrystalFrame.Dashboard.exe
+Dashboard\bin\x64\Release\net8.0-windows10.0.22621.0\win-x64\GlassBar.Dashboard.exe
 ```
 
-The Dashboard automatically locates and loads `CrystalFrame.Core.dll` from the same directory.
+The Dashboard automatically locates and loads `GlassBar.Core.dll` from the same directory.
 Click the **Core** toggle → ON to start the overlay engine.
 
 ---
@@ -159,7 +159,7 @@ Click the **Core** toggle → ON to start the overlay engine.
 **Overlay doesn't appear after enabling Core**
 - Wait 1–2 seconds for detection; status indicator turns green when found
 - If Taskbar not detected: restart Windows Explorer (Task Manager → Windows Explorer → Restart)
-- Logs: `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log`
+- Logs: `%LOCALAPPDATA%\GlassBar\GlassBar.log`
 
 **Start Menu not appearing**
 - Ensure the Start Menu toggle is ON in the Start Menu tab
@@ -188,7 +188,7 @@ Click the **Core** toggle → ON to start the overlay engine.
 - Taskbar overlay (all edges + auto-hide support)
 - Start Menu replacement (Win7 two-column layout, fully functional)
 - Per-channel RGB color control (background + text + border/accent per panel)
-- Config persistence (JSON in `%LOCALAPPDATA%\CrystalFrame\`)
+- Config persistence (JSON in `%LOCALAPPDATA%\GlassBar\`)
 - Explorer restart recovery
 - Run at Startup (registry) — starts hidden in System Tray when launched at boot
 - System theme (light/dark) support

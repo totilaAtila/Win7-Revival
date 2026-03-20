@@ -140,7 +140,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 
 int main() {
     std::wcout << L"========================================\n";
-    std::wcout << L"  CrystalFrame Window Diagnostic Tool\n";
+    std::wcout << L"  GlassBar Window Diagnostic Tool\n";
     std::wcout << L"========================================\n\n";
 
     std::wcout << L"This tool will help identify the Start Menu window.\n\n";

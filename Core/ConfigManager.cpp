@@ -5,7 +5,7 @@
 #include <sstream>
 #include <algorithm>
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 ConfigManager::ConfigManager() {
 }
@@ -15,7 +15,7 @@ ConfigManager::~ConfigManager() {
 }
 
 bool ConfigManager::Initialize() {
-    // Get AppData\Local\CrystalFrame path
+    // Get AppData\Local\GlassBar path
     m_configPath = GetConfigDirectory();
     
     if (!EnsureDirectoryExists(m_configPath)) {
@@ -166,11 +166,11 @@ std::wstring ConfigManager::GetConfigDirectory() {
     
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
         std::wstring configDir(path);
-        configDir += L"\\CrystalFrame";
+        configDir += L"\\GlassBar";
         return configDir;
     }
     
-    return L".\\CrystalFrame";
+    return L".\\GlassBar";
 }
 
 bool ConfigManager::EnsureDirectoryExists(const std::wstring& path) {
@@ -193,4 +193,4 @@ bool ConfigManager::EnsureDirectoryExists(const std::wstring& path) {
     return true;
 }
 
-} // namespace CrystalFrame
+} // namespace GlassBar

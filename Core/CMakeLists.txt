@@ -65,7 +65,7 @@ if(MSVC)
     target_compile_definitions(GlassBar.Core PRIVATE
         UNICODE
         _UNICODE
-        CRYSTALFRAME_EXPORTS  # Export symbols for DLL
+        GLASSBAR_EXPORTS  # Export symbols for DLL
     )
 endif()
 

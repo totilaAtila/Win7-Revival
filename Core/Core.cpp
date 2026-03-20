@@ -1,7 +1,7 @@
 #include "Core.h"
 #include "Diagnostics.h"
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 // Transparency refresh interval
 constexpr UINT REFRESH_INTERVAL_MS = 100;
@@ -14,7 +14,7 @@ Core::~Core() {
 }
 
 bool Core::Initialize() {
-    CF_LOG(Info, "=== CrystalFrame Core Initialization ===");
+    CF_LOG(Info, "=== GlassBar Core Initialization ===");
 
     // Create modules
     m_config = std::make_unique<ConfigManager>();
@@ -119,7 +119,7 @@ bool Core::Initialize() {
     m_lastRefreshTick = GetTickCount64();
     m_lastDetectTick  = GetTickCount64();
 
-    CF_LOG(Info, "=== CrystalFrame Core Ready ===");
+    CF_LOG(Info, "=== GlassBar Core Ready ===");
 
     m_running = true;
     return true;
@@ -382,4 +382,4 @@ void Core::SetStartMenuBorderColor(DWORD rgb) {
     }
 }
 
-} // namespace CrystalFrame
+} // namespace GlassBar

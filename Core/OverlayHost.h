@@ -2,7 +2,7 @@
 #include <Windows.h>
 #include "ShellTargetLocator.h"
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 class OverlayHost {
 public:
@@ -31,4 +31,4 @@ private:
     static LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 };
 
-} // namespace CrystalFrame
+} // namespace GlassBar

@@ -5,7 +5,7 @@
 
 using Microsoft::WRL::ComPtr;
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 // Accent state for SetWindowCompositionAttribute
 enum ACCENT_STATE {
@@ -96,4 +96,4 @@ private:
     void RestoreWindow(HWND hwnd);
 };
 
-} // namespace CrystalFrame
+} // namespace GlassBar

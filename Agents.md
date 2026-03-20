@@ -1,7 +1,7 @@
 # Agents.md — GlassBar Engine (Windows 11)
 
 ## 1) Scopul proiectului
-CrystalFrame este un utilitar pentru Windows 11 care aplică un **overlay extern** (fără injection / fără patching Explorer) peste:
+GlassBar este un utilitar pentru Windows 11 care aplică un **overlay extern** (fără injection / fără patching Explorer) peste:
 - **Taskbar** (cu suport pentru **auto-hide** și poziționare pe **oricare edge**)
 - **Start Menu** (overlay **doar când Start este deschis**, altfel ascuns)
 
@@ -34,9 +34,9 @@ Overlay-ul este **click-through** (nu interceptează input). Controlul principal
 
 ## 3) Arhitectură (overview)
 ### Executabile
-- **CrystalFrame.Core** (C++20)  
+- **GlassBar.Core** (C++20)
   Responsabil pentru: detectarea țintelor, gestionarea overlay-ului, randare, IPC, logging.
-- **CrystalFrame.Dashboard** (C# .NET 8, WinUI 3)  
+- **GlassBar.Dashboard** (C# .NET 8, WinUI 3)
   Responsabil pentru: UI setări (slidere/toggles), persistență config, status, comenzi IPC.
 
 ### Module Core (obligatorii)
@@ -182,7 +182,7 @@ Un milestone este „Done” doar dacă:
 ---
 
 ## 8) Observabilitate (logging & diagnostic)
-### Log obligatoriu (CrystalFrame.log)
+### Log obligatoriu (GlassBar.log)
 - Startup summary (versiune, init ok, config loaded)
 - Taskbar found/lost + rect + edge
 - Start shown/hidden + rect

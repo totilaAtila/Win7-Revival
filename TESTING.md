@@ -17,8 +17,8 @@ Quick testing scenarios to validate all functionality.
 
 ### TC-M1-01: Taskbar Detection
 **Steps:**
-1. Start `CrystalFrame.Core.exe`
-2. Check log: `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log`
+1. Start `GlassBar.Dashboard.exe`
+2. Check log: `%LOCALAPPDATA%\GlassBar\GlassBar.log`
 3. Look for: `[INFO] Taskbar found: edge=bottom`
 
 **Expected:** ✓ Taskbar detected, overlay positioned correctly
@@ -117,13 +117,13 @@ Quick testing scenarios to validate all functionality.
 **Steps:**
 1. Open Dashboard
 2. Enable "Run at startup" toggle
-3. Verify registry key: `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\CrystalFrame`
-   - Value must be: `"<path>\CrystalFrame.Dashboard.exe" /autostart`
+3. Verify registry key: `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\GlassBar`
+   - Value must be: `"<path>\GlassBar.Dashboard.exe" /autostart`
 4. Sign out and sign back in (or run the command manually from CLI)
 5. Check that **no Dashboard window appears** on screen
-6. Check that a **CrystalFrame icon is visible in the System Tray**
+6. Check that a **GlassBar icon is visible in the System Tray**
 7. Double-click the tray icon → Dashboard window opens
-8. Right-click the tray icon → context menu shows "Open CrystalFrame" and "Exit"
+8. Right-click the tray icon → context menu shows "Open GlassBar" and "Exit"
 
 **Expected:** ✓ Window stays hidden at startup; tray icon present; double-click/right-click work
 
@@ -131,7 +131,7 @@ Quick testing scenarios to validate all functionality.
 **Steps:**
 1. Set Taskbar opacity to 63, Start opacity to 42
 2. Close Dashboard
-3. Verify `%LOCALAPPDATA%\CrystalFrame\config.json` contains values
+3. Verify `%LOCALAPPDATA%\GlassBar\config.json` contains values
 4. Reopen Dashboard
 5. Verify sliders show 63 and 42
 
@@ -140,7 +140,7 @@ Quick testing scenarios to validate all functionality.
 ### TC-M4-02: Performance
 **Steps:**
 1. Open Task Manager
-2. Find `CrystalFrame.Core.exe`
+2. Find `GlassBar.Dashboard.exe`
 3. Let run for 5 minutes idle
 4. Check CPU usage
 
@@ -220,7 +220,7 @@ For 1 minute:
 ### TC-M7-02: Windows build detection
 **Steps:**
 1. Start GlassBar
-2. Check log: `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log`
+2. Check log: `%LOCALAPPDATA%\GlassBar\GlassBar.log`
 3. Look for: `Windows build number: XXXXX`
 
 **Expected:** ✓ Build number logged at startup with correct classification (pre-24H2 / 24H2 / 25H2+)
@@ -269,7 +269,7 @@ If you find an issue:
 
 1. **Capture:**
    - Screenshot of issue
-   - Copy `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log`
+   - Copy `%LOCALAPPDATA%\GlassBar\GlassBar.log`
    - Note exact steps to reproduce
 
 2. **Report:**

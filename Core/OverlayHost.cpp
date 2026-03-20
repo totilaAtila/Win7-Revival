@@ -1,7 +1,7 @@
 #include "OverlayHost.h"
 #include "Diagnostics.h"
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 OverlayHost::OverlayHost() {
 }
@@ -19,14 +19,14 @@ bool OverlayHost::Initialize(HINSTANCE hInstance) {
     }
     
     // Create Taskbar overlay window
-    m_hwndTaskbar = CreateOverlayWindow(L"CrystalFrameTaskbarOverlay", L"CrystalFrame Taskbar Overlay");
+    m_hwndTaskbar = CreateOverlayWindow(L"GlassBarTaskbarOverlay", L"GlassBar Taskbar Overlay");
     if (!m_hwndTaskbar) {
         CF_LOG(Error, "Failed to create Taskbar overlay window");
         return false;
     }
     
     // Create Start overlay window
-    m_hwndStart = CreateOverlayWindow(L"CrystalFrameStartOverlay", L"CrystalFrame Start Overlay");
+    m_hwndStart = CreateOverlayWindow(L"GlassBarStartOverlay", L"GlassBar Start Overlay");
     if (!m_hwndStart) {
         CF_LOG(Error, "Failed to create Start overlay window");
         return false;
@@ -60,7 +60,7 @@ bool OverlayHost::RegisterWindowClasses() {
     wcTaskbar.cbSize = sizeof(WNDCLASSEXW);
     wcTaskbar.lpfnWndProc = OverlayWndProc;
     wcTaskbar.hInstance = m_hInstance;
-    wcTaskbar.lpszClassName = L"CrystalFrameTaskbarOverlay";
+    wcTaskbar.lpszClassName = L"GlassBarTaskbarOverlay";
     wcTaskbar.hCursor = LoadCursor(nullptr, IDC_ARROW);
     
     if (!RegisterClassExW(&wcTaskbar)) {
@@ -76,7 +76,7 @@ bool OverlayHost::RegisterWindowClasses() {
     wcStart.cbSize = sizeof(WNDCLASSEXW);
     wcStart.lpfnWndProc = OverlayWndProc;
     wcStart.hInstance = m_hInstance;
-    wcStart.lpszClassName = L"CrystalFrameStartOverlay";
+    wcStart.lpszClassName = L"GlassBarStartOverlay";
     wcStart.hCursor = LoadCursor(nullptr, IDC_ARROW);
     
     if (!RegisterClassExW(&wcStart)) {
@@ -191,4 +191,4 @@ LRESULT CALLBACK OverlayHost::OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
     }
 }
 
-} // namespace CrystalFrame
+} // namespace GlassBar
