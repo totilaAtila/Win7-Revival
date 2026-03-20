@@ -10,7 +10,7 @@
 #include <vector>
 #include "AllProgramsEnumerator.h"   // MenuNode, BuildAllProgramsTree, IconCache
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 /// <summary>
 /// Recently used program, populated from the Windows UserAssist registry at startup.
@@ -193,7 +193,7 @@ private:
     std::vector<RecentItem> m_recentItems;
 
     // Paths explicitly removed by the user via right-click "Remove from list".
-    // Persisted to %LOCALAPPDATA%\CrystalFrame\recent_excluded.json.
+    // Persisted to %LOCALAPPDATA%\GlassBar\recent_excluded.json.
     std::set<std::wstring> m_recentExcluded;
 
     // Dynamic pinned list (replaces static s_pinnedItems at runtime).
@@ -216,7 +216,7 @@ private:
     // Per-item custom display names (empty = use default from m_menuItems[i].name).
     std::wstring m_customMenuNames[7];
 
-    // Optional custom title override (empty = "CrystalFrame").
+    // Optional custom title override (empty = "GlassBar").
     std::wstring m_customTitle;
 
     // Cached menu position — computed once at Initialize() and refreshed on
@@ -355,8 +355,8 @@ private:
     static constexpr int SM_MAX_VIS = (BOTTOM_BAR_Y - SM_TITLE_H) / SM_ITEM_H;
 
     // ── Window class names ──────────────────────────────────────────────────
-    static constexpr wchar_t WINDOW_CLASS[]      = L"CrystalFrame_StartMenu";
-    static constexpr wchar_t EDIT_DIALOG_CLASS[] = L"CrystalFrame_EditDialog";
+    static constexpr wchar_t WINDOW_CLASS[]      = L"GlassBar_StartMenu";
+    static constexpr wchar_t EDIT_DIALOG_CLASS[] = L"GlassBar_EditDialog";
 
     // ── Static data ─────────────────────────────────────────────────────────
     static const PinnedItem    s_pinnedItems[PROG_COUNT];
@@ -496,4 +496,4 @@ private:
     static LRESULT CALLBACK EditDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 };
 
-} // namespace CrystalFrame
+} // namespace GlassBar

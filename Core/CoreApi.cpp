@@ -1,4 +1,4 @@
-#define CRYSTALFRAME_EXPORTS
+#define GLASSBAR_EXPORTS
 #include "CoreApi.h"
 #include "Core.h"
 #include "Diagnostics.h"
@@ -86,7 +86,7 @@ static LONG WINAPI GlassBarExceptionFilter(EXCEPTION_POINTERS* pei)
 
 extern "C" {
 
-CRYSTALFRAME_API bool CoreInitialize() {
+GLASSBAR_API bool CoreInitialize() {
     try {
         if (g_core) {
             CF_LOG(Warning, "Core already initialized");
@@ -127,7 +127,7 @@ CRYSTALFRAME_API bool CoreInitialize() {
     }
 }
 
-CRYSTALFRAME_API void CoreShutdown() {
+GLASSBAR_API void CoreShutdown() {
     try {
         if (g_core) {
             CF_LOG(Info, "Core API shutdown initiated");
@@ -144,7 +144,7 @@ CRYSTALFRAME_API void CoreShutdown() {
     }
 }
 
-CRYSTALFRAME_API void CoreSetTaskbarOpacity(int opacity) {
+GLASSBAR_API void CoreSetTaskbarOpacity(int opacity) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetTaskbarOpacity: Core not initialized");
         return;
@@ -152,7 +152,7 @@ CRYSTALFRAME_API void CoreSetTaskbarOpacity(int opacity) {
     g_core->SetTaskbarOpacity(opacity);
 }
 
-CRYSTALFRAME_API void CoreSetStartOpacity(int opacity) {
+GLASSBAR_API void CoreSetStartOpacity(int opacity) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetStartOpacity: Core not initialized");
         return;
@@ -160,7 +160,7 @@ CRYSTALFRAME_API void CoreSetStartOpacity(int opacity) {
     g_core->SetStartOpacity(opacity);
 }
 
-CRYSTALFRAME_API void CoreSetTaskbarEnabled(bool enabled) {
+GLASSBAR_API void CoreSetTaskbarEnabled(bool enabled) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetTaskbarEnabled: Core not initialized");
         return;
@@ -168,7 +168,7 @@ CRYSTALFRAME_API void CoreSetTaskbarEnabled(bool enabled) {
     g_core->SetTaskbarEnabled(enabled);
 }
 
-CRYSTALFRAME_API void CoreSetStartEnabled(bool enabled) {
+GLASSBAR_API void CoreSetStartEnabled(bool enabled) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetStartEnabled: Core not initialized");
         return;
@@ -176,7 +176,7 @@ CRYSTALFRAME_API void CoreSetStartEnabled(bool enabled) {
     g_core->SetStartEnabled(enabled);
 }
 
-CRYSTALFRAME_API void CoreSetTaskbarColor(int r, int g, int b) {
+GLASSBAR_API void CoreSetTaskbarColor(int r, int g, int b) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetTaskbarColor: Core not initialized");
         return;
@@ -184,7 +184,7 @@ CRYSTALFRAME_API void CoreSetTaskbarColor(int r, int g, int b) {
     g_core->SetTaskbarColor(r, g, b);
 }
 
-CRYSTALFRAME_API void CoreSetTaskbarBlur(bool enabled) {
+GLASSBAR_API void CoreSetTaskbarBlur(bool enabled) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetTaskbarBlur: Core not initialized");
         return;
@@ -192,7 +192,7 @@ CRYSTALFRAME_API void CoreSetTaskbarBlur(bool enabled) {
     g_core->SetTaskbarBlur(enabled);
 }
 
-CRYSTALFRAME_API void CoreSetStartBlur(bool enabled) {
+GLASSBAR_API void CoreSetStartBlur(bool enabled) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetStartBlur: Core not initialized");
         return;
@@ -200,7 +200,7 @@ CRYSTALFRAME_API void CoreSetStartBlur(bool enabled) {
     g_core->SetStartBlur(enabled);
 }
 
-CRYSTALFRAME_API void CoreSetStartMenuHookEnabled(bool enabled) {
+GLASSBAR_API void CoreSetStartMenuHookEnabled(bool enabled) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetStartMenuHookEnabled: Core not initialized");
         return;
@@ -208,7 +208,7 @@ CRYSTALFRAME_API void CoreSetStartMenuHookEnabled(bool enabled) {
     g_core->SetStartMenuHookEnabled(enabled);
 }
 
-CRYSTALFRAME_API void CoreSetStartMenuOpacity(int opacity) {
+GLASSBAR_API void CoreSetStartMenuOpacity(int opacity) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetStartMenuOpacity: Core not initialized");
         return;
@@ -216,7 +216,7 @@ CRYSTALFRAME_API void CoreSetStartMenuOpacity(int opacity) {
     g_core->SetStartMenuOpacity(opacity);
 }
 
-CRYSTALFRAME_API void CoreSetStartMenuBackgroundColor(unsigned int rgb) {
+GLASSBAR_API void CoreSetStartMenuBackgroundColor(unsigned int rgb) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetStartMenuBackgroundColor: Core not initialized");
         return;
@@ -224,7 +224,7 @@ CRYSTALFRAME_API void CoreSetStartMenuBackgroundColor(unsigned int rgb) {
     g_core->SetStartMenuBackgroundColor(rgb);
 }
 
-CRYSTALFRAME_API void CoreSetStartMenuTextColor(unsigned int rgb) {
+GLASSBAR_API void CoreSetStartMenuTextColor(unsigned int rgb) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetStartMenuTextColor: Core not initialized");
         return;
@@ -232,7 +232,7 @@ CRYSTALFRAME_API void CoreSetStartMenuTextColor(unsigned int rgb) {
     g_core->SetStartMenuTextColor(rgb);
 }
 
-CRYSTALFRAME_API void CoreSetStartMenuItems(bool controlPanel, bool deviceManager, bool installedApps,
+GLASSBAR_API void CoreSetStartMenuItems(bool controlPanel, bool deviceManager, bool installedApps,
                                              bool documents, bool pictures, bool videos, bool recentFiles) {
     if (!g_core) {
         CF_LOG(Warning, "CoreSetStartMenuItems: Core not initialized");
@@ -241,17 +241,17 @@ CRYSTALFRAME_API void CoreSetStartMenuItems(bool controlPanel, bool deviceManage
     g_core->SetStartMenuItems(controlPanel, deviceManager, installedApps, documents, pictures, videos, recentFiles);
 }
 
-CRYSTALFRAME_API void CoreSetStartMenuPinned(bool pinned) {
+GLASSBAR_API void CoreSetStartMenuPinned(bool pinned) {
     if (!g_core) return;
     g_core->SetStartMenuPinned(pinned);
 }
 
-CRYSTALFRAME_API void CoreSetStartMenuBorderColor(unsigned int rgb) {
+GLASSBAR_API void CoreSetStartMenuBorderColor(unsigned int rgb) {
     if (!g_core) return;
     g_core->SetStartMenuBorderColor(static_cast<DWORD>(rgb));
 }
 
-CRYSTALFRAME_API void CoreGetStatus(CoreStatus* status) {
+GLASSBAR_API void CoreGetStatus(CoreStatus* status) {
     if (!g_core || !status) {
         if (status) {
             memset(status, 0, sizeof(CoreStatus));
@@ -269,7 +269,7 @@ CRYSTALFRAME_API void CoreGetStatus(CoreStatus* status) {
     status->start.opacity = g_core->GetStartOpacity();
 }
 
-CRYSTALFRAME_API bool CoreProcessMessages() {
+GLASSBAR_API bool CoreProcessMessages() {
     if (!g_core) {
         return false;
     }

@@ -528,21 +528,29 @@ namespace GlassBar.Dashboard
             switch (name)
             {
                 case "Win7Aero":  // Aero Glass blue — translucent, opacity 50
+                    TaskbarEnabled = true;
+                    _core.SetTaskbarEnabled(true);
+                    StartEnabled = true;
+                    _core.SetStartEnabled(true);
                     OnTaskbarColorChanged(20, 40, 80);
                     OnTaskbarOpacityChanged(50);
                     OnStartBgColorChanged(20, 40, 80);
                     OnStartTextColorChanged(255, 255, 255);
                     OnStartBorderColorChanged(60, 100, 160);
-                    OnStartOpacityChanged(50);
+                    OnStartOpacityChanged(17);
                     OnStartBlurChanged(false);
                     break;
                 case "Dark":      // Dark charcoal — modern dark theme, opacity 50
+                    TaskbarEnabled = true;
+                    _core.SetTaskbarEnabled(true);
+                    StartEnabled = true;
+                    _core.SetStartEnabled(true);
                     OnTaskbarColorChanged(18, 18, 22);
                     OnTaskbarOpacityChanged(50);
                     OnStartBgColorChanged(18, 18, 22);
                     OnStartTextColorChanged(200, 200, 200);
                     OnStartBorderColorChanged(60, 60, 65);
-                    OnStartOpacityChanged(50);
+                    OnStartOpacityChanged(17);
                     OnStartBlurChanged(false);
                     break;
             }

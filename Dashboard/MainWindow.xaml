@@ -82,6 +82,28 @@
                 </NavigationViewItem>
             </NavigationView.MenuItems>
 
+            <NavigationView.PaneFooter>
+                <StackPanel Margin="8,4,8,12" Spacing="5">
+                    <Rectangle Height="1" Fill="#333333" Margin="0,0,0,2"/>
+                    <TextBlock Text="THEME PRESETS" FontSize="10" Foreground="#666"
+                               FontWeight="SemiBold" Margin="4,0,0,0"/>
+                    <Button x:Name="TaskbarPresetWin7AeroButton"
+                            Content="Win7 Aero"
+                            Click="TaskbarPresetWin7Aero_Click"
+                            HorizontalAlignment="Stretch"
+                            FontSize="11" Padding="8,5">
+                        <ToolTipService.ToolTip>Translucent blue — sets Taskbar + Start Menu, opacity 50</ToolTipService.ToolTip>
+                    </Button>
+                    <Button x:Name="TaskbarPresetDarkButton"
+                            Content="Dark"
+                            Click="TaskbarPresetDark_Click"
+                            HorizontalAlignment="Stretch"
+                            FontSize="11" Padding="8,5">
+                        <ToolTipService.ToolTip>Dark charcoal — sets Taskbar + Start Menu, opacity 50</ToolTipService.ToolTip>
+                    </Button>
+                </StackPanel>
+            </NavigationView.PaneFooter>
+
             <!-- ── Conținut ──────────────────────────────────────────────────── -->
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
@@ -200,29 +222,6 @@
                                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1">
                                     <Border x:Name="TaskbarColorPreview" Background="Black" CornerRadius="2"/>
                                 </Border>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Card: Theme Presets -->
-                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1" CornerRadius="6">
-                            <StackPanel Padding="10,8" Spacing="6">
-                                <TextBlock Text="THEME PRESETS" FontSize="10" FontWeight="SemiBold"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           CharacterSpacing="75"/>
-                                <TextBlock Text="Applies to Taskbar + Start Menu" FontSize="10"
-                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Button x:Name="TaskbarPresetWin7AeroButton" Content="Win7 Aero"
-                                            Click="TaskbarPresetWin7Aero_Click" FontSize="11" Padding="8,4">
-                                        <ToolTipService.ToolTip>Translucent blue — sets Taskbar + Start Menu, opacity 50</ToolTipService.ToolTip>
-                                    </Button>
-                                    <Button x:Name="TaskbarPresetDarkButton" Content="Dark"
-                                            Click="TaskbarPresetDark_Click" FontSize="11" Padding="8,4">
-                                        <ToolTipService.ToolTip>Dark charcoal — sets Taskbar + Start Menu, opacity 50</ToolTipService.ToolTip>
-                                    </Button>
-                                </StackPanel>
                             </StackPanel>
                         </Border>
 

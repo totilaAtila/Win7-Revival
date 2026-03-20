@@ -1,7 +1,7 @@
 #include "StartMenuHook.h"
 #include "Diagnostics.h"
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 // Static instance pointer
 StartMenuHook* StartMenuHook::s_instance = nullptr;
@@ -271,4 +271,4 @@ LRESULT CALLBACK StartMenuHook::MouseHookProc(int nCode, WPARAM wParam, LPARAM l
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
-} // namespace CrystalFrame
+} // namespace GlassBar

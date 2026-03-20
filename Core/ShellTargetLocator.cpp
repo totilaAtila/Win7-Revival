@@ -3,7 +3,7 @@
 #include <shellapi.h>
 #include <algorithm>
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 // Helper function to convert wide string to UTF-8 for logging
 static std::string WideToUtf8(const wchar_t* wstr) {
@@ -191,7 +191,7 @@ bool ShellTargetLocator::CheckAutoHide(HWND hwnd) {
 // ========== MESSAGE WINDOW ==========
 
 bool ShellTargetLocator::CreateMessageWindow() {
-    const wchar_t* className = L"CrystalFrameMessageWindow";
+    const wchar_t* className = L"GlassBarMessageWindow";
     
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(WNDCLASSEXW);
@@ -210,7 +210,7 @@ bool ShellTargetLocator::CreateMessageWindow() {
     m_msgWindow = CreateWindowExW(
         0,
         className,
-        L"CrystalFrame Message",
+        L"GlassBar Message",
         0,
         0, 0, 0, 0,
         HWND_MESSAGE,  // Message-only window
@@ -517,4 +517,4 @@ bool ShellTargetLocator::IsStartMenuForeground() {
     return isStart;
 }
 
-} // namespace CrystalFrame
+} // namespace GlassBar

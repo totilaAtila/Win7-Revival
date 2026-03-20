@@ -5,7 +5,7 @@
 #include <vector>
 #include <shellapi.h>  // HICON (via Windows.h already, but explicit for clarity)
 
-namespace CrystalFrame {
+namespace GlassBar {
 
 /// <summary>
 /// IconCache — deduplicated HICON lifetime manager.
@@ -126,4 +126,4 @@ bool ResolveShortcutTarget(const std::wstring& path,
 /// </summary>
 std::vector<MenuNode> BuildAllProgramsTree();
 
-} // namespace CrystalFrame
+} // namespace GlassBar

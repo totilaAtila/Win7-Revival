@@ -658,6 +658,9 @@ namespace GlassBar.Dashboard
             _isDetailInitialized = false;
             try
             {
+                // Overlay enable toggles
+                TaskbarEnabledToggle.IsOn = _viewModel.TaskbarEnabled;
+                StartEnabledToggle.IsOn   = _viewModel.StartEnabled;
                 // Taskbar
                 TaskbarOpacitySlider.Value = _viewModel.TaskbarOpacity;
                 TaskbarColorRSlider.Value  = _viewModel.TaskbarColorR;

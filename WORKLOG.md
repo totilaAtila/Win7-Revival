@@ -1,6 +1,6 @@
 
 # WORKLOG — GlassBar
-Last updated: 2026-03-19 (session 22 — Windows 25H2 compatibility, Mica fix, universal transparency fallback, global theme presets)
+Last updated: 2026-03-20 (session 23 — Rebrand fix GlassBar, 24H2 LWA_ALPHA fallback, preset UI fixes)
 
 ## 0) Ground truth (docs to treat as canonical)
 - Product overview + current capabilities: README.md
@@ -1311,6 +1311,77 @@ cu opacitate standardizată la 50 pentru ambele componente.
 
 **Fișiere:** `Dashboard/MainWindow.xaml`, `Dashboard/MainViewModel.cs`,
 `Dashboard/MainWindow.xaml.cs`
+
+---
+
+## Session 23 — Rebrand fix GlassBar, 24H2 LWA_ALPHA fallback, preset UI fixes
+
+### Rebrand: CrystalFrame → GlassBar (Core build errors)
+
+**Problemă:** Rebrandul anterior (commit `e2c52a1`) a redenumit fișierele și namespace-ul în `GlassBar`,
+dar nu a actualizat toate referințele din cele 14 fișiere Core. Build-ul CMake eșua cu sute de erori
+(`CrystalFrame` namespace necunoscut, macro `CF_LOG` nedefinit în unele fișiere, string literals vechi).
+
+**Remediere:**
+- Toate fișierele `Core/` actualizate: namespace `CrystalFrame` → `GlassBar` în header include guards,
+  macro-uri `CF_LOG`, string literals de path (`CrystalFrame\` → `GlassBar\`), class window names
+- `Core/ConfigManager.cpp`: config path `%LOCALAPPDATA%\CrystalFrame\` → `%LOCALAPPDATA%\GlassBar\`
+- `publish-standalone-full.ps1`: verificat — deja corect (GlassBar naming)
+
+**Fișiere:** Toate fișierele `Core/*.cpp`, `Core/*.h`
+
+---
+
+### 24H2 taskbar transparency: LWA_ALPHA fallback
+
+**Problemă:** Pe Windows 11 24H2/25H2 (build ≥ 26000), DWM ignoră silențios SWCA pe `Shell_TrayWnd`
+pentru TOATE stările (TRANSPARENTGRADIENT, ACRYLICBLURBEHIND etc.).
+Threshold-ul inițial era `>= 27000` (incorect) → corectat la `>= 26000`.
+
+**Soluție curentă — LWA_ALPHA fallback:**
+- Pe build ≥ 26000, `ApplyTransparencyWithColor()` aplică `WS_EX_LAYERED +
+  SetLayeredWindowAttributes(LWA_ALPHA)` direct pe `Shell_TrayWnd`
+- Rezultat: transparență uniformă funcțională; culorile RGB și blur nu au efect pe 24H2/25H2
+- `DWMWA_SYSTEMBACKDROP_TYPE=NONE` apelat pe aceleași build-uri pentru a dezactiva Mica/Mica Alt
+  (altfel DWM ignoră complet efectele noastre)
+
+**Notă:** Abordarea cu overlay SWCA (fereastră separată deasupra Shell_TrayWnd) a fost investigată
+și implementată, dar abandonată: `WS_EX_LAYERED` aplicat pe `Shell_TrayWnd` (necesar pentru a-l
+face invizibil sub overlay) rupe WinUI 3 XAML input routing pe 24H2/25H2 — click-urile nu ajung
+la butoanele taskbar-ului. Problema rămâne deschisă pentru o sesiune viitoare.
+
+**Fișiere:** `Core/Renderer.cpp` — bloc `if (!isStartMenu && m_buildNumber >= 26000)`
+
+---
+
+### Theme presets — mutate în sidebar NavigationView.PaneFooter
+
+**Problemă:** Butoanele “Win7 Aero” și “Dark” erau în panoul de conținut Taskbar;
+utilizatorul a cerut să fie în sidebar, sub butonul “Start Menu”.
+
+**Remediere:**
+- `Dashboard/MainWindow.xaml`: eliminat cardul THEME PRESETS din `TaskbarPanel`; adăugat
+  `<NavigationView.PaneFooter>` cu `StackPanel` (separator + label + 2 butoane HorizontalAlignment=Stretch)
+- Butoanele sunt vizibile în sidebar indiferent de panoul activ (Taskbar / Start Menu)
+
+**Fișiere:** `Dashboard/MainWindow.xaml`
+
+---
+
+### Auto-enable overlay toggle la aplicarea preset-ului
+
+**Problemă:** `ApplyGlobalTheme()` seta `TaskbarEnabled = true` și apela `SetTaskbarEnabled(true)`,
+dar `SyncAllSlidersFromViewModel()` nu sincroniza `TaskbarEnabledToggle` și `StartEnabledToggle`.
+Toggle switch-urile rămâneau vizual în starea anterioară.
+
+**Remediere:**
+- `Dashboard/MainWindow.xaml.cs` → `SyncAllSlidersFromViewModel()`: adăugate la început
+  `TaskbarEnabledToggle.IsOn = _viewModel.TaskbarEnabled;` și `StartEnabledToggle.IsOn = _viewModel.StartEnabled;`
+- `Dashboard/MainViewModel.cs` → `ApplyGlobalTheme()`: ambele preset-uri setează explicit
+  `TaskbarEnabled = true` + `StartEnabled = true` + `_core.SetTaskbarEnabled/SetStartEnabled(true)`
+- Start opacity corectată la 17 (nu 50) pentru ambele preset-uri (50 era prea opac pentru Start Menu)
+
+**Fișiere:** `Dashboard/MainWindow.xaml.cs`, `Dashboard/MainViewModel.cs`
 
 ---
 
