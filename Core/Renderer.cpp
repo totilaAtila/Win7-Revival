@@ -300,11 +300,14 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
     if (enabled && opacity > 0) {
         if (m_buildNumber >= 26200 && !isStartMenu) {
             // On 25H2+ (build 26200+) TRANSPARENTGRADIENT is silently ignored for
-            // the taskbar. Force ACRYLICBLURBEHIND (state 4) which uses the modern
-            // Acrylic pipeline and still honours GradientColor for colour+alpha tint.
-            // Start Menu is excluded so its blur toggle remains effective.
-            accent.AccentState = ACCENT_ENABLE_ACRYLICBLURBEHIND;
-            CF_LOG(Debug, "[" << windowType << "] Win25H2+ forcing ACRYLICBLURBEHIND (TRANSPARENTGRADIENT ignored)");
+            // the taskbar; ACRYLICBLURBEHIND uses the modern Acrylic pipeline and
+            // honours GradientColor. Honor useBlur: when blur is off, try
+            // TRANSPARENTGRADIENT anyway — it may be ignored, but colour+alpha
+            // still reaches the taskbar via LWA_ALPHA applied above.
+            accent.AccentState = useBlur ? ACCENT_ENABLE_ACRYLICBLURBEHIND
+                                         : ACCENT_ENABLE_TRANSPARENTGRADIENT;
+            CF_LOG(Debug, "[" << windowType << "] Win25H2+ "
+                         << (useBlur ? "ACRYLICBLURBEHIND" : "TRANSPARENTGRADIENT (blur off)"));
         } else if (useBlur) {
             // Acrylic blur (Windows 10 1803+ / Windows 11)
             accent.AccentState = ACCENT_ENABLE_ACRYLICBLURBEHIND;
