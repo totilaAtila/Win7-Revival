@@ -287,7 +287,7 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
                 SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
             BYTE alpha = static_cast<BYTE>(((100 - opacity) * 255) / 100);
             SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
-            CF_LOG(Debug, "[TASKBAR] Win25H2+ LWA_ALPHA safety net: alpha=" << (int)alpha);
+            CF_LOG(Info, "[TASKBAR] Win25H2+ LWA_ALPHA safety net applied: alpha=" << (int)alpha);
         } else {
             if (exStyle & WS_EX_LAYERED)
                 SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
@@ -323,19 +323,15 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
         // On Windows 25H2+ (build >= 26200) AccentFlags = 2 may be silently ignored;
         // 0x20 (draw gradient on entire client area) has better compatibility.
         // On older builds AccentFlags = 2 is the correct value.
-        if (m_buildNumber >= 26200) {
-            // 25H2+ (build 26200+): use 0x20 (full-window gradient, no border clipping)
-            accent.AccentFlags = 0x20;
-            CF_LOG(Debug, "[" << windowType << "] Win25H2+ AccentFlags=0x20 (build " << m_buildNumber << ")");
-        } else {
-            accent.AccentFlags = 2;
-        }
+        // Iter#4 hypothesis: AccentFlags=0x20 caused SWCA to be silently ignored on 26200.
+        // Revert to AccentFlags=2 (standard value, worked on pre-25H2 builds) for all paths.
+        accent.AccentFlags = 2;
+        CF_LOG(Info, "[" << windowType << "] AccentFlags=2 (build " << m_buildNumber << ")");
 
-        CF_LOG(Debug, "[" << windowType << "] Applying "
-                     << (useBlur ? "ACRYLIC" : "TRANSPARENTGRADIENT")
-                     << ": opacity=" << opacity << "%, GradientColor=0x"
-                     << std::hex << gradientColor << std::dec
-                     << ", AccentFlags=0x" << accent.AccentFlags);
+        CF_LOG(Info, "[" << windowType << "] SWCA call: AccentState=" << accent.AccentState
+                     << " AccentFlags=0x" << std::hex << accent.AccentFlags
+                     << " GradientColor=0x" << gradientColor << std::dec
+                     << " opacity=" << opacity << "%");
     } else {
         accent.AccentState = ACCENT_DISABLED;
         accent.GradientColor = 0;
@@ -350,8 +346,9 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
     data.cbData = sizeof(accent);
 
     BOOL result = m_setWindowCompositionAttribute(hwnd, &data);
-    CF_LOG(Debug, "SetWindowCompositionAttribute result: " << result
-                  << " for HWND 0x" << std::hex << reinterpret_cast<uintptr_t>(hwnd) << std::dec);
+    CF_LOG(Info, "[" << windowType << "] SWCA result=" << result
+                 << " HWND=0x" << std::hex << reinterpret_cast<uintptr_t>(hwnd) << std::dec
+                 << " GetLastError=" << GetLastError());
 }
 
 void Renderer::RestoreWindow(HWND hwnd) {
