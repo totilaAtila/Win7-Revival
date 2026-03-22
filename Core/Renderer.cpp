@@ -66,6 +66,7 @@ bool Renderer::Initialize() {
 }
 
 void Renderer::Shutdown() {
+    DestroyAllOverlays();
     // Restore original window states
     for (HWND h : m_hwndTaskbars) {
         RestoreWindow(h);
@@ -86,6 +87,7 @@ void Renderer::SetTaskbarWindow(HWND hwnd) {
 }
 
 void Renderer::SetTaskbarWindows(const std::vector<HWND>& hwnds) {
+    DestroyAllOverlays();
     m_hwndTaskbars = hwnds;
     for (HWND h : m_hwndTaskbars) {
         if (h) {
@@ -276,7 +278,7 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
 
     // Iter#6: SWCA confirmed inert on 25H2 (result=1, GetLastError=0 but zero visual
     // effect). LWA_ALPHA is the only working transparency mechanism for 25H2+ taskbar.
-    // Apply it unconditionally here; SWCA call below is kept as a no-op for diagnostics.
+    // Iter#7: overlay window adds color tint on top of Shell_TrayWnd.
     if (!isStartMenu && m_buildNumber >= 26200) {
         LONG exStyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
         if (enabled && opacity > 0) {
@@ -285,10 +287,23 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
             BYTE alpha = static_cast<BYTE>(((100 - opacity) * 255) / 100);
             SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
             CF_LOG(Info, "[TASKBAR] Win25H2+ LWA_ALPHA applied: alpha=" << (int)alpha);
+
+            // Overlay for color tint (Iter#7)
+            EnsureOverlayWindow(hwnd);
+            auto it = m_overlayWindows.find(hwnd);
+            if (it != m_overlayWindows.end()) {
+                UpdateOverlayAppearance(it->second, r, g, b, opacity, true);
+            }
         } else {
             if (exStyle & WS_EX_LAYERED)
                 SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
             CF_LOG(Info, "[TASKBAR] Win25H2+ LWA disabled");
+
+            // Hide overlay
+            auto it = m_overlayWindows.find(hwnd);
+            if (it != m_overlayWindows.end()) {
+                ShowWindow(it->second, SW_HIDE);
+            }
         }
         // Fall through — SWCA call below is diagnostic-only (result=1, no visual effect).
     }
@@ -352,6 +367,127 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
                  << " GetLastError=" << std::dec << lastErr);
 
 }
+
+// ---------------------------------------------------------------------------
+// Iter#7: Overlay window — color tint for 25H2+ taskbar
+// ---------------------------------------------------------------------------
+
+/*static*/ LRESULT CALLBACK Renderer::OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+        case WM_NCHITTEST:
+            return HTTRANSPARENT;
+
+        case WM_ERASEBKGND: {
+            COLORREF color = (COLORREF)(ULONG_PTR)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            HBRUSH brush = CreateSolidBrush(color);
+            FillRect(reinterpret_cast<HDC>(wParam), &rc, brush);
+            DeleteObject(brush);
+            return 1;
+        }
+
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+
+        case WM_DESTROY:
+            return 0;
+
+        default:
+            return DefWindowProcW(hwnd, msg, wParam, lParam);
+    }
+}
+
+void Renderer::EnsureOverlayWindow(HWND taskbarHwnd) {
+    // Register window class once per Renderer lifetime
+    if (!m_overlayClassAtom) {
+        WNDCLASSEXW wc = {};
+        wc.cbSize = sizeof(wc);
+        wc.lpfnWndProc = OverlayWndProc;
+        wc.hInstance = GetModuleHandleW(nullptr);
+        wc.lpszClassName = L"GlassBarTaskbarOverlay25H2";
+        wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        m_overlayClassAtom = RegisterClassExW(&wc);
+        if (!m_overlayClassAtom) {
+            DWORD err = GetLastError();
+            if (err != ERROR_CLASS_ALREADY_EXISTS) {
+                CF_LOG(Error, "[TASKBAR] Overlay RegisterClassExW failed: " << err);
+                return;
+            }
+            m_overlayClassAtom = 1; // already registered
+        }
+    }
+
+    // Reposition existing valid overlay
+    auto it = m_overlayWindows.find(taskbarHwnd);
+    if (it != m_overlayWindows.end()) {
+        if (IsWindow(it->second)) {
+            RECT rc;
+            GetWindowRect(taskbarHwnd, &rc);
+            SetWindowPos(it->second, HWND_TOPMOST,
+                rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
+                SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+            return;
+        }
+        m_overlayWindows.erase(it);
+    }
+
+    // Create overlay
+    RECT rc;
+    GetWindowRect(taskbarHwnd, &rc);
+    HWND overlay = CreateWindowExW(
+        WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST |
+        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        L"GlassBarTaskbarOverlay25H2",
+        nullptr,
+        WS_POPUP,
+        rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
+        nullptr, nullptr, GetModuleHandleW(nullptr), nullptr
+    );
+    if (!overlay) {
+        CF_LOG(Error, "[TASKBAR] Overlay CreateWindowExW failed: " << GetLastError());
+        return;
+    }
+    m_overlayWindows[taskbarHwnd] = overlay;
+    CF_LOG(Info, "[TASKBAR] Overlay created HWND=0x" << std::hex
+                 << reinterpret_cast<uintptr_t>(overlay)
+                 << " for taskbar 0x" << reinterpret_cast<uintptr_t>(taskbarHwnd) << std::dec);
+}
+
+void Renderer::UpdateOverlayAppearance(HWND overlayHwnd, int r, int g, int b, int opacity, bool enabled) {
+    if (!overlayHwnd || !IsWindow(overlayHwnd)) return;
+
+    if (!enabled || opacity == 0 || (r == 0 && g == 0 && b == 0)) {
+        ShowWindow(overlayHwnd, SW_HIDE);
+        return;
+    }
+
+    SetWindowLongPtrW(overlayHwnd, GWLP_USERDATA, (LONG_PTR)RGB(r, g, b));
+    // Match Shell_TrayWnd LWA formula: opacity=75 -> colorAlpha=63 (25% opaque = light tint).
+    // Overlay transparency tracks taskbar transparency so wallpaper stays visible through both.
+    BYTE colorAlpha = static_cast<BYTE>(((100 - opacity) * 255) / 100);
+    SetLayeredWindowAttributes(overlayHwnd, 0, colorAlpha, LWA_ALPHA);
+    ShowWindow(overlayHwnd, SW_SHOWNA);
+    InvalidateRect(overlayHwnd, nullptr, TRUE);
+    UpdateWindow(overlayHwnd);
+    CF_LOG(Info, "[TASKBAR] Overlay color RGB(" << r << "," << g << "," << b
+                 << ") alpha=" << (int)colorAlpha);
+}
+
+void Renderer::DestroyAllOverlays() {
+    for (auto& [taskbar, overlay] : m_overlayWindows) {
+        if (overlay && IsWindow(overlay))
+            DestroyWindow(overlay);
+    }
+    m_overlayWindows.clear();
+    CF_LOG(Info, "[TASKBAR] All overlays destroyed");
+}
+
+// ---------------------------------------------------------------------------
 
 void Renderer::RestoreWindow(HWND hwnd) {
     CF_LOG(Info, "RestoreWindow called for HWND 0x"

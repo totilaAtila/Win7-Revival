@@ -2,6 +2,7 @@
 #include <Windows.h>
 #include <wrl/client.h>
 #include <vector>
+#include <unordered_map>
 
 using Microsoft::WRL::ComPtr;
 
@@ -94,6 +95,15 @@ private:
     void ApplyTransparency(HWND hwnd, int opacity, bool enabled, bool useBlur);
     void ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled, int r, int g, int b, bool useBlur);
     void RestoreWindow(HWND hwnd);
+
+    // Iter#7: overlay window for color tint on 25H2+ (SWCA confirmed inert)
+    std::unordered_map<HWND, HWND> m_overlayWindows; // taskbar HWND -> overlay HWND
+    ATOM m_overlayClassAtom = 0;
+
+    void EnsureOverlayWindow(HWND taskbarHwnd);
+    void UpdateOverlayAppearance(HWND overlayHwnd, int r, int g, int b, int opacity, bool enabled);
+    void DestroyAllOverlays();
+    static LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 };
 
 } // namespace GlassBar
