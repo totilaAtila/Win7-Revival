@@ -274,25 +274,17 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
         return;
     }
 
-    // Safety net for 25H2+ (>= 26200): apply LWA_ALPHA before attempting SWCA.
-    // If SWCA is silently ignored on this build, LWA_ALPHA ensures basic alpha
-    // transparency is preserved (avoids regression to a fully opaque taskbar).
-    // If SWCA does work, both are active — the taskbar may appear slightly more
-    // transparent than configured (double-alpha), which is diagnosable and
-    // addressed in the next iteration once SWCA behaviour is confirmed.
+    // Iter#5 hypothesis: WS_EX_LAYERED applied before SWCA locks the window into
+    // legacy layered compositing on 25H2, causing DWM to silently ignore SWCA.
+    // Strategy: clear WS_EX_LAYERED first, attempt SWCA, fall back to LWA_ALPHA
+    // only if SWCA returns 0 (failure).
     if (!isStartMenu && m_buildNumber >= 26200) {
         LONG exStyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
-        if (enabled && opacity > 0) {
-            if (!(exStyle & WS_EX_LAYERED))
-                SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
-            BYTE alpha = static_cast<BYTE>(((100 - opacity) * 255) / 100);
-            SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
-            CF_LOG(Info, "[TASKBAR] Win25H2+ LWA_ALPHA safety net applied: alpha=" << (int)alpha);
-        } else {
-            if (exStyle & WS_EX_LAYERED)
-                SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
+        if (exStyle & WS_EX_LAYERED) {
+            SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
+            CF_LOG(Info, "[TASKBAR] Win25H2+ cleared WS_EX_LAYERED before SWCA");
         }
-        // Fall through — SWCA applied below for colour overlay / blur attempt.
+        // SWCA attempted below; LWA_ALPHA applied after if SWCA fails.
     }
 
     ACCENT_POLICY accent = {};
@@ -300,14 +292,13 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
     if (enabled && opacity > 0) {
         if (m_buildNumber >= 26200 && !isStartMenu) {
             // On 25H2+ (build 26200+) TRANSPARENTGRADIENT is silently ignored for
-            // the taskbar; ACRYLICBLURBEHIND uses the modern Acrylic pipeline and
-            // honours GradientColor. Honor useBlur: when blur is off, try
-            // TRANSPARENTGRADIENT anyway — it may be ignored, but colour+alpha
-            // still reaches the taskbar via LWA_ALPHA applied above.
-            accent.AccentState = useBlur ? ACCENT_ENABLE_ACRYLICBLURBEHIND
-                                         : ACCENT_ENABLE_TRANSPARENTGRADIENT;
-            CF_LOG(Debug, "[" << windowType << "] Win25H2+ "
-                         << (useBlur ? "ACRYLICBLURBEHIND" : "TRANSPARENTGRADIENT (blur off)"));
+            // the taskbar. Always use ACRYLICBLURBEHIND regardless of useBlur:
+            // TRANSPARENTGRADIENT returns result=1 (success) but has no visual
+            // effect, and the LWA fallback only fires on result=0 — leaving the
+            // taskbar opaque when blur is off. Known limitation: blur toggle has
+            // no effect on 25H2+ taskbar.
+            accent.AccentState = ACCENT_ENABLE_ACRYLICBLURBEHIND;
+            CF_LOG(Debug, "[" << windowType << "] Win25H2+ ACRYLICBLURBEHIND (blur toggle ineffective on this build)");
         } else if (useBlur) {
             // Acrylic blur (Windows 10 1803+ / Windows 11)
             accent.AccentState = ACCENT_ENABLE_ACRYLICBLURBEHIND;
@@ -349,9 +340,25 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
     data.cbData = sizeof(accent);
 
     BOOL result = m_setWindowCompositionAttribute(hwnd, &data);
+    DWORD lastErr = GetLastError();
     CF_LOG(Info, "[" << windowType << "] SWCA result=" << result
                  << " HWND=0x" << std::hex << reinterpret_cast<uintptr_t>(hwnd) << std::dec
-                 << " GetLastError=" << GetLastError());
+                 << " GetLastError=" << std::dec << lastErr);
+
+    // Iter#5: if SWCA failed and this is the 25H2+ taskbar path, fall back to LWA_ALPHA.
+    if (!result && !isStartMenu && m_buildNumber >= 26200) {
+        LONG exStyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
+        if (accent.AccentState != ACCENT_DISABLED) {
+            if (!(exStyle & WS_EX_LAYERED))
+                SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+            BYTE alpha = static_cast<BYTE>(((100 - opacity) * 255) / 100);
+            SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
+            CF_LOG(Info, "[TASKBAR] Win25H2+ SWCA failed — LWA_ALPHA fallback: alpha=" << (int)alpha);
+        } else {
+            if (exStyle & WS_EX_LAYERED)
+                SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
+        }
+    }
 }
 
 void Renderer::RestoreWindow(HWND hwnd) {
