@@ -1,75 +1,58 @@
-# VSCode Setup Guide pentru GlassBar Engine
+# VSCode Setup Guide — GlassBar
 
-Acest ghid te va ajuta să configurezi **Visual Studio Code** pentru a lucra cu proiectul GlassBar Engine.
-
----
-
-## 📋 Cerințe preliminare
-
-Înainte de a configura VSCode, trebuie să instalezi următoarele:
-
-### 1. **Visual Studio 2022** (Community Edition este gratuită)
-   - **De ce?** Pentru compilatorul C++ (MSVC) și Windows SDK
-   - **Link:** https://visualstudio.microsoft.com/downloads/
-   - **Componente necesare la instalare:**
-     - ✅ "Desktop development with C++"
-     - ✅ "C++ CMake tools for Windows"
-     - ✅ "Windows 11 SDK (10.0.22621.0)"
-   
-   **IMPORTANT:** Chiar dacă folosești VSCode pentru editare, ai nevoie de Visual Studio pentru compilator!
-
-### 2. **.NET 8 SDK**
-   - **De ce?** Pentru compilarea Dashboard-ului C#
-   - **Link:** https://dotnet.microsoft.com/download/dotnet/8.0
-   - Descarcă "SDK x64" (nu doar Runtime)
-   - Verifică instalarea:
-     ```cmd
-     dotnet --version
-     ```
-     Trebuie să vezi: `8.0.x` sau mai nou
-
-### 3. **CMake**
-   - **De ce?** Pentru build system-ul Core C++
-   - **Link:** https://cmake.org/download/
-   - Descarcă "Windows x64 Installer"
-   - **LA INSTALARE:** bifează "Add CMake to system PATH"
-   - Verifică instalarea:
-     ```cmd
-     cmake --version
-     ```
+Ghid pentru configurarea Visual Studio Code pentru lucrul cu proiectul GlassBar.
 
 ---
 
-## 🔧 Instalare extensii VSCode
+## Cerințe preliminare
 
-Deschide VSCode și instalează următoarele extensii:
+### 1. Visual Studio 2022 (Community Edition este gratuită)
+- **De ce?** Pentru compilatorul C++ (MSVC) și Windows SDK
+- **Link:** https://visualstudio.microsoft.com/downloads/
+- **Componente necesare:**
+  - "Desktop development with C++"
+  - "C++ CMake tools for Windows"
+  - "Windows 11 SDK (10.0.22621.0)"
+
+> Chiar dacă folosești VSCode pentru editare, ai nevoie de Visual Studio pentru compilator (cl.exe)!
+
+### 2. .NET 8 SDK
+- **De ce?** Pentru compilarea Dashboard-ului C#
+- **Link:** https://dotnet.microsoft.com/download/dotnet/8.0
+- Descarcă **SDK x64** (nu doar Runtime)
+- Verificare:
+  ```cmd
+  dotnet --version
+  ```
+  Trebuie să vezi: `8.0.x` sau mai nou
+
+### 3. CMake 3.20+
+- **Link:** https://cmake.org/download/
+- Descarcă "Windows x64 Installer"
+- **LA INSTALARE:** bifează "Add CMake to system PATH"
+- Verificare:
+  ```cmd
+  cmake --version
+  ```
+
+---
+
+## Extensii VSCode recomandate
 
 ### Pentru C++ (Core):
-1. **C/C++** (de la Microsoft)
-   - ID: `ms-vscode.cpptools`
-   - Provides IntelliSense, debugging, code browsing
-
-2. **CMake Tools** (de la Microsoft)
-   - ID: `ms-vscode.cmake-tools`
-   - CMake integration
+- **C/C++** — `ms-vscode.cpptools` (IntelliSense, debugging)
+- **CMake Tools** — `ms-vscode.cmake-tools` (integrare CMake)
 
 ### Pentru C# (Dashboard):
-3. **C# Dev Kit** (de la Microsoft)
-   - ID: `ms-dotnettools.csdevkit`
-   - Includes C#, IntelliSense, debugging
-
-Cum se instalează:
-- Click pe icon-ul Extensions (Ctrl+Shift+X)
-- Caută fiecare extensie
-- Click "Install"
+- **C# Dev Kit** — `ms-dotnettools.csdevkit` (IntelliSense, debugging)
 
 ---
 
-## 📂 Deschidere proiect în VSCode
+## Deschidere proiect în VSCode
 
 ### Opțiunea 1: Workspace multi-root (RECOMANDAT)
 
-1. Salvează acest conținut într-un fișier `CrystalFrame.code-workspace`:
+Salvează conținutul următor în `GlassBar.code-workspace` la rădăcina proiectului:
 
 ```json
 {
@@ -97,71 +80,54 @@ Cum se instalează:
 }
 ```
 
-2. Deschide workspace-ul: `File` → `Open Workspace from File` → selectează `CrystalFrame.code-workspace`
+Deschide: `File` → `Open Workspace from File` → selectează `GlassBar.code-workspace`
 
 ### Opțiunea 2: Folder simplu
 
-Doar deschide folderul root `CrystalFrame/` în VSCode.
+Deschide folderul root `GlassBar/` în VSCode.
 
 ---
 
-## 🏗️ Compilare Core (C++)
+## Compilare Core (C++)
 
-### Metoda 1: Cu CMake Tools (în VSCode)
+Core produce un **DLL** (`GlassBar.Core.dll`), nu un executabil. Nu se rulează standalone.
 
-1. **Configurare CMake:**
-   - Apasă `Ctrl+Shift+P`
-   - Tastează: `CMake: Configure`
-   - Alege compilatorul: "Visual Studio Community 2022 Release - amd64"
+### Metoda 1: CMake Tools (în VSCode)
 
-2. **Build:**
-   - Apasă `Ctrl+Shift+P`
-   - Tastează: `CMake: Build`
-   - SAU click pe butonul "Build" din status bar (jos)
+1. `Ctrl+Shift+P` → `CMake: Configure`
+2. Alege compilatorul: "Visual Studio Community 2022 Release - amd64"
+3. `Ctrl+Shift+P` → `CMake: Build`
+   SAU click pe butonul "Build" din status bar (jos)
 
-3. **Executabil rezultat:**
-   - `CrystalFrame/Core/build/bin/CrystalFrame.Core.exe`
+**Output:** `Core/build/bin/Release/GlassBar.Core.dll`
 
-### Metoda 2: Terminal (command line)
+### Metoda 2: Terminal
 
 ```cmd
-cd CrystalFrame/Core
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
+cd Core
+cmake -B build -A x64
+cmake --build build --config Release
 ```
 
 ---
 
-## 🏗️ Compilare Dashboard (C#)
+## Compilare Dashboard (C#)
 
-### În VSCode:
+### În terminal VSCode:
 
-1. **Deschide Terminal în VSCode:**
-   - `Terminal` → `New Terminal` (sau Ctrl+ù)
+```cmd
+cd Dashboard
+dotnet restore
+dotnet build -r win-x64 --no-self-contained --configuration Release
+```
 
-2. **Navighează la Dashboard:**
-   ```cmd
-   cd Dashboard
-   ```
+**Output:** `Dashboard/bin/Release/net8.0-windows10.0.22621.0/win-x64/GlassBar.Dashboard.exe`
 
-3. **Restore dependencies:**
-   ```cmd
-   dotnet restore
-   ```
+> MSBuild copiază automat `GlassBar.Core.dll` în directorul Dashboard după build.
 
-4. **Build:**
-   ```cmd
-   dotnet build --configuration Release
-   ```
+### Task automation (.vscode/tasks.json)
 
-5. **Executabil rezultat:**
-   - `CrystalFrame/Dashboard/bin/Release/net8.0-windows10.0.22621.0/win-x64/CrystalFrame.Dashboard.exe`
-
-### Shortcut: Task automation
-
-Creează fișier `.vscode/tasks.json` în root:
+Creează sau actualizează `.vscode/tasks.json`:
 
 ```json
 {
@@ -179,7 +145,7 @@ Creează fișier `.vscode/tasks.json` în root:
             "label": "Build Dashboard (C#)",
             "type": "shell",
             "command": "dotnet",
-            "args": ["build", "Dashboard", "--configuration", "Release"],
+            "args": ["build", "Dashboard", "-r", "win-x64", "--no-self-contained", "--configuration", "Release"],
             "group": "build",
             "problemMatcher": "$msCompile"
         },
@@ -195,49 +161,31 @@ Creează fișier `.vscode/tasks.json` în root:
 }
 ```
 
-Apoi: `Ctrl+Shift+B` → "Build All"
+Rulare: `Ctrl+Shift+B` → "Build All"
 
 ---
 
-## ▶️ Rulare proiect
+## Rulare GlassBar
 
-### Pas 1: Pornește Core
+**Nu trebuie să pornești Core separat.** `GlassBar.Core.dll` este încărcat automat de Dashboard
+prin P/Invoke. Rulezi direct Dashboard-ul:
 
-În terminal VSCode:
 ```cmd
-cd Core/build/bin
-CrystalFrame.Core.exe
+Dashboard\bin\Release\net8.0-windows10.0.22621.0\win-x64\GlassBar.Dashboard.exe
 ```
 
-SAU double-click pe `CrystalFrame.Core.exe`
+**Verificare:**
+- Fereastra Dashboard se deschide
+- Click pe toggleul **Core** → ON → indicator verde = Core pornit
+- Overlay Taskbar apare; Win key activează Start Menu-ul custom
 
-**Verificare:** Ar trebui să vezi în `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log` mesaje de tip:
-```
-[INFO] CrystalFrame Core Starting
-[INFO] Taskbar found
-[INFO] IPC pipe created
-```
-
-### Pas 2: Pornește Dashboard
-
-În alt terminal VSCode:
-```cmd
-cd Dashboard/bin/Release/net8.0-windows10.0.22621.0/win-x64
-CrystalFrame.Dashboard.exe
-```
-
-SAU double-click pe `CrystalFrame.Dashboard.exe`
-
-**Verificare:** Dashboard-ul ar trebui să arate:
-- ✓ Connected to Core
-- ✓ Taskbar found
-- Slidere funcționale
+**Log file:** `%LOCALAPPDATA%\GlassBar\GlassBar.log`
 
 ---
 
-## 🐛 Debugging în VSCode
+## Debugging în VSCode
 
-### Debug Core (C++):
+### Debug Dashboard (C#):
 
 Creează `.vscode/launch.json`:
 
@@ -246,22 +194,11 @@ Creează `.vscode/launch.json`:
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Core (C++)",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Core/build/bin/Debug/CrystalFrame.Core.exe",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/Core",
-            "environment": [],
-            "console": "externalTerminal"
-        },
-        {
             "name": "Debug Dashboard (C#)",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "Build Dashboard (C#)",
-            "program": "${workspaceFolder}/Dashboard/bin/Debug/net8.0-windows10.0.22621.0/win-x64/CrystalFrame.Dashboard.exe",
+            "program": "${workspaceFolder}/Dashboard/bin/Debug/net8.0-windows10.0.22621.0/win-x64/GlassBar.Dashboard.exe",
             "args": [],
             "cwd": "${workspaceFolder}/Dashboard",
             "console": "internalConsole",
@@ -271,13 +208,14 @@ Creează `.vscode/launch.json`:
 }
 ```
 
-Apoi: F5 pentru a porni debugging!
+Apasă F5 pentru a porni debugging.
+
+> Pentru debug Core (C++), folosește Visual Studio 2022 cu `Attach to Process` pe
+> `GlassBar.Dashboard.exe` (Core rulează in-process ca DLL).
 
 ---
 
-## ✅ Verificare instalare corectă
-
-Rulează în terminal:
+## Verificare instalare
 
 ```cmd
 # Verifică Visual Studio compiler
@@ -289,67 +227,45 @@ dotnet --version
 # Verifică CMake
 cmake --version
 
-# Verifică Git (optional, pentru version control)
+# Verifică Git (optional)
 git --version
 ```
 
-Toate ar trebui să returneze versiuni, nu erori!
+Toate comenzile trebuie să returneze versiuni, nu erori.
 
 ---
 
-## ❓ Probleme comune
+## Probleme comune
 
-### ❌ "cl.exe not found"
-**Soluție:** 
+### "cl.exe not found"
 - Asigură-te că Visual Studio 2022 este instalat cu "Desktop development with C++"
 - Deschide "Developer Command Prompt for VS 2022" și rulează compilarea de acolo
 
-### ❌ "CMake not found"
-**Soluție:**
+### "CMake not found"
 - Reinstalează CMake cu opțiunea "Add to PATH"
-- Sau adaugă manual: `C:\Program Files\CMake\bin` la PATH
+- Sau adaugă manual `C:\Program Files\CMake\bin` la PATH
 
-### ❌ "dotnet not found"
-**Soluție:**
+### "dotnet not found"
 - Reinstalează .NET 8 SDK (nu Runtime!)
 - Restart VSCode după instalare
 
-### ❌ Dashboard nu se conectează la Core
-**Soluție:**
-1. Verifică că `CrystalFrame.Core.exe` rulează
-2. Verifică logul: `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log`
-3. Caută linia "IPC pipe created"
+### Overlay nu apare
+1. Verifică că Core toggle este ON (indicator verde în Dashboard header)
+2. Verifică log: `%LOCALAPPDATA%\GlassBar\GlassBar.log`
+3. Caută linia `Taskbar found` — dacă lipsește, restartează Windows Explorer
 
-### ❌ Overlay nu apare
-**Soluție:**
-1. Verifică că rulezi pe Windows 11
-2. Core trebuie să ruleze cu permisiuni normale (nu Administrator)
-3. Verifică log pentru erori DirectComposition
+### GlassBar.Core.dll lipsește din directorul Dashboard
+- Asigură-te că ai compilat **Core** înainte de Dashboard
+- Sau copiază manual: `copy Core\build\bin\Release\GlassBar.Core.dll Dashboard\bin\Release\net8.0-windows10.0.22621.0\win-x64\`
 
 ---
 
-## 🚀 Next Steps
+## Next Steps
 
-După ce ai reușit să compilezi și să rulezi:
-
-1. **Testare:** Citește `docs/TESTING.md` pentru scenarii de test
+1. **Testare:** Citește `TESTING.md` pentru scenarii de validare
 2. **Modificări:** Editează cod în VSCode, rebuild, test
-3. **Git:** Inițializează repo:
-   ```cmd
-   git init
-   git add .
-   git commit -m "Initial commit - GlassBar Engine"
-   ```
+3. **Publishing:** Citește `PUBLISHING.md` pentru ghid de distribuire
 
 ---
 
-## 📚 Resurse utile
-
-- **VSCode Docs:** https://code.visualstudio.com/docs
-- **CMake Tutorial:** https://cmake.org/cmake/help/latest/guide/tutorial/
-- **.NET CLI:** https://learn.microsoft.com/en-us/dotnet/core/tools/
-- **C++ in VSCode:** https://code.visualstudio.com/docs/languages/cpp
-
----
-
-**Succes! Dacă întâmpini probleme, verifică logurile în `%LOCALAPPDATA%\CrystalFrame\CrystalFrame.log`** 🎯
+**Dacă întâmpini probleme, verifică logurile în `%LOCALAPPDATA%\GlassBar\GlassBar.log`**

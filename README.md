@@ -182,6 +182,31 @@ Click the **Core** toggle → ON to start the overlay engine.
 
 ---
 
+## Windows Version Compatibility
+
+GlassBar uses different rendering strategies depending on the Windows build, because Microsoft introduced major architectural changes to Taskbar display rendering in 24H2 and 25H2.
+
+| Windows version | Build | Rendering | Transparency | Color tint (RGB) | Blur (Acrylic) | Icon visibility |
+|----------------|-------|-----------|-------------|-----------------|----------------|-----------------|
+| **22H2** | < 22631 | `SetWindowCompositionAttribute` (SWCA) | ✅ Full control | ✅ Full control | ✅ Full Acrylic | ✅ Icons always fully opaque |
+| **23H2** | 22631 | SWCA | ✅ Full control | ✅ Full control | ✅ Full Acrylic | ✅ Icons always fully opaque |
+| **24H2 / 25H2+** | ≥ 26000 | `SetLayeredWindowAttributes` (LWA_ALPHA) fallback | ✅ Works | ⚠️ No effect | ⚠️ No effect | ⚠️ Icons fade with transparency |
+
+### Notes on 24H2 / 25H2+
+
+On Windows builds ≥ 26000, Microsoft removed support for SWCA-based transparency on `Shell_TrayWnd`. GlassBar falls back to applying `LWA_ALPHA` directly to the Taskbar window, which means:
+
+- **Transparency works**, but as opacity increases, Taskbar icons become proportionally less visible alongside the background. This is a platform limitation — the entire Taskbar window becomes translucent, not just the background layer.
+- **RGB color tint and Blur/Acrylic have no effect** on these builds (DWM ignores them).
+
+This limitation is not unique to GlassBar. As of testing on Windows 25H2 (build 26000+):
+- **OpenShell** runs as an application but cannot display any transparency effect on either the Taskbar or Start Menu.
+- **TranslucentTB** does not run at all on this build.
+
+On **22H2 and 23H2**, GlassBar's SWCA-based rendering works flawlessly: full transparency + RGB color tint + Acrylic blur with the wallpaper clearly visible through the Taskbar, and all icons remaining fully opaque at any transparency level.
+
+---
+
 ## Roadmap
 
 ### Done

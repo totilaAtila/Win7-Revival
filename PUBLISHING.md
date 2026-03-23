@@ -1,8 +1,8 @@
-# 📦 CrystalFrame Publishing Guide
+# GlassBar Publishing Guide
 
-Ghid complet pentru publicarea și distribuirea aplicației CrystalFrame.
+Ghid complet pentru publicarea și distribuirea aplicației GlassBar.
 
-## 📚 Cuprins
+## Cuprins
 
 1. [Quick Start](#quick-start)
 2. [Publishing Options](#publishing-options)
@@ -12,70 +12,67 @@ Ghid complet pentru publicarea și distribuirea aplicației CrystalFrame.
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Opțiunea 1: Publish Simplu (Framework-Dependent)
 ```powershell
-.\publish.ps1 -Version "1.0.0"
+.\publish.ps1 -Version "2.2"
 ```
-**Rezultat:** Package de ~15-20 MB în `.\publish\CrystalFrame-v1.0.0.zip`
+**Rezultat:** Package de ~15-20 MB în `.\publish\GlassBar-v2.2.zip`
 **Necesită:** .NET 8 Runtime instalat pe calculatorul utilizatorului
 
 ### Opțiunea 2: Publish Standalone (Self-Contained)
 ```powershell
-.\publish-standalone.ps1 -Version "1.0.0"
+.\publish-standalone.ps1 -Version "2.2"
 ```
-**Rezultat:** Package de ~70-90 MB în `.\publish\CrystalFrame-v1.0.0-Standalone.zip`
+**Rezultat:** Package de ~70-90 MB în `.\publish\GlassBar-v2.2-Standalone.zip`
 **Necesită:** NIMIC! Include .NET runtime
 
 ### Opțiunea 3: GitHub Release (Ambele Packages)
 ```powershell
-.\create-release.ps1 -Version "1.0.0"
+.\create-release.ps1 -Version "2.2"
 ```
 **Rezultat:** Ambele package-uri + release notes pregătite pentru GitHub
 
 ---
 
-## 📋 Publishing Options
+## Publishing Options
 
-### 1️⃣ Framework-Dependent (Recomandat pentru distribuție generală)
+### 1) Framework-Dependent (Recomandat pentru distribuție generală)
 
 **Avantaje:**
-- ✅ Package mic (~15-20 MB)
-- ✅ Build rapid
-- ✅ Updates mai ușoare
-- ✅ Utilizatorii pot folosi .NET shared runtime
+- Package mic (~15-20 MB)
+- Build rapid
+- Updates mai ușoare
+- Utilizatorii pot folosi .NET shared runtime
 
 **Dezavantaje:**
-- ⚠️ Necesită .NET 8 Runtime instalat
-- ⚠️ Utilizatorii trebuie să descarce .NET separat
+- Necesită .NET 8 Runtime instalat
+- Utilizatorii trebuie să descarce .NET separat dacă nu îl au
 
 **Când să folosești:**
 - Pentru distribuție publică pe GitHub
-- Când utilizatorii au deja .NET instalat
 - Când vrei package-uri mici
 
-### 2️⃣ Self-Contained (Recomandat pentru non-tehnici)
+### 2) Self-Contained (Recomandat pentru utilizatori non-tehnici)
 
 **Avantaje:**
-- ✅ Zero dependencies
-- ✅ Simplu drag-and-drop
-- ✅ Funcționează out-of-the-box
-- ✅ Nu necesită .NET instalat
+- Zero dependencies
+- Simplu drag-and-drop
+- Funcționează out-of-the-box
 
 **Dezavantaje:**
-- ⚠️ Package mare (~70-90 MB)
-- ⚠️ Build mai lent
-- ⚠️ Include duplicate runtime files
+- Package mare (~70-90 MB)
+- Build mai lent
+- Include duplicate runtime files
 
 **Când să folosești:**
 - Pentru utilizatori non-tehnici
-- Când vrei instalare simplă
 - Pentru demo-uri și teste rapide
 
 ---
 
-## 🔧 Detailed Workflows
+## Detailed Workflows
 
 ### Workflow 1: Development Build (Local Testing)
 ```powershell
@@ -83,7 +80,7 @@ Ghid complet pentru publicarea și distribuirea aplicației CrystalFrame.
 .\build.ps1
 
 # Run direct din bin
-.\Dashboard\bin\x64\Release\net8.0-windows10.0.22621.0\CrystalFrame.Dashboard.exe
+.\Dashboard\bin\Release\net8.0-windows10.0.22621.0\win-x64\GlassBar.Dashboard.exe
 ```
 
 ### Workflow 2: Create Release Package
@@ -92,11 +89,11 @@ Ghid complet pentru publicarea și distribuirea aplicației CrystalFrame.
 git status
 
 # 2. Tag versiunea în git
-git tag v1.0.0
-git push origin v1.0.0
+git tag v2.2
+git push origin v2.2
 
 # 3. Create packages
-.\create-release.ps1 -Version "1.0.0"
+.\create-release.ps1 -Version "2.2"
 
 # 4. Verifică package-urile
 explorer .\publish
@@ -105,7 +102,7 @@ explorer .\publish
 ### Workflow 3: Update Existing Release
 ```powershell
 # 1. Increment versiunea
-$newVersion = "1.0.1"
+$newVersion = "2.3"
 
 # 2. Create new packages
 .\create-release.ps1 -Version $newVersion
@@ -116,7 +113,7 @@ $newVersion = "1.0.1"
 
 ---
 
-## 🌟 GitHub Release
+## GitHub Release
 
 ### Metoda 1: Manual (Web Interface)
 
@@ -126,20 +123,20 @@ $newVersion = "1.0.1"
    ```
 
 2. **Create tag:**
-   - Tag version: `v1.0.0`
+   - Tag version: `v2.2`
    - Target: `main` branch
 
 3. **Release details:**
-   - Release title: `GlassBar v1.0.0`
-   - Description: Copy din `.\publish\RELEASE_NOTES_v1.0.0.md`
+   - Release title: `GlassBar v2.2`
+   - Description: Copy din `.\publish\RELEASE_NOTES_v2.2.md`
 
 4. **Upload files:**
-   - Drag & drop ambele ZIP files
-   - `CrystalFrame-v1.0.0.zip`
-   - `CrystalFrame-v1.0.0-Standalone.zip`
+   - Drag & drop ambele ZIP files:
+   - `GlassBar-v2.2.zip`
+   - `GlassBar-v2.2-Standalone.zip`
 
 5. **Publish:**
-   - ✅ Set as latest release
+   - Set as latest release
    - Click "Publish release"
 
 ### Metoda 2: GitHub CLI (Automat)
@@ -147,7 +144,6 @@ $newVersion = "1.0.1"
 **Instalare GitHub CLI:**
 ```powershell
 winget install GitHub.cli
-# sau download de pe: https://cli.github.com/
 ```
 
 **Login:**
@@ -157,19 +153,17 @@ gh auth login
 
 **Create release:**
 ```powershell
-# După ce ai rulat create-release.ps1
-gh release create v1.0.0 `
-    .\publish\CrystalFrame-v1.0.0.zip `
-    .\publish\CrystalFrame-v1.0.0-Standalone.zip `
-    --title "GlassBar v1.0.0" `
-    --notes-file .\publish\RELEASE_NOTES_v1.0.0.md
+gh release create v2.2 `
+    .\publish\GlassBar-v2.2.zip `
+    .\publish\GlassBar-v2.2-Standalone.zip `
+    --title "GlassBar v2.2" `
+    --notes-file .\publish\RELEASE_NOTES_v2.2.md
 ```
 
 ### Metoda 3: Script Automatizat (Complet)
 
 ```powershell
-# Create și publish într-un singur pas
-$version = "1.0.0"
+$version = "2.2"
 
 # 1. Create packages
 .\create-release.ps1 -Version $version
@@ -188,38 +182,39 @@ gh release create "v$version" `
 
 ---
 
-## 🎯 Best Practices
+## Best Practices
 
 ### Versioning (Semantic Versioning)
 ```
-v1.0.0 - Initial release
-v1.0.1 - Bug fix
-v1.1.0 - New feature (minor)
-v2.0.0 - Breaking change (major)
+v2.2   — current release
+v2.2.1 — bug fix
+v2.3   — new feature (minor)
+v3.0   — breaking change (major)
 ```
 
 ### Pre-release Testing Checklist
-- [ ] Build succeed fără erori
-- [ ] Toate feature-urile funcționează
-- [ ] Edit dialog funcționează (nu face crash)
-- [ ] Start Menu toggle funcționează
-- [ ] Transparency funcționează
-- [ ] Custom names se salvează și persistă
-- [ ] Testat pe Windows 10 și 11
+- [ ] Build reușit fără erori
+- [ ] Taskbar overlay apare pe Windows 11
+- [ ] Start Menu se deschide la Win key (meniul custom GlassBar)
+- [ ] All Programs funcționează (drill-down, keyboard nav)
+- [ ] Pinned items: pin/unpin via right-click funcționează
+- [ ] Recent items: se actualizează la fiecare deschidere
+- [ ] Theme presets (Win7 Aero / Dark) aplicate pe ambele panouri
+- [ ] Config persistă după restart
+- [ ] System Tray icon funcționează
+- [ ] Autostart: Dashboard pornește ascuns în tray
 
 ### Release Checklist
 - [ ] Version number actualizat
 - [ ] Git tag creat
-- [ ] Changelog actualizat
-- [ ] Screenshots actualizate (dacă e cazul)
-- [ ] README actualizat
-- [ ] Tested on clean Windows install
+- [ ] README actualizat (dacă e cazul)
+- [ ] Testat pe Windows 11 22H2+
 - [ ] Ambele packages create și testate
 - [ ] Release notes scrise
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Error: "Build failed"
 ```powershell
@@ -232,27 +227,21 @@ Remove-Item .\Dashboard\obj -Recurse -Force -ErrorAction SilentlyContinue
 
 ### Error: "dotnet command not found"
 ```powershell
-# Install .NET 8 SDK
 winget install Microsoft.DotNet.SDK.8
-
-# Sau download de pe:
-# https://dotnet.microsoft.com/download/dotnet/8.0
 ```
 
 ### Error: "CMake not found"
 ```powershell
-# Install CMake
 winget install Kitware.CMake
-
-# Add to PATH sau restart terminal
+# Restart terminal după instalare
 ```
 
 ### Package prea mare
 ```powershell
 # Folosește Framework-Dependent în loc de Standalone
-.\publish.ps1 -Version "1.0.0"
+.\publish.ps1 -Version "2.2"
 
-# Sau optimizează:
+# Sau optimizează cu trimming:
 dotnet publish -c Release -r win-x64 `
     --self-contained true `
     -p:PublishTrimmed=true `
@@ -262,19 +251,19 @@ dotnet publish -c Release -r win-x64 `
 ### ZIP file corrupt
 ```powershell
 # Verifică integritatea
-$hash = Get-FileHash .\publish\CrystalFrame-v1.0.0.zip
+$hash = Get-FileHash .\publish\GlassBar-v2.2.zip
 Write-Host $hash.Hash
 
 # Re-create ZIP
-$version = "1.0.0"
-Compress-Archive -Path ".\publish\CrystalFrame-v$version" `
-    -DestinationPath ".\publish\CrystalFrame-v$version.zip" `
+$version = "2.2"
+Compress-Archive -Path ".\publish\GlassBar-v$version" `
+    -DestinationPath ".\publish\GlassBar-v$version.zip" `
     -Force
 ```
 
 ---
 
-## 📖 Additional Resources
+## Additional Resources
 
 - [.NET Publishing Guide](https://docs.microsoft.com/en-us/dotnet/core/deploying/)
 - [GitHub Releases Guide](https://docs.github.com/en/repositories/releasing-projects-on-github)
@@ -282,31 +271,24 @@ Compress-Archive -Path ".\publish\CrystalFrame-v$version" `
 
 ---
 
-## 🎉 Example Complete Workflow
+## Example Complete Workflow
 
 ```powershell
 # 1. Finish development
 git add .
-git commit -m "Release v1.0.0 preparation"
+git commit -m "Release v2.2 preparation"
 git push
 
 # 2. Create packages
-.\create-release.ps1 -Version "1.0.0"
+.\create-release.ps1 -Version "2.2"
 
 # 3. Create git tag
-git tag v1.0.0
-git push origin v1.0.0
+git tag v2.2
+git push origin v2.2
 
-# 4. Create GitHub release (manual sau CLI)
-gh release create v1.0.0 .\publish\*.zip `
-    --title "GlassBar v1.0.0" `
-    --notes-file .\publish\RELEASE_NOTES_v1.0.0.md `
+# 4. Create GitHub release
+gh release create v2.2 .\publish\*.zip `
+    --title "GlassBar v2.2" `
+    --notes-file .\publish\RELEASE_NOTES_v2.2.md `
     --latest
-
-# 5. Anunță release
-# - Update README.md cu link la latest release
-# - Post pe social media / forum
-# - Notify users
 ```
-
-**Gata! 🚀**
