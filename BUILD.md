@@ -1,16 +1,16 @@
-# Build Instructions - GlassBar Engine
+# Build Instructions — GlassBar
 
-Detailed steps for building both Core (C++) and Dashboard (C#) components.
+Pași detaliați pentru compilarea componentelor Core (C++) și Dashboard (C#).
 
 ---
 
 ## Prerequisites Checklist
 
 - [ ] Windows 11 (22H2 or later)
-- [ ] Visual Studio 2022 (Community/Professional/Enterprise)
-  - [ ] "Desktop development with C++" workload
-  - [ ] "Windows 11 SDK (10.0.22621.0)"
-  - [ ] "C++ CMake tools for Windows"
+- [ ] Visual Studio 2022 (Community / Professional / Enterprise)
+  - [ ] Workload: "Desktop development with C++"
+  - [ ] Component: "Windows 11 SDK (10.0.22621.0)"
+  - [ ] Component: "C++ CMake tools for Windows"
 - [ ] .NET 8 SDK ([Download](https://dotnet.microsoft.com/download/dotnet/8.0))
 - [ ] CMake 3.20+ ([Download](https://cmake.org/download/))
 - [ ] Git (optional, for version control)
@@ -19,12 +19,15 @@ Detailed steps for building both Core (C++) and Dashboard (C#) components.
 
 ## Building Core (C++20)
 
+Core compilează ca **DLL nativ** (`GlassBar.Core.dll`). Nu este un executabil standalone — este
+încărcat direct de Dashboard prin P/Invoke.
+
 ### Option 1: Visual Studio 2022
 
 1. **Open CMake Project:**
    - Launch Visual Studio 2022
    - `File` → `Open` → `CMake`
-   - Select `CrystalFrame/Core/CMakeLists.txt`
+   - Select `Core/CMakeLists.txt`
 
 2. **Configure:**
    - Select configuration: `x64-Release`
@@ -35,34 +38,24 @@ Detailed steps for building both Core (C++) and Dashboard (C#) components.
    - OR press `Ctrl+Shift+B`
 
 4. **Output:**
-   - `CrystalFrame/Core/out/build/x64-Release/CrystalFrame.Core.exe`
+   - `Core/build/bin/Release/GlassBar.Core.dll`
 
 ### Option 2: Command Line (CMake)
 
 ```cmd
-cd CrystalFrame/Core
+cd Core
 
-# Create build directory
-mkdir build
-cd build
-
-# Configure
-cmake .. -G "Visual Studio 17 2022" -A x64
-
-# Build Release
-cmake --build . --config Release
-
-# Build Debug (optional)
-cmake --build . --config Debug
+cmake -B build -A x64
+cmake --build build --config Release
 ```
 
 **Output:**
-- Release: `Core/build/bin/Release/CrystalFrame.Core.exe`
-- Debug: `Core/build/bin/Debug/CrystalFrame.Core.exe`
+- Release: `Core/build/bin/Release/GlassBar.Core.dll`
+- Debug:   `Core/build/bin/Debug/GlassBar.Core.dll`
 
 ### Option 3: VSCode (with CMake Tools)
 
-See `docs/VSCODE-SETUP.md` for detailed VSCode instructions.
+See `VSCODE-SETUP.md` for detailed VSCode instructions.
 
 ---
 
@@ -70,48 +63,41 @@ See `docs/VSCODE-SETUP.md` for detailed VSCode instructions.
 
 ### Option 1: Visual Studio 2022
 
-1. **Open Solution/Project:**
+1. **Open Solution:**
    - Launch Visual Studio 2022
    - `File` → `Open` → `Project/Solution`
-   - Select `CrystalFrame/Dashboard/CrystalFrame.Dashboard.csproj`
+   - Select `Dashboard/GlassBar.Dashboard.csproj`
 
 2. **Restore NuGet Packages:**
    - `Build` → `Restore NuGet Packages`
-   - Wait for completion
 
 3. **Build:**
    - Select `Release` configuration
-   - `Build` → `Build Solution`
-   - OR press `Ctrl+Shift+B`
+   - `Build` → `Build Solution` (or `Ctrl+Shift+B`)
 
 4. **Output:**
-   - `Dashboard/bin/Release/net8.0-windows10.0.22621.0/win-x64/CrystalFrame.Dashboard.exe`
+   - `Dashboard/bin/Release/net8.0-windows10.0.22621.0/win-x64/GlassBar.Dashboard.exe`
 
 ### Option 2: Command Line (dotnet CLI)
 
 ```cmd
-cd CrystalFrame/Dashboard
+cd Dashboard
 
-# Restore dependencies
 dotnet restore
-
-# Build Release
-dotnet build --configuration Release
-
-# Build Debug (optional)
-dotnet build --configuration Debug
-
-# Publish (self-contained, optional)
-dotnet publish --configuration Release --self-contained --runtime win-x64
+dotnet build -r win-x64 --no-self-contained --configuration Release
 ```
 
 **Output:**
-- Build: `Dashboard/bin/Release/net8.0-windows10.0.22621.0/win-x64/`
-- Publish: `Dashboard/bin/Release/net8.0-windows10.0.22621.0/win-x64/publish/`
+- `Dashboard/bin/Release/net8.0-windows10.0.22621.0/win-x64/GlassBar.Dashboard.exe`
+
+Publish (self-contained, optional):
+```cmd
+dotnet publish -r win-x64 --self-contained --configuration Release
+```
 
 ### Option 3: VSCode
 
-See `docs/VSCODE-SETUP.md` for VSCode build tasks.
+See `VSCODE-SETUP.md` for VSCode build tasks.
 
 ---
 
@@ -121,50 +107,44 @@ See `docs/VSCODE-SETUP.md` for VSCode build tasks.
 
 | Configuration | Optimizations | Debug Info | Use Case |
 |--------------|---------------|------------|----------|
-| Debug | Disabled (/Od) | Full (/Zi) | Development, debugging |
-| Release | Enabled (/O2) | None | Production, testing |
+| Debug        | Disabled (/Od) | Full (/Zi) | Development, debugging |
+| Release      | Enabled (/O2)  | None       | Production, testing |
 
 ### Dashboard (C#)
 
 | Configuration | Optimizations | Debug Info | Use Case |
 |--------------|---------------|------------|----------|
-| Debug | Disabled | Full | Development |
-| Release | Enabled | None | Production |
+| Debug        | Disabled | Full | Development |
+| Release      | Enabled  | None | Production |
 
 ---
 
-## Verification
+## Running GlassBar
 
-### Core
+**Nu trebuie să pornești Core separat.** `GlassBar.Core.dll` este încărcat automat de Dashboard
+prin P/Invoke când dai click pe butonul **Core → ON** din interfață.
 
 ```cmd
-# Run Core
-cd Core/build/bin/Release
-CrystalFrame.Core.exe
-
-# Check log
-type %LOCALAPPDATA%\CrystalFrame\CrystalFrame.log
+Dashboard\bin\Release\net8.0-windows10.0.22621.0\win-x64\GlassBar.Dashboard.exe
 ```
 
-Expected output in log:
+**Expected behavior:**
+- Fereastra Dashboard se deschide cu două taburi: Taskbar / Start Menu
+- Indicatorul de status din header este gri (Core oprit)
+- Click pe toggleul **Core** → ON → indicatorul devine verde
+- Overlay-ul de Taskbar apare; hook-ul pentru Start Menu se activează
+
+**Log file:**
 ```
-[INFO] CrystalFrame Core Starting
+%LOCALAPPDATA%\GlassBar\GlassBar.log
+```
+
+Expected entries after startup:
+```
+[INFO] GlassBar Core Starting
 [INFO] Taskbar found: edge=bottom
-[INFO] IPC pipe created
+[INFO] Config loaded
 ```
-
-### Dashboard
-
-```cmd
-# Run Dashboard
-cd Dashboard/bin/Release/net8.0-windows10.0.22621.0/win-x64
-CrystalFrame.Dashboard.exe
-```
-
-Expected:
-- Window opens with sliders
-- Status shows "✓ Connected to Core"
-- Sliders are functional
 
 ---
 
@@ -173,20 +153,18 @@ Expected:
 ### Core
 
 ```cmd
-cd CrystalFrame/Core
+cd Core
 rmdir /s /q build
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
+cmake -B build -A x64
+cmake --build build --config Release
 ```
 
 ### Dashboard
 
 ```cmd
-cd CrystalFrame/Dashboard
+cd Dashboard
 dotnet clean
-dotnet build --configuration Release
+dotnet build -r win-x64 --no-self-contained --configuration Release
 ```
 
 ---
@@ -197,95 +175,92 @@ dotnet build --configuration Release
 
 **Error: "CMake not found"**
 ```cmd
-# Add CMake to PATH or use full path
-"C:\Program Files\CMake\bin\cmake.exe" ..
+"C:\Program Files\CMake\bin\cmake.exe" -B build -A x64
 ```
+Or add CMake to PATH and restart terminal.
 
 **Error: "Cannot open compiler-generated file"**
-- Solution: Run as Administrator OR disable antivirus temporarily
+- Run as standard user (not Administrator) OR disable antivirus temporarily.
 
-**Error: "d2d1.lib not found"**
-- Solution: Install Windows 11 SDK via Visual Studio Installer
+**Error: "Windows SDK not found"**
+- Open Visual Studio Installer → Modify → add "Windows 11 SDK (10.0.22621.0)".
 
 ### Dashboard Build Issues
 
 **Error: "SDK not found"**
 ```cmd
-# Verify .NET SDK installation
 dotnet --list-sdks
-
-# If missing, reinstall .NET 8 SDK
 ```
+If missing, reinstall .NET 8 SDK.
 
 **Error: "WindowsAppSDK package not found"**
 ```cmd
-# Clear NuGet cache
 dotnet nuget locals all --clear
-
-# Restore again
 dotnet restore
 ```
 
-**Error: "MSVCR140.dll missing"**
-- Solution: Install "Visual C++ Redistributable 2015-2022"
+**Error: "VCRUNTIME140.dll missing" at runtime**
+- Core is built with static CRT (`/MT`), so this should not occur.
+  If it does, install "Visual C++ Redistributable 2015–2022".
 
 ---
 
 ## Build Artifacts
 
-After successful build, you should have:
+After a successful build:
 
 ```
-CrystalFrame/
+GlassBar/
 ├── Core/
 │   └── build/
 │       └── bin/
 │           └── Release/
-│               └── CrystalFrame.Core.exe       ← Core executable
+│               └── GlassBar.Core.dll          ← Native DLL (loaded by Dashboard)
 │
 └── Dashboard/
     └── bin/
         └── Release/
             └── net8.0-windows10.0.22621.0/
                 └── win-x64/
-                    ├── CrystalFrame.Dashboard.exe    ← Dashboard executable
-                    └── *.dll                          ← Dependencies
+                    ├── GlassBar.Dashboard.exe  ← Entry point
+                    ├── GlassBar.Core.dll       ← Copied here automatically by MSBuild
+                    └── *.dll                   ← WinAppSDK / .NET dependencies
 ```
+
+> The Dashboard `.csproj` contains a post-build step that copies `GlassBar.Core.dll`
+> into the Dashboard output directory automatically.
 
 ---
 
 ## Packaging (Optional)
 
-To create a distributable package:
+To create a distributable ZIP:
 
-1. **Create folder:**
-   ```cmd
-   mkdir CrystalFrame-v1.0
-   ```
+```cmd
+mkdir GlassBar-v2.2
 
-2. **Copy executables:**
-   ```cmd
-   copy Core\build\bin\Release\CrystalFrame.Core.exe CrystalFrame-v1.0\
-   copy Dashboard\bin\Release\net8.0-windows10.0.22621.0\win-x64\*.* CrystalFrame-v1.0\
-   ```
+copy Dashboard\bin\Release\net8.0-windows10.0.22621.0\win-x64\GlassBar.Dashboard.exe GlassBar-v2.2\
+copy Dashboard\bin\Release\net8.0-windows10.0.22621.0\win-x64\GlassBar.Core.dll      GlassBar-v2.2\
+copy Dashboard\bin\Release\net8.0-windows10.0.22621.0\win-x64\*.dll                  GlassBar-v2.2\
+copy README.md GlassBar-v2.2\
+```
 
-3. **Add README:**
-   ```cmd
-   copy README.md CrystalFrame-v1.0\
-   ```
+Then right-click folder → Send to → Compressed (zipped) folder.
 
-4. **Zip:**
-   - Right-click folder → Send to → Compressed (zipped) folder
+For automated packaging, use the provided PowerShell scripts:
+```powershell
+.\create-release.ps1 -Version "2.2"
+```
 
 ---
 
 ## Next Steps
 
-After successful build:
-1. **Test:** Follow `docs/TESTING.md`
-2. **Run:** Start Core, then Dashboard
-3. **Debug:** Use Debug builds with Visual Studio debugger
+After a successful build:
+1. **Test:** Follow `TESTING.md` for validation scenarios
+2. **Run:** Start `GlassBar.Dashboard.exe`, enable Core from the header toggle
+3. **Debug:** Use Debug builds with Visual Studio or VSCode debugger (see `VSCODE-SETUP.md`)
 
 ---
 
-**For VSCode-specific build instructions, see `docs/VSCODE-SETUP.md`**
+**For VSCode-specific build instructions, see `VSCODE-SETUP.md`**

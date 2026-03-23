@@ -54,7 +54,7 @@ Ctrl+Shift+P → Tasks: Run Task → 📦 Publish - Framework Dependent
 > Enter version: 1.0.0
 ```
 
-**Output:** `.\publish\CrystalFrame-v1.0.0.zip`
+**Output:** `.\publish\GlassBar-v1.0.0.zip`
 
 ---
 
@@ -68,7 +68,7 @@ Ctrl+Shift+P → Tasks: Run Task → 📦 Publish - Standalone
 > Enter version: 1.0.0
 ```
 
-**Output:** `.\publish\CrystalFrame-v1.0.0-Standalone.zip`
+**Output:** `.\publish\GlassBar-v1.0.0-Standalone.zip`
 
 ---
 
@@ -83,8 +83,8 @@ Ctrl+Shift+P → Tasks: Run Task → 🚀 Create GitHub Release
 ```
 
 **Output:**
-- `CrystalFrame-v1.0.0.zip` (framework-dependent)
-- `CrystalFrame-v1.0.0-Standalone.zip` (standalone)
+- `GlassBar-v1.0.0.zip` (framework-dependent)
+- `GlassBar-v1.0.0-Standalone.zip` (standalone)
 - `RELEASE_NOTES_v1.0.0.md` (pentru GitHub)
 
 După ce se termină, folderul `.\publish` se deschide automat! 🎉

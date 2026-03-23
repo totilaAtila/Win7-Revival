@@ -1,208 +1,209 @@
-# Agents.md — GlassBar Engine (Windows 11)
+# Agents.md — GlassBar Architecture Reference
 
 ## 1) Scopul proiectului
-GlassBar este un utilitar pentru Windows 11 care aplică un **overlay extern** (fără injection / fără patching Explorer) peste:
-- **Taskbar** (cu suport pentru **auto-hide** și poziționare pe **oricare edge**)
-- **Start Menu** (overlay **doar când Start este deschis**, altfel ascuns)
 
-Overlay-ul este **click-through** (nu interceptează input). Controlul principal este prin **slidere 0–100** pentru opacitate:
-- `TaskbarOpacity` (0–100)
-- `StartOpacity` (0–100)
+GlassBar este un utilitar de personalizare pentru Windows 11 care oferă:
 
-**Single monitor**: proiectul este proiectat și testat pentru un singur monitor.
+- **Taskbar overlay** — strat semitransparent colorat peste Windows 11 Taskbar, cu control
+  independent al opacității, RGB color tint și efect Blur/Acrylic. Suportă toate pozițiile
+  (bottom / top / left / right), auto-hide și multi-monitor.
+- **Start Menu replacement** — înlocuire completă a meniului Start nativ cu o reimplementare
+  Win7 two-column, construită din zero în GDI (C++). Interceptează Win key și click pe butonul
+  Start prin low-level hooks, prezintă meniul custom și suprimă meniul nativ.
+
+Proiectul rulează **extern, fără injection** — nicio modificare a fișierelor de sistem,
+niciun hook în procesele Explorer sau StartMenuExperienceHost.
 
 ---
 
 ## 2) Principii non-negociabile
-1. **Sustenabilitate**  
+
+1. **Fără injection / fără patching**
    - Niciun hook/injection în procesele Explorer/StartMenuExperienceHost.
-   - Nicio modificare internă a UI-ului nativ; doar strat vizual extern.
+   - Nicio modificare internă a UI-ului nativ; doar strat vizual extern sau fereastră custom proprie.
 
 2. **Fără impact pe funcționalitate**
-   - Taskbar și Start rămân complet utilizabile (click, drag, context menus).
-   - Overlay-ul nu blochează interacțiunea.
+   - Taskbar rămâne complet utilizabil (click, drag, context menus, system tray).
+   - Overlay-ul Taskbar este click-through (`WS_EX_TRANSPARENT | WS_EX_LAYERED`).
 
 3. **Performanță**
-   - Țintă: **CPU < 2% idle**.
-   - Randare eficientă: update-uri doar la schimbări (show/hide, rect change, slider change).
+   - Țintă: CPU < 2% idle.
+   - Update-uri doar la schimbări (show/hide, rect change, slider change).
+   - Debounce 50ms pe slidere (~20 comenzi/s maxim).
 
 4. **Fail-safe**
-   - Dacă Start nu este detectat în mod sigur, componenta Start se dezactivează elegant.
-   - Core nu se prăbușește; log + status în Dashboard.
+   - Core nu se prăbușește la erori; log + status în Dashboard.
+   - Dacă Taskbar-ul nu este detectat la pornire, se reîncearcă automat.
+   - Recovery automată după restart Explorer.
+
+5. **Start Menu: fidelitate Win7**
+   - Vizual și funcțional identic cu Windows 7 (cu excepția search bar, nefuncțional momentan).
+   - Toate meniurile și submeniurile sunt 100% funcționale (niciun element UI fără acțiune).
 
 ---
 
-## 3) Arhitectură (overview)
-### Executabile
-- **GlassBar.Core** (C++20)
-  Responsabil pentru: detectarea țintelor, gestionarea overlay-ului, randare, IPC, logging.
-- **GlassBar.Dashboard** (C# .NET 8, WinUI 3)
-  Responsabil pentru: UI setări (slidere/toggles), persistență config, status, comenzi IPC.
+## 3) Arhitectură
 
-### Module Core (obligatorii)
-- `ShellTargetLocator` — localizează Taskbar și detectează Start (open/close + rect)
-- `OverlayHost` — gestionează ferestrele overlay (Taskbar/Start), click-through, poziționare
-- `Renderer` — pipeline performant (DirectComposition recomandat) + opacitate
-- `IpcBridge` — canal de comunicare Dashboard ↔ Core (Named Pipes recomandat)
-- `ConfigManager` — citește/scrie `config.json`
-- `Diagnostics/Logging` — log ring-buffer + fișier
+### Componente
 
----
+```
+GlassBar.Dashboard.exe  (C# .NET 8, WinUI 3)
+        │
+        │  P/Invoke — apeluri directe în DLL (in-process, fără IPC extern)
+        │
+GlassBar.Core.dll  (C++20, Win32)
+```
 
-## 4) Agenți / roluri (responsabilități clare)
+**GlassBar.Dashboard.exe** — UI de setări
+- Fereastră compactă (NavigationView) cu două panouri: **Taskbar** și **Start Menu**
+- Încarcă `GlassBar.Core.dll` in-process prin P/Invoke
+- Gestionează lifecycle-ul Core (start/stop toggle)
+- Trimite setări în timp real (culori, opacitate, toggle-uri)
+- System tray icon + autostart prin registry
+- Config persistence: `%LOCALAPPDATA%\GlassBar\config.json`
 
-### Agent A — Core Rendering Agent (C++20)
-**Obiectiv:** overlay stabil, performant, click-through.
+**GlassBar.Core.dll** — Motor nativ
+- Exportă un C API (`CoreApi.h`) consumat de Dashboard prin P/Invoke
+- Rulează un message loop propriu pe un thread dedicat
+- Gestionează toate window handle-urile, hook-urile și renderer-ul
 
-**Responsabilități:**
-- Inițializare Core (lifecycle, message loop, DPI awareness pe single monitor)
-- Creare `Overlay_Taskbar` și `Overlay_Start`
-- Integrare Renderer (DComp tree, SetOpacity, commit scheduling)
-- Gestionare reacții: taskbar rect changes, auto-hide show/hide, Explorer restart
-- Asigură non-interferența cu input-ul
+### Module Core
 
-**Deliverables:**
-- Overlay over Taskbar cu opacitate setabilă 0–100
-- Overlay Start doar când e deschis, cu opacitate 0–100
-- Loguri clare + status hooks
+| Modul | Fișiere | Responsabilitate |
+|-------|---------|-----------------|
+| `Core` | `Core.h / Core.cpp` | Orchestrator principal; lifecycle, message loop, inițializare module |
+| `CoreApi` | `CoreApi.h / CoreApi.cpp` | Exporturi C API (`extern "C"`) pentru P/Invoke Dashboard |
+| `Renderer` | `Renderer.h / Renderer.cpp` | Transparență Taskbar via SWCA (22H2/23H2) sau LWA_ALPHA fallback (24H2+) |
+| `StartMenuWindow` | `StartMenuWindow.h / .cpp` | Fereastră custom Win7-style (GDI painting, state, navigare, right-click menus) |
+| `StartMenuHook` | `StartMenuHook.h / .cpp` | Low-level hooks (`WH_KEYBOARD_LL`, `WH_MOUSE_LL`) pentru Win key și Start button |
+| `ShellTargetLocator` | `ShellTargetLocator.h / .cpp` | Detectare Taskbar (toate edge-urile, multi-monitor), monitoring prin background thread |
+| `AllProgramsEnumerator` | `AllProgramsEnumerator.h / .cpp` | Enumerare recursivă `FOLDERID_Programs`, rezolvare `.lnk` via COM `IShellLinkW` |
+| `ConfigManager` | `ConfigManager.h / .cpp` | Citire/scriere `config.json`; thread-safe getters/setters |
+| `Diagnostics` | `Diagnostics.h / .cpp` | Macro `CF_LOG` + scriere `%LOCALAPPDATA%\GlassBar\GlassBar.log` |
 
----
+### Module Dashboard (C#)
 
-### Agent B — Shell Target Locator Agent (C++20)
-**Obiectiv:** detectare robustă pentru Taskbar și Start pe un singur monitor.
-
-**Responsabilități:**
-- Taskbar:
-  - găsire handle principal
-  - determinare `RECT` corect indiferent de edge
-  - reacție la auto-hide și schimbări ale shell-ului
-- Start:
-  - detectare open/close
-  - calcul `RECT` pentru zona meniului Start
-  - fail-safe dacă detecția e incertă
-
-**Metodă:**
-- Evenimente / polling minim (coalescing)
-- Heuristici pentru Start (fără injection) + „confidence score” intern (opțional)
-
-**Deliverables:**
-- API intern: `GetTaskbarRect()`, `IsStartOpen()`, `GetStartRect()`
-- Semnale: `OnTaskbarChanged`, `OnStartShown`, `OnStartHidden`
+| Fișier | Responsabilitate |
+|--------|-----------------|
+| `App.xaml.cs` | Single-instance (Mutex), `/autostart` flag, unhandled exception handler |
+| `MainWindow.xaml.cs` | UI principal, NavigationView tabs, debounce slidere, sync culori |
+| `MainViewModel.cs` | State management (INotifyPropertyChanged), forwardare setări la Core |
+| `CoreManager.cs` | P/Invoke wrapper high-level, message pump thread, lifecycle Core |
+| `CoreNative.cs` | Declarații P/Invoke pentru toate exporturile Core |
+| `ConfigManager.cs` | JSON persistence cu debounce save (250ms) |
+| `TrayIconManager.cs` | System tray icon via `Shell_NotifyIcon`, context menu (Show / Exit) |
+| `StartupManager.cs` | Autostart via `HKCU\...\Run` cu flag `/autostart` |
 
 ---
 
-### Agent C — Dashboard & UX Agent (C# WinUI 3)
-**Obiectiv:** UI de setări simplu, fără lag, cu persistență.
+## 4) API Core ↔ Dashboard (P/Invoke)
 
-**Responsabilități:**
-- UI:
-  - Toggle Enable Taskbar/Start (recomandat)
-  - Slider 0–100 pentru fiecare
-  - Status: Taskbar Found/Not found; Start Detected/Undetected
-- IPC:
-  - trimitere update live la schimbarea sliderului (cu debounce optional)
-  - conectare/reconectare la Core
-- Config:
-  - scriere `config.json` (debounce 250ms recomandat)
-  - încărcare și populare UI la start
+Comunicarea se face exclusiv prin apeluri directe în DLL (in-process). Nu există Named Pipes,
+sockets sau orice alt canal IPC extern.
 
-**Deliverables:**
-- Dashboard funcțional, cu control live asupra opacității
+**Exporturi principale (din `CoreApi.h`):**
 
----
+```cpp
+// Lifecycle
+GB_API void Core_Initialize();
+GB_API void Core_Shutdown();
+GB_API bool Core_IsRunning();
 
-### Agent D — QA & Reliability Agent
-**Obiectiv:** stabilitate pe termen lung și criterii verificabile.
+// Taskbar overlay
+GB_API void Core_SetTaskbarEnabled(bool enabled);
+GB_API void Core_SetTaskbarOpacity(int opacity);          // 0–100
+GB_API void Core_SetTaskbarColor(int r, int g, int b);
+GB_API void Core_SetTaskbarBlur(bool blur);
 
-**Responsabilități:**
-- Plan de test: funcțional + regresii
-- Scenarii obligatorii:
-  - Taskbar jos/sus/stânga/dreapta
-  - Auto-hide ON: show/hide
-  - Start open/close repetat (spam)
-  - Explorer restart recovery
-  - Sleep/Wake (optional, dar recomandat)
-- Validare performanță:
-  - CPU idle
-  - memorie stabilă (24h smoke)
-
-**Deliverables:**
-- Checklist de acceptanță semnat
-- Raport bug-uri cu pași de reproducere + loguri anexate
+// Start Menu
+GB_API void Core_SetStartEnabled(bool enabled);
+GB_API void Core_SetStartMenuOpacity(int opacity);        // 0–100
+GB_API void Core_SetStartMenuBgColor(int r, int g, int b);
+GB_API void Core_SetStartMenuTextColor(int r, int g, int b);
+GB_API void Core_SetStartMenuBorderColor(int r, int g, int b);
+GB_API void Core_SetStartMenuBlur(bool blur);
+GB_API void Core_SetStartMenuItemVisible(const wchar_t* item, bool visible);
+GB_API void Core_KeepStartMenuOpen(bool keep);
+```
 
 ---
 
-## 5) Instrumente & tehnologii acceptate
+## 5) Tehnologii utilizate
+
 ### Core (C++)
-- C++20, MSVC
-- API-uri: `user32`, `dwmapi`, `dcomp`, `d2d1` (după nevoie)
-- Smart pointers: `Microsoft::WRL::ComPtr`
-- Logging: macro `CF_LOG(level, message)` + thread id + timestamp
+- **Limbaj:** C++20, MSVC
+- **API-uri Win32:** `user32`, `gdi32`, `shell32`, `ole32`, `advapi32`, `dwmapi`
+- **Transparență (22H2/23H2):** `SetWindowCompositionAttribute` (SWCA) — `ACCENT_ENABLE_ACRYLICBLURBEHIND`
+- **Transparență (24H2/25H2+):** `SetLayeredWindowAttributes` (LWA_ALPHA) fallback
+- **Start Menu painting:** GDI (`SelectObject`, `DrawTextW`, `BitBlt`, `DrawIconEx`)
+- **Hooks:** `WH_KEYBOARD_LL`, `WH_MOUSE_LL`
+- **Shell:** `SHGetKnownFolderPath`, `SHGetFileInfoW`, `IShellLinkW`, `ShellExecuteW`
+- **Build:** CMake 3.20+, output: DLL cu static CRT (`/MT`)
+- **Logging:** macro `CF_LOG(level, message)` + thread id + timestamp
 
 ### Dashboard (C#)
-- .NET 8
-- WinUI 3
-- JSON: `System.Text.Json`
-
-### IPC
-- Named Pipes (recommended) sau alternativ: Local sockets
-- Mesaje minimale:
-  - `SetTaskbarOpacity(0..100)`
-  - `SetStartOpacity(0..100)`
-  - `SetTaskbarEnabled(bool)`
-  - `SetStartEnabled(bool)`
-  - `GetStatus()`
+- **.NET 8**, WinUI 3, XAML
+- **P/Invoke** pentru toate apelurile la Core
+- **JSON:** `System.Text.Json`
+- **Single-instance:** `Mutex`
+- **Thread safety:** `DispatcherQueue.TryEnqueue()` pentru update-uri UI cross-thread
 
 ---
 
-## 6) Metode de lucru (workflow)
-### Milestones
-- **M1**: Taskbar overlay + slider 0–100 (click-through)
-- **M2**: Taskbar hardening: auto-hide, edge positions, Explorer restart recovery
-- **M3**: Start overlay + slider 0–100 (doar când Start e deschis)
-- **M4**: Start hardening + fallback + diag/status complet
+## 6) Configurație persistentă
 
-### Reguli de commit
-- Commits mici, tematice (1 feature / fix per commit)
-- Mesaje: `Core: ...`, `Dashboard: ...`, `Locator: ...`, `QA: ...`
+Config salvată în: `%LOCALAPPDATA%\GlassBar\config.json`
 
----
-
-## 7) Standard de calitate (Definition of Done)
-Un milestone este „Done” doar dacă:
-- Taskbar/Start sunt complet utilizabile (overlay click-through)
-- Slider 0–100 aplică opacitate în timp real
-- Fără flicker vizibil la:
-  - auto-hide show/hide
-  - Start open/close
-- CPU idle < 2%
-- Recovery după Explorer restart
-- Logurile confirmă evenimentele cheie (found/lost, shown/hidden)
+**Chei principale:**
+- `taskbarEnabled`, `taskbarOpacity`, `taskbarR/G/B`, `taskbarBlur`
+- `startEnabled`, `startOpacity`, `startBgR/G/B`, `startTextR/G/B`, `startBorderR/G/B`, `startBlur`
+- `startupEnabled`
+- `rightColumnItems` — visibility per item (Documents, Pictures, Music, Downloads, Control Panel etc.)
+- `pinnedApps` — lista de aplicații pinned în Start Menu (separat în `pinned_apps.json`)
 
 ---
 
-## 8) Observabilitate (logging & diagnostic)
-### Log obligatoriu (GlassBar.log)
-- Startup summary (versiune, init ok, config loaded)
+## 7) Starea proiectului
+
+| Componentă | Status |
+|-----------|--------|
+| Taskbar overlay (toate edge-urile, multi-monitor, auto-hide) | ✅ Done |
+| Renderer 22H2/23H2 (SWCA — transparență + RGB + Blur) | ✅ Done |
+| Renderer 24H2/25H2+ (LWA_ALPHA fallback — transparență uniformă) | ✅ Done |
+| Explorer restart recovery | ✅ Done |
+| Start Menu replacement (Win7 two-column layout) | ✅ Done |
+| All Programs tree (folder drill-down, hover submenus, keyboard nav) | ✅ Done |
+| Pinned items (pin/unpin, custom icon picker) | ✅ Done |
+| Recent items (UserAssist, right-click remove, exclusion list) | ✅ Done |
+| Right-column items (system links, visibility toggles) | ✅ Done |
+| Theme presets (Classic Win7 / Aero Glass / Dark) | ✅ Done |
+| Power/session submenu (Sleep, Shut down, Restart) | ✅ Done |
+| Config persistence (JSON) | ✅ Done |
+| System tray + autostart | ✅ Done |
+| Single-instance Dashboard | ✅ Done |
+| Search box | ⚠️ Vizibil, nefuncțional (placeholder) |
+| Global hotkey toggle overlay | ❌ Planned |
+| Auto-update check (GitHub releases) | ❌ Planned |
+
+---
+
+## 8) Observabilitate (logging)
+
+**Log obligatoriu (`GlassBar.log`):**
+- Startup summary (versiune, init ok, config loaded, Windows build number)
 - Taskbar found/lost + rect + edge
-- Start shown/hidden + rect
-- Explorer restart detectat + reacție
+- Explorer restart detectat + recovery
 - Erori `HRESULT` + context (file/line)
 
-### Diagnostic mode (opțional)
-- Activat din Dashboard:
-  - contur discret al rect-urilor overlay
-  - text mic cu status (Taskbar/Start)
+**Log path:** `%LOCALAPPDATA%\GlassBar\GlassBar.log`
 
 ---
 
-## 9) Riscuri cunoscute (acceptate)
-- Start Menu poate varia între build-uri Windows 11; detecția fără injection este inerent mai fragilă.
-- În caz de detecție nesigură, Start overlay se dezactivează (fail-safe), iar proiectul rămâne valid (Taskbar continuă să funcționeze).
+## 9) Riscuri cunoscute
 
----
-
-## 10) Roadmap ulterior (după scope-ul actual)
-- Material effects (blur) cu degradare la animare
-- Profilare GPU/CPU + optimizări
-- Opțiuni UX: preseturi (0/20/40/60/80), hotkey toggle
+- **Transparență pe 24H2/25H2+:** Microsoft a eliminat suportul SWCA pe `Shell_TrayWnd`.
+  Fallback-ul LWA_ALPHA funcționează (transparență uniformă), dar RGB color tint și Blur nu au efect.
+  Iconițele Taskbar devin și ele mai puțin vizibile odată cu creșterea transparenței — aceasta
+  este o limitare a platformei, nu un bug GlassBar.
+- **Search box:** nefuncțional momentan (placeholder vizual); nu afectează restul meniului.
+- **DPI 200%+:** testat până la 150%; pot apărea artefacte vizuale la scaling foarte mare.

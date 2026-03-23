@@ -1391,3 +1391,78 @@ Toggle switch-urile rămâneau vizual în starea anterioară.
 - No injection / no patching system components.
 - Clear logs + fail-safe behavior, no silent failures.
 - This WORKLOG.md file has to be updated BEFORE any commit and push
+
+---
+
+## Session 24 — Actualizare completă documentație Markdown (2026-03-23)
+
+### Context
+
+Documentația acumulase discrepanțe semnificative față de codul actual, în principal din cauza:
+1. Rebrandului CrystalFrame → GlassBar (aplicat în cod dar nu în toate docs-urile)
+2. Schimbării arhitecturale de la IPC Named Pipes la P/Invoke direct
+3. Evoluției proiectului: Start Menu a trecut de la "overlay" la "înlocuire completă"
+4. Multi-monitor suportat, dar docs spuneau "single monitor only"
+
+### Modificări efectuate
+
+**README.md** — Adăugată secțiune "Windows Version Compatibility":
+- Tabel comparativ 22H2/23H2 vs 24H2/25H2+ pentru rendering, transparency, RGB, blur, icon visibility
+- Explicație clară: SWCA funcționează ireproșabil pe 22H2/23H2 (iconițe full opace, RGB + Acrylic complet)
+- Pe 24H2/25H2+ (build ≥ 26000): fallback LWA_ALPHA — transparență funcțională dar iconițe fade cu overlay
+- Context comparativ: OpenShell nu poate face transparency pe 25H2; TranslucentTB nu rulează deloc
+
+**BUILD.md** — Overhaul complet:
+- Toate referințele „CrystalFrame" → „GlassBar"
+- Core output corectat: `.exe` → `.dll` (`GlassBar.Core.dll`)
+- Căi VS corectate: `CrystalFrame/Core/` → `Core/`
+- Secțiunea Verification: explică că DLL-ul nu se rulează separat (încărcat de Dashboard)
+- Log path: `%LOCALAPPDATA%\CrystalFrame\` → `%LOCALAPPDATA%\GlassBar\`
+- Expected log: eliminat `IPC pipe created` (nu există IPC)
+- Eliminat troubleshooting `d2d1.lib` (nu se mai folosește Direct2D)
+- Build artifacts: structură actualizată (DLL + Dashboard exe)
+- Packaging: `GlassBar-v2.2/` cu fișierele corecte
+
+**Agents.md** — Rescriere completă ca document de arhitectură curent:
+- Eliminat framework-ul de „agenți" A/B/C/D (artefact de planning inițial)
+- Arhitectura reală: Core DLL (C++20) + Dashboard (C# .NET 8) comunicând prin P/Invoke
+- Tabel module Core reale: Core, Renderer, StartMenuWindow, StartMenuHook, ShellTargetLocator, AllProgramsEnumerator, ConfigManager, Diagnostics
+- API P/Invoke documentat (exporturile din CoreApi.h)
+- Starea proiectului: tabel cu status per componentă
+- Riscuri cunoscute actualizate (renderer 24H2/25H2+, search box, DPI)
+
+**TESTING.md** — Actualizări majore:
+- M3 redenumit „Start Menu Replacement" (era „Start Menu Overlay" — complet greșit)
+- TC-M3-01: Win key → meniul custom GlassBar apare (nu „overlay peste Start nativ")
+- Adăugat TC-M2-04: Multi-Monitor (era marcat ca „not supported" — incorect)
+- Adăugat Milestone S: Start Menu Features (TC-S-01 … TC-S-08)
+  - All Programs navigation, keyboard nav, scroll, pinned/recent right-click, right-column visibility, power submenu, theme presets
+- Known Limitations: eliminat „Multi-Monitor not supported" (suportat acum)
+- Known Limitations: eliminat „confidence < 0.6" (detaliu intern outdated)
+- Known Limitations: adăugat search box placeholder + renderer 24H2/25H2+ cu descriere corectă
+- TC-M4-01: test de persistență actualizat (include bg color Start Menu)
+- Automated Testing: eliminat „Integration tests (IPC)"
+
+**PUBLISHING.md** — Rebranding + actualizare checklist:
+- Titlu și tot conținutul: `CrystalFrame` → `GlassBar`
+- Zip outputs: `CrystalFrame-v1.0.0.zip` → `GlassBar-v1.0.0.zip`
+- Pre-release checklist: eliminat itemii incorecți (Edit dialog, Custom names, Windows 10)
+- Adăugați itemi relevanți: Start Menu, All Programs, theme presets, config persistă
+
+**VSCODE-SETUP.md** — Rebranding + corectare arhitectură:
+- Workspace: `CrystalFrame.code-workspace` → `GlassBar.code-workspace`
+- Core output: `.exe` → `.dll`
+- „Rulare proiect Pas 1: Pornește Core" → eliminat; înlocuit cu explicație că DLL-ul se încarcă automat
+- Expected log: eliminat `IPC pipe created`
+- Dashboard log path: CrystalFrame → GlassBar
+- launch.json: eliminat debug Core standalone (DLL in-process); păstrat debug Dashboard
+
+**VSCODE-PUBLISHING.md** — Rebranding minor:
+- Zip names: `CrystalFrame-v1.0.0.zip` → `GlassBar-v1.0.0.zip` (toate aparițiile)
+
+**docs/ folder** — Șters complet:
+- Conținea copii identice (dar outdated) ale Agents.md, BUILD.md, TESTING.md, VSCODE-SETUP.md
+- Documentele originale din root sunt singura sursă de adevăr
+
+**Fișiere:** `README.md`, `BUILD.md`, `Agents.md`, `TESTING.md`, `PUBLISHING.md`,
+`VSCODE-SETUP.md`, `VSCODE-PUBLISHING.md`, `docs/` (deleted)

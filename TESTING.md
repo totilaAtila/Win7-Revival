@@ -1,15 +1,15 @@
-# Testing Guide - GlassBar Engine
+# Testing Guide — GlassBar
 
-Quick testing scenarios to validate all functionality.
+Scenarii de testare manuală pentru validarea funcționalității.
 
 ---
 
 ## Pre-Test Checklist
 
 - [ ] Windows 11 (22H2 or later)
-- [ ] Core compiled (Release build)
-- [ ] Dashboard compiled (Release build)
-- [ ] Both executables running
+- [ ] Core compiled (Release build) → `Core/build/bin/Release/GlassBar.Core.dll`
+- [ ] Dashboard compiled (Release build) → `Dashboard/bin/Release/.../GlassBar.Dashboard.exe`
+- [ ] `GlassBar.Dashboard.exe` pornit; Core toggle → ON (indicator verde)
 
 ---
 
@@ -17,29 +17,37 @@ Quick testing scenarios to validate all functionality.
 
 ### TC-M1-01: Taskbar Detection
 **Steps:**
-1. Start `GlassBar.Dashboard.exe`
+1. Start `GlassBar.Dashboard.exe`, enable Core toggle
 2. Check log: `%LOCALAPPDATA%\GlassBar\GlassBar.log`
 3. Look for: `[INFO] Taskbar found: edge=bottom`
 
-**Expected:** ✓ Taskbar detected, overlay positioned correctly
+**Expected:** ✓ Taskbar detectat; overlay poziționat corect
 
 ### TC-M1-02: Opacity Control
 **Steps:**
-1. Start Dashboard
-2. Set Taskbar slider to 0 → Taskbar appears normal
-3. Set Taskbar slider to 50 → Overlay visible at 50%
-4. Set Taskbar slider to 100 → Maximum overlay opacity
+1. Enable Taskbar overlay toggle
+2. Set Transparency slider to 0 → overlay invizibil
+3. Set Transparency slider to 50 → overlay vizibil la 50%
+4. Set Transparency slider to 100 → opacitate maximă
 
-**Expected:** ✓ Opacity changes in real-time, no flicker
+**Expected:** ✓ Opacitate se modifică în timp real, fără flicker
 
-### TC-M1-03: Click-Through
+### TC-M1-03: RGB Color Control
 **Steps:**
-1. Set Taskbar opacity to 50
-2. Click Start button through overlay
-3. Click system tray icons
-4. Right-click taskbar
+1. Set R=255, G=0, B=0 → overlay roșu
+2. Set R=0, G=0, B=200, opacity=60 → overlay albastru semitransparent
+3. Verifică preview square (live color preview lângă slidere)
 
-**Expected:** ✓ All clicks work as if overlay doesn't exist
+**Expected:** ✓ Culoarea se actualizează instant; preview square reflectă valorile
+
+### TC-M1-04: Click-Through
+**Steps:**
+1. Set Taskbar opacity to 60
+2. Click Start button prin overlay
+3. Click system tray icons
+4. Right-click Taskbar
+
+**Expected:** ✓ Toate click-urile funcționează ca și când overlay-ul nu există
 
 ---
 
@@ -51,232 +59,292 @@ Quick testing scenarios to validate all functionality.
 2. Verify overlay follows
 3. Test click-through
 
-**Expected:** ✓ Overlay tracks taskbar on all edges
+**Expected:** ✓ Overlay urmărește Taskbar pe toate edge-urile
 
 ### TC-M2-02: Auto-Hide
 **Steps:**
 1. Enable auto-hide (Taskbar Settings)
-2. Move mouse away → Taskbar hides
-3. Verify overlay hides too
-4. Move mouse to edge → Taskbar shows
-5. Verify overlay shows too
-6. Repeat 10 times rapidly
+2. Move mouse away → Taskbar se ascunde
+3. Verifică că overlay-ul se ascunde și el
+4. Move mouse to edge → Taskbar apare
+5. Verifică că overlay-ul reapare
+6. Repetă 10 ori rapid
 
-**Expected:** ✓ No flicker, perfect tracking
+**Expected:** ✓ Fără flicker; overlay sincronizat perfect cu Taskbar
 
 ### TC-M2-03: Explorer Restart
 **Steps:**
-1. Core + Dashboard running, overlay visible
-2. Open Task Manager
-3. Find "Windows Explorer" process
-4. Right-click → End task
-5. Windows will restart Explorer automatically
-6. Wait 2 seconds
-7. Check if overlay reappears
+1. Core + Dashboard running, overlay vizibil
+2. Open Task Manager → Find "Windows Explorer" → Right-click → End task
+3. Windows restartează Explorer automat
+4. Așteaptă 2–3 secunde
+5. Verifică că overlay-ul reapare
 
-**Expected:** ✓ Automatic recovery, overlay restored
+**Expected:** ✓ Recovery automat; overlay restaurat fără intervenție
+
+### TC-M2-04: Multi-Monitor
+**Pre-condition:** Două sau mai multe monitoare conectate
+
+**Steps:**
+1. Enable Taskbar overlay
+2. Verifică că overlay-ul apare pe **toate** monitoarele unde există Taskbar
+3. Modifică opacity → se aplică pe toate monitoarele simultan
+
+**Expected:** ✓ Overlay pe toate monitoarele
 
 ---
 
-## Milestone M3: Start Menu Overlay
+## Milestone M3: Start Menu Replacement
 
-### TC-M3-01: Start Detection
+### TC-M3-01: Start Menu Opens on Win Key
 **Steps:**
-1. Enable Start overlay in Dashboard
-2. Press Windows key
-3. Dashboard should show "Start: Open"
-4. Overlay appears over Start Menu
-5. Press Esc
-6. Dashboard shows "Start: Closed"
-7. Overlay disappears
+1. Enable Start Menu toggle în Dashboard (panoul Start Menu)
+2. Apasă tasta **Windows** (Win key)
+3. Verifică că meniul **GlassBar custom** apare (two-column Win7 layout)
+4. Apasă **Esc** sau click în afara meniului → meniul se închide
+5. Click pe butonul Start din Taskbar → meniul reapare
 
-**Expected:** ✓ Detection < 250ms, smooth tracking
+**Expected:** ✓ Meniul custom GlassBar înlocuiește complet Start Menu-ul nativ;
+latență < 250ms; se deschide/închide fără crash
 
-### TC-M3-02: Start Opacity
+### TC-M3-02: Win Key Combos Not Blocked
 **Steps:**
-1. Open Start Menu
-2. Set Start slider to 0 → No overlay visible
-3. Set Start slider to 50 → 50% overlay
-4. Set Start slider to 100 → Maximum opacity
+1. Apasă Win+D → Desktop show/hide funcționează
+2. Apasă Win+E → File Explorer se deschide
+3. Apasă Win+R → Run dialog se deschide
 
-**Expected:** ✓ Opacity changes work
+**Expected:** ✓ Combinațiile Win+X nu sunt blocate; doar Win singur deschide meniul custom
 
 ### TC-M3-03: Spam Test
 **Steps:**
-1. Set Start opacity to 75
-2. Rapidly press Windows key 20 times
-3. Check for crashes, lag, or flicker
+1. Apasă Win key de 20 ori rapid
+2. Verifică absența crash-urilor, lag-ului sau flicker-ului
 
-**Expected:** ✓ No crashes, smooth handling
+**Expected:** ✓ Fără crash; handling stabil
+
+---
+
+## Milestone S: Start Menu Features
+
+### TC-S-01: Two-Column Layout
+**Steps:**
+1. Deschide Start Menu (Win key)
+2. Verifică coloana stângă: pinned programs + recent programs + "All Programs ›"
+3. Verifică coloana dreaptă: Documents, Pictures, Music, Downloads, Control Panel etc.
+4. Verifică user avatar (sus-stânga) și power button (jos-stânga)
+
+**Expected:** ✓ Layout Win7 complet; toate elementele vizibile și cu text clar
+
+### TC-S-02: All Programs Navigation
+**Steps:**
+1. Click pe "All Programs ›" în coloana stângă
+2. Verifică că lista programelor instalate apare (structură folder)
+3. Hover pe un folder → submeniu apare
+4. Click pe un program → aplicația se lansează; meniul se închide
+
+**Expected:** ✓ Tree complet; drill-down funcțional; aplicațiile se lansează
+
+### TC-S-03: Keyboard Navigation
+**Steps:**
+1. Deschide Start Menu
+2. Apasă ↑/↓ → selecția se mișcă între itemi
+3. Apasă Enter pe un item → aplicația se lansează
+4. Apasă Esc → meniul se închide
+5. În All Programs: ↑/↓ navighează lista; ← se întoarce la lista principală
+
+**Expected:** ✓ Navigare completă cu tastatura
+
+### TC-S-04: Mouse Wheel Scroll
+**Steps:**
+1. Deschide All Programs cu mai multe intrări
+2. Scroll cu mouse wheel pe lista All Programs
+
+**Expected:** ✓ Lista scrollează smooth
+
+### TC-S-05: Pinned Items — Right-Click
+**Steps:**
+1. Right-click pe un item din secțiunea Pinned
+2. Verifică că apare context menu cu: "Unpin from Start", "Select custom icon"
+3. Click "Unpin from Start" → itemul dispare din Pinned
+
+**Expected:** ✓ Context menu funcțional; unpin persistent (supraviețuiește restart)
+
+### TC-S-06: Recent Items — Right-Click
+**Steps:**
+1. Deschide câteva aplicații, re-deschide Start Menu
+2. Verifică că Recent items s-au actualizat
+3. Right-click pe un item Recent → "Remove from list"
+4. Verifică că itemul dispare
+
+**Expected:** ✓ Recent list se actualizează la fiecare deschidere; remove persistent
+
+### TC-S-07: Right-Column Item Visibility
+**Steps:**
+1. În Dashboard (Start Menu tab), dezactivează "Documents" din lista de itemi
+2. Deschide Start Menu → "Documents" nu mai apare în coloana dreaptă
+3. Reactivează → reapare
+
+**Expected:** ✓ Visibility toggles funcționale; modificările se aplică imediat
+
+### TC-S-08: Power/Session Submenu
+**Steps:**
+1. Click pe butonul power (jos-stânga în Start Menu)
+2. Verifică submeniu: Sleep, Shut down, Restart
+3. Verifică că opțiunile funcționează (sau cel puțin nu cauzează crash la click)
+
+**Expected:** ✓ Submeniu apare; opțiunile funcționează
 
 ---
 
 ## Milestone M4: Final Validation
 
-### TC-M4-00: Autostart → Start hidden in System Tray
+### TC-M4-00: Autostart — Start hidden in System Tray
 **Steps:**
 1. Open Dashboard
 2. Enable "Run at startup" toggle
-3. Verify registry key: `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\GlassBar`
-   - Value must be: `"<path>\GlassBar.Dashboard.exe" /autostart`
-4. Sign out and sign back in (or run the command manually from CLI)
-5. Check that **no Dashboard window appears** on screen
-6. Check that a **GlassBar icon is visible in the System Tray**
-7. Double-click the tray icon → Dashboard window opens
-8. Right-click the tray icon → context menu shows "Open GlassBar" and "Exit"
+3. Verifică registry key: `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\GlassBar`
+   - Valoarea trebuie să fie: `"<path>\GlassBar.Dashboard.exe" /autostart`
+4. Sign out și sign back in (sau rulează comanda manual din CLI)
+5. Verifică că **nicio fereastră Dashboard** nu apare pe ecran
+6. Verifică că **iconița GlassBar este vizibilă în System Tray**
+7. Double-click pe tray icon → fereastra Dashboard se deschide
+8. Right-click pe tray icon → context menu: "Open GlassBar" și "Exit"
 
-**Expected:** ✓ Window stays hidden at startup; tray icon present; double-click/right-click work
+**Expected:** ✓ La startup fereastra rămâne ascunsă; tray icon prezent; double-click/right-click funcționale
 
 ### TC-M4-01: Config Persistence
 **Steps:**
-1. Set Taskbar opacity to 63, Start opacity to 42
-2. Close Dashboard
-3. Verify `%LOCALAPPDATA%\GlassBar\config.json` contains values
-4. Reopen Dashboard
-5. Verify sliders show 63 and 42
+1. Set Taskbar opacity 63, R=100, G=50, B=20
+2. Set Start Menu bg color R=20, G=40, B=80
+3. Close Dashboard
+4. Verifică `%LOCALAPPDATA%\GlassBar\config.json` conține valorile
+5. Reopen Dashboard
+6. Verifică că slidere reflectă valorile salvate
 
-**Expected:** ✓ Settings persisted and restored
+**Expected:** ✓ Setările persistă și se restaurează corect
 
 ### TC-M4-02: Performance
 **Steps:**
 1. Open Task Manager
-2. Find `GlassBar.Dashboard.exe`
-3. Let run for 5 minutes idle
+2. GlassBar Dashboard running, Core ON, overlay activ
+3. Let run 5 minutes idle
 4. Check CPU usage
 
 **Expected:** ✓ CPU < 2% average
 
 ### TC-M4-03: Memory Stability
 **Steps:**
-1. Note initial memory (Task Manager)
-2. Toggle Start 50 times
-3. Move taskbar between edges 10 times
-4. Adjust sliders 100 times
-5. Note final memory
+1. Notează memoria inițială (Task Manager)
+2. Toggle Start Menu 50 de ori
+3. Mută Taskbar între edge-uri de 10 ori
+4. Ajustează slidere de 100 ori
+5. Notează memoria finală
 
-**Expected:** ✓ Memory increase < 10 MB
+**Expected:** ✓ Creștere memorie < 10 MB
+
+---
+
+## Milestone M7: Windows Compatibility + Theme Presets
+
+### TC-M7-01: Windows Transparency Effects conflict (22H2+)
+**Pre-condition:** Windows 11 22H2+; "Transparency effects" ON în Settings → Personalization → Colors
+
+**Steps:**
+1. Start GlassBar, enable Taskbar overlay (opacity 50, blur OFF)
+2. Verifică că Taskbar este semitransparent
+3. Toggle "Transparency effects" din Windows Settings
+4. Verifică că Taskbar rămâne semitransparent (nu devine opac)
+
+**Expected:** ✓ Overlay funcționează indiferent de setarea Windows Transparency Effects
+
+### TC-M7-02: Windows Build Detection
+**Steps:**
+1. Start GlassBar
+2. Check log: `%LOCALAPPDATA%\GlassBar\GlassBar.log`
+3. Look for: `Windows build number: XXXXX`
+
+**Expected:** ✓ Build number logat la startup cu clasificarea corectă (pre-24H2 / 24H2/25H2+)
+
+### TC-M7-03: Win7 Aero Global Theme Preset
+**Steps:**
+1. Click butonul "Win7 Aero" din sidebar (NavigationView.PaneFooter)
+2. Navighează la Taskbar tab → verifică: opacity=50, R=20, G=40, B=80
+3. Navighează la Start Menu tab → verifică: bg R=20/G=40/B=80, text R=255/G=255/B=255, border R=60/G=100/B=160, opacity=17, blur=OFF
+4. Verifică că ambele overlay-uri toggle sunt ON
+
+**Expected:** ✓ Ambele panouri reflectă valorile corecte; efectele aplicate imediat
+
+### TC-M7-04: Dark Global Theme Preset
+**Steps:**
+1. Click butonul "Dark" din sidebar
+2. Verifică Taskbar: opacity=50, R=18, G=18, B=22
+3. Verifică Start Menu: bg R=18/G=18/B=22, text R=200/G=200/B=200, border R=60/G=60/B=65, opacity=17, blur=OFF
+
+**Expected:** ✓ Ambele panouri cu valorile Dark corecte; efect charcoal aplicat
+
+### TC-M7-05: Theme Preset Slider Sync
+**Steps:**
+1. Click "Win7 Aero" din sidebar
+2. Verifică că Taskbar color preview box se actualizează la albastru închis
+3. Switch la Start Menu tab
+4. Verifică că slidere Start Menu reflectă noile valori (nu valorile vechi)
+
+**Expected:** ✓ Toate slider-ele și preview box-urile se actualizează imediat după click tema
 
 ---
 
 ## Stress Testing
 
 ### 8-Hour Idle Test
-**Steps:**
 1. Start Core + Dashboard
-2. Set opacity to 50/50
-3. Leave computer idle (don't sleep)
-4. Return after 8 hours
-5. Check Task Manager for CPU/memory
-6. Test all functions still work
+2. Set opacity 50 pe ambele panouri
+3. Lasă computerul idle (fără sleep)
+4. After 8 hours: verifică CPU/memorie, testează funcțiile
 
-**Expected:** ✓ No crashes, no memory leaks
+**Expected:** ✓ Fără crash, fără memory leaks
 
-### Rapid Operations
-**Script (manual):**
+### Rapid Operations (1 minut)
 ```
-For 1 minute:
-  - Open/close Start every 2 seconds
-  - Adjust sliders randomly
-  - Toggle enable/disable
+- Deschide/închide Start Menu la fiecare 2 secunde
+- Ajustează slidere aleatoriu
+- Toggle enable/disable
 ```
 
-**Expected:** ✓ No crashes, stable performance
+**Expected:** ✓ Fără crash, performanță stabilă
 
 ---
 
 ## Known Limitations (Expected Behavior)
 
-### Start Menu Detection
-- May not work on all Windows 11 builds
-- If confidence < 0.6, Start overlay disables automatically
-- **This is normal** - Taskbar continues to work
+### Search Box
+- Caseta de căutare din Start Menu este **vizibilă dar nefuncțională** (placeholder).
+- Aceasta este o limitare known — restul meniului nu este afectat.
 
-### Multi-Monitor
-- Currently only supports primary monitor
-- Taskbar on secondary monitors not detected
+### Renderer pe 24H2 / 25H2+ (build ≥ 26000)
+- SWCA nu mai funcționează pe aceste build-uri; se folosește fallback LWA_ALPHA.
+- RGB color tint și Blur/Acrylic nu au efect vizual.
+- Transparența funcționează, dar iconițele Taskbar devin proporțional mai puțin vizibile
+  odată cu creșterea transparenței. Aceasta este o limitare a platformei Windows.
+- Pe 22H2/23H2, toate efectele funcționează complet.
 
 ### DPI Scaling
-- Tested with 100%, 125%, 150% scaling
-- May have issues with 200%+ scaling
+- Testat cu 100%, 125%, 150%.
+- Pot apărea artefacte vizuale la 200%+ scaling.
 
 ---
-
----
-
-## Milestone M7: Windows Compatibility + Global Theme Presets (Session 22)
-
-### TC-M7-01: Windows Transparency Effects conflict (22H2+)
-**Pre-condition:** Windows 11 22H2+, "Transparency effects" ON in Settings → Personalization → Colors
-
-**Steps:**
-1. Start GlassBar, enable Taskbar transparency (opacity 50, blur OFF)
-2. Verify taskbar is transparent (semi-transparent overlay visible)
-3. Go to Windows Settings → Personalization → Colors → toggle "Transparency effects" ON
-4. Verify taskbar remains transparent (NOT opaque)
-
-**Expected:** ✓ Taskbar stays transparent regardless of Windows Transparency Effects setting
-**Log verification:** Look for `DwmSetWindowAttribute DWMWA_SYSTEMBACKDROP_TYPE=NONE attempted`
-
-### TC-M7-02: Windows build detection
-**Steps:**
-1. Start GlassBar
-2. Check log: `%LOCALAPPDATA%\GlassBar\GlassBar.log`
-3. Look for: `Windows build number: XXXXX`
-
-**Expected:** ✓ Build number logged at startup with correct classification (pre-24H2 / 24H2 / 25H2+)
-
-### TC-M7-03: 25H2+ universal fallback (no-blur)
-**Pre-condition:** Windows build ≥ 27000 (25H2+)
-
-**Steps:**
-1. Enable Taskbar transparency, blur OFF, opacity 50
-2. Verify taskbar shows basic alpha transparency (semi-transparent)
-
-**Expected:** ✓ Basic transparency via `SetLayeredWindowAttributes` — taskbar is NOT opaque
-**Log verification:** Look for `Win25H2+ layered fallback: alpha=`
-
-### TC-M7-04: Win7 Aero global theme preset
-**Steps:**
-1. Navigate to Taskbar panel in Dashboard
-2. Click "Win7 Aero" button (THEME PRESETS card)
-3. Verify Taskbar sliders: opacity=50, R=20, G=40, B=80
-4. Navigate to Start Menu panel
-5. Verify Start Menu sliders: bg R=20/G=40/B=80, text R=255/G=255/B=255, border R=60/G=100/B=160, opacity=50, blur=OFF
-
-**Expected:** ✓ Both panels show correct values; effects applied immediately on taskbar and Start Menu
-
-### TC-M7-05: Dark global theme preset
-**Steps:**
-1. Click "Dark" button in Taskbar panel → THEME PRESETS card
-2. Verify Taskbar: opacity=50, R=18, G=18, B=22
-3. Navigate to Start Menu panel
-4. Verify Start Menu: bg R=18/G=18/B=22, text R=200/G=200/B=200, border R=60/G=60/B=65, opacity=50, blur=OFF
-
-**Expected:** ✓ Both panels show correct values; dark charcoal effect applied
-
-### TC-M7-06: Theme preset slider sync
-**Steps:**
-1. Click "Win7 Aero" while on Taskbar panel
-2. Verify Taskbar color preview box updates to dark blue
-3. Switch to Start Menu panel
-4. Verify all Start Menu sliders reflect the new values (not stale)
-
-**Expected:** ✓ All sliders and preview boxes update immediately after theme button click
 
 ## Bug Reporting
 
-If you find an issue:
+1. **Captează:**
+   - Screenshot al problemei
+   - `%LOCALAPPDATA%\GlassBar\GlassBar.log`
+   - Pașii exacți de reproducere
 
-1. **Capture:**
-   - Screenshot of issue
-   - Copy `%LOCALAPPDATA%\GlassBar\GlassBar.log`
-   - Note exact steps to reproduce
-
-2. **Report:**
-   - Windows 11 version (Settings → System → About)
-   - Steps to reproduce
+2. **Raportează:**
+   - Versiunea Windows (Settings → System → About → OS build)
+   - Pași de reproducere
    - Expected vs actual behavior
-   - Log excerpt
+   - Extras din log
 
 ---
 
@@ -287,19 +355,9 @@ If you find an issue:
 | CPU (idle) | < 2% | |
 | Memory | < 50 MB | |
 | Startup | < 2 sec | |
-| Opacity change | < 50 ms | |
-| Taskbar track | < 100 ms | |
-| Start detection | < 250 ms | |
-
----
-
-## Automated Testing (Future)
-
-Currently manual testing only. Future versions may include:
-- Unit tests (C++ Core)
-- Integration tests (IPC)
-- UI automation tests (Dashboard)
-- Performance regression tests
+| Opacity change latency | < 50 ms | |
+| Taskbar track latency | < 100 ms | |
+| Start Menu open latency | < 250 ms | |
 
 ---
 
