@@ -190,7 +190,7 @@ GlassBar uses different rendering strategies depending on the Windows build, bec
 |----------------|-------|-----------|-------------|-----------------|----------------|-----------------|
 | **22H2** | < 22631 | `SetWindowCompositionAttribute` (SWCA) | ✅ Full control | ✅ Full control | ✅ Full Acrylic | ✅ Icons always fully opaque |
 | **23H2** | 22631 | SWCA | ✅ Full control | ✅ Full control | ✅ Full Acrylic | ✅ Icons always fully opaque |
-| **24H2 / 25H2+** | ≥ 26000 | `SetLayeredWindowAttributes` (LWA_ALPHA) fallback | ✅ Works | ⚠️ No effect | ⚠️ No effect | ⚠️ Icons fade with transparency |
+| **24H2 / 25H2+** | ≥ 26000 | `SetLayeredWindowAttributes` (LWA_ALPHA) fallback | ✅ Works | ✅ Works | ⚠️ No effect | ⚠️ Icons fade with transparency |
 
 ### Notes on 24H2 / 25H2+
 
