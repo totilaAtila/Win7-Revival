@@ -54,6 +54,9 @@ namespace GlassBar.Dashboard
         // Global hotkey toggle (0 = disabled)
         public int HotkeyVk        { get; set; } = 0;
         public int HotkeyModifiers { get; set; } = 0;
+
+        // XamlBridge blur amount (0 = off, 1-100 = intensity)
+        public int BlurAmount { get; set; } = 0;
     }
 
     public class ConfigManager
@@ -181,6 +184,7 @@ namespace GlassBar.Dashboard
         public bool IsFirstRun  { get => _config.IsFirstRun;  set { _config.IsFirstRun  = value; _ = SaveAsync(); } }
         public int  HotkeyVk        { get => _config.HotkeyVk;        set { _config.HotkeyVk        = value; _ = SaveAsync(); } }
         public int  HotkeyModifiers { get => _config.HotkeyModifiers; set { _config.HotkeyModifiers = value; _ = SaveAsync(); } }
+        public int  BlurAmount      { get => _config.BlurAmount;      set { _config.BlurAmount      = value; _ = SaveAsync(); } }
 
         public async Task LoadAsync()
         {

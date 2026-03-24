@@ -15,6 +15,7 @@ struct Config {
     bool startBlur = false;
     int hotkeyVk        = 0;      // 0 = disabled; virtual-key code (e.g. 'G' = 0x47)
     int hotkeyModifiers = 0;      // MOD_CONTROL | MOD_ALT | MOD_SHIFT | MOD_WIN
+    int blurAmount      = 0;      // 0 = off; 1-100 = XamlBridge blur intensity
 };
 
 class ConfigManager {

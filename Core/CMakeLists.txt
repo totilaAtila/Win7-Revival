@@ -83,6 +83,45 @@ install(TARGETS GlassBar.Core
     ARCHIVE DESTINATION lib
 )
 
+# ── GlassBar.XamlBridge.dll ──────────────────────────────────────────────────
+add_library(GlassBar.XamlBridge SHARED
+    XamlBridge/XamlBridge.cpp
+    XamlBridge/XamlBridge.h
+    XamlBridge/SharedBlurState.h
+)
+
+target_link_libraries(GlassBar.XamlBridge
+    user32.lib
+)
+
+if(MSVC)
+    target_compile_options(GlassBar.XamlBridge PRIVATE
+        /W4
+        /permissive-
+    )
+
+    set_property(TARGET GlassBar.XamlBridge PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+    target_compile_definitions(GlassBar.XamlBridge PRIVATE
+        UNICODE
+        _UNICODE
+        XAMLBRIDGE_EXPORTS
+    )
+endif()
+
+set_target_properties(GlassBar.XamlBridge PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+)
+
+install(TARGETS GlassBar.XamlBridge
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION bin
+    ARCHIVE DESTINATION lib
+)
+
 # Diagnostic tool (standalone executable)
 add_executable(WindowDiagnostic WindowDiagnostic.cpp)
 

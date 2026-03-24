@@ -81,6 +81,11 @@ GLASSBAR_API void CoreGetStatus(CoreStatus* status);
 // Returns false when shutdown is requested
 GLASSBAR_API bool CoreProcessMessages();
 
+// Set XamlBridge blur amount (0 = off, 1-100 = intensity).
+// On 22H2+ this triggers injection of GlassBar.XamlBridge.dll into explorer.exe
+// and applies acrylic blur from within the owner process.
+GLASSBAR_API void CoreSetTaskbarBlurAmount(int amount);
+
 // Register a global hotkey that toggles the taskbar overlay.
 // vk: virtual-key code (e.g. 'G' = 0x47); modifiers: MOD_CONTROL | MOD_ALT etc.
 // Pass vk=0 to disable the hotkey.

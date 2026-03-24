@@ -1,5 +1,6 @@
 #include "Core.h"
 #include "Diagnostics.h"
+#include <algorithm>
 
 namespace GlassBar {
 
@@ -38,6 +39,9 @@ bool Core::Initialize() {
     m_startEnabled = config.startEnabled;
     m_taskbarBlur = config.taskbarBlur;
     m_startBlur = config.startBlur;
+
+    // Load blur amount
+    m_blurAmount = config.blurAmount;
 
     // Schedule hotkey registration (will be picked up on first ProcessMessages call)
     if (config.hotkeyVk != 0) {
@@ -412,6 +416,12 @@ void Core::SetStartMenuBorderColor(DWORD rgb) {
         m_startMenuWindow->SetBorderColor(static_cast<COLORREF>(rgb));
         CF_LOG(Info, "Start Menu border color set to 0x" << std::hex << rgb << std::dec);
     }
+}
+
+void Core::SetTaskbarBlurAmount(int amount) {
+    m_blurAmount = std::clamp(amount, 0, 100);
+    if (m_renderer) m_renderer->SetTaskbarBlurAmount(m_blurAmount);
+    CF_LOG(Info, "Taskbar blur amount set to " << m_blurAmount);
 }
 
 void Core::RegisterHotkey(int vk, int modifiers) {

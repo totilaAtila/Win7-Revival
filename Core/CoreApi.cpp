@@ -276,6 +276,11 @@ GLASSBAR_API bool CoreProcessMessages() {
     return g_core->ProcessMessages();
 }
 
+GLASSBAR_API void CoreSetTaskbarBlurAmount(int amount) {
+    if (!g_core) return;
+    g_core->SetTaskbarBlurAmount(amount);
+}
+
 GLASSBAR_API void CoreRegisterHotkey(int vk, int modifiers) {
     if (!g_core) {
         CF_LOG(Warning, "CoreRegisterHotkey: Core not initialized");

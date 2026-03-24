@@ -3,6 +3,7 @@
 #include <wrl/client.h>
 #include <vector>
 #include <unordered_map>
+#include "XamlBridge/SharedBlurState.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -66,6 +67,10 @@ public:
     void SetTaskbarBlur(bool useBlur);
     void SetStartBlur(bool useBlur);
 
+    // XamlBridge: set blur amount 0-100 (0=off, 1-100=intensity hint)
+    // On 22H2+ this triggers injection of GlassBar.XamlBridge.dll into explorer.exe.
+    void SetTaskbarBlurAmount(int amount);
+
     // Reapply transparency (call periodically to maintain effect)
     void RefreshTransparency();
 
@@ -95,6 +100,18 @@ private:
     void ApplyTransparency(HWND hwnd, int opacity, bool enabled, bool useBlur);
     void ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled, int r, int g, int b, bool useBlur);
     void RestoreWindow(HWND hwnd);
+
+    // ── XamlBridge (blur injection into explorer.exe) ──────────────────────────
+    HANDLE           m_hSharedMem    = nullptr;   // file mapping created by us (Core side)
+    SharedBlurState* m_pSharedState  = nullptr;   // mapped view of shared memory
+    HMODULE          m_hXamlBridge   = nullptr;   // GlassBar.XamlBridge.dll handle
+    HHOOK            m_hInjHook      = nullptr;   // WH_CALLWNDPROC hook for injection
+    bool             m_bridgeInited  = false;     // injection attempted flag
+    int              m_blurAmount    = 0;         // 0-100
+
+    void InitXamlBridge();
+    void UpdateSharedState();
+    void ShutdownXamlBridge();
 
     // Iter#7: overlay window for color tint on 25H2+ (SWCA confirmed inert)
     std::unordered_map<HWND, HWND> m_overlayWindows; // taskbar HWND -> overlay HWND

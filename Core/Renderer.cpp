@@ -2,7 +2,9 @@
 #include "Diagnostics.h"
 #include <algorithm>
 #include <dwmapi.h>
+#include <shlwapi.h>
 #pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "shlwapi.lib")
 
 namespace GlassBar {
 
@@ -65,6 +67,7 @@ bool Renderer::Initialize() {
 }
 
 void Renderer::Shutdown() {
+    ShutdownXamlBridge();
     DestroyAllOverlays();
     // Restore original window states
     for (HWND h : m_hwndTaskbars) {
@@ -123,6 +126,7 @@ void Renderer::SetTaskbarOpacity(int opacity) {
         }
         CF_LOG(Debug, "Taskbar opacity set to " << opacity << "%");
     }
+    if (m_pSharedState) UpdateSharedState();
 }
 
 void Renderer::SetStartOpacity(int opacity) {
@@ -159,6 +163,7 @@ void Renderer::SetTaskbarColor(int r, int g, int b) {
                 m_taskbarColorR, m_taskbarColorG, m_taskbarColorB, m_taskbarBlur);
         }
     }
+    if (m_pSharedState) UpdateSharedState();
 }
 
 void Renderer::SetTaskbarEnabled(bool enabled) {
@@ -171,6 +176,7 @@ void Renderer::SetTaskbarEnabled(bool enabled) {
             RestoreWindow(h);
         }
     }
+    if (m_pSharedState) UpdateSharedState();
     CF_LOG(Info, "Taskbar transparency " << (enabled ? "enabled" : "disabled"));
 }
 
@@ -195,6 +201,7 @@ void Renderer::SetTaskbarBlur(bool useBlur) {
                 m_taskbarColorR, m_taskbarColorG, m_taskbarColorB, useBlur);
         }
     }
+    if (m_pSharedState) UpdateSharedState();
     CF_LOG(Info, "Taskbar blur " << (useBlur ? "enabled" : "disabled"));
 }
 
@@ -534,6 +541,158 @@ void Renderer::RefreshTransparency() {
         }
     }
     // Skip refreshing Start menu - Windows handles it; refreshing causes flicker
+}
+
+// ── XamlBridge integration ────────────────────────────────────────────────────
+
+void Renderer::SetTaskbarBlurAmount(int amount) {
+    amount = std::clamp(amount, 0, 100);
+    m_blurAmount = amount;
+
+    // On 22H2+ (22621+), activate XamlBridge injection for in-process SWCA.
+    // On older builds SWCA works fine cross-process; no bridge needed.
+    if (m_buildNumber >= 22621) {
+        if (!m_bridgeInited) {
+            InitXamlBridge();
+        }
+    }
+
+    UpdateSharedState();
+    CF_LOG(Info, "XamlBridge blur amount: " << amount);
+}
+
+void Renderer::InitXamlBridge() {
+    if (m_bridgeInited) return;
+    m_bridgeInited = true;  // mark early so we don't retry on failure
+
+    CF_LOG(Info, "XamlBridge: initializing (build " << m_buildNumber << ")");
+
+    // ── 1. Create shared memory ──────────────────────────────────────────
+    m_hSharedMem = CreateFileMappingW(
+        INVALID_HANDLE_VALUE, nullptr,
+        PAGE_READWRITE, 0, sizeof(SharedBlurState),
+        SharedBlurState::kName);
+
+    if (!m_hSharedMem) {
+        CF_LOG(Error, "XamlBridge: CreateFileMapping failed: " << GetLastError());
+        return;
+    }
+
+    m_pSharedState = reinterpret_cast<SharedBlurState*>(
+        MapViewOfFile(m_hSharedMem, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(SharedBlurState)));
+
+    if (!m_pSharedState) {
+        CF_LOG(Error, "XamlBridge: MapViewOfFile failed: " << GetLastError());
+        CloseHandle(m_hSharedMem);
+        m_hSharedMem = nullptr;
+        return;
+    }
+
+    ZeroMemory(m_pSharedState, sizeof(SharedBlurState));
+
+    // ── 2. Load GlassBar.XamlBridge.dll from same directory as Core ────
+    wchar_t corePath[MAX_PATH] = {};
+    GetModuleFileNameW(
+        GetModuleHandleW(L"GlassBar.Core.dll"), corePath, MAX_PATH);
+    PathRemoveFileSpecW(corePath);
+    PathAppendW(corePath, L"GlassBar.XamlBridge.dll");
+
+    m_hXamlBridge = LoadLibraryExW(corePath, nullptr, 0);
+    if (!m_hXamlBridge) {
+        CF_LOG(Error, "XamlBridge: LoadLibrary failed for '" << std::wstring(corePath).c_str()
+                      << "' err=" << GetLastError());
+        return;
+    }
+
+    // ── 3. Find exported hook proc ───────────────────────────────────────
+    auto hookProc = reinterpret_cast<HOOKPROC>(
+        GetProcAddress(m_hXamlBridge, "XamlBridgeHookProc"));
+
+    if (!hookProc) {
+        CF_LOG(Error, "XamlBridge: XamlBridgeHookProc export not found");
+        return;
+    }
+
+    // ── 4. Install WH_CALLWNDPROC hook on explorer's UI thread ──────────
+    HWND hwndTray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    if (!hwndTray) {
+        CF_LOG(Warning, "XamlBridge: Shell_TrayWnd not found — injection deferred");
+        return;
+    }
+
+    DWORD explorerTid = GetWindowThreadProcessId(hwndTray, nullptr);
+
+    m_hInjHook = SetWindowsHookExW(
+        WH_CALLWNDPROC, hookProc, m_hXamlBridge, explorerTid);
+
+    if (!m_hInjHook) {
+        CF_LOG(Error, "XamlBridge: SetWindowsHookEx failed: " << GetLastError());
+        return;
+    }
+
+    // ── 5. Deliver the hook by sending a harmless message to explorer ────
+    // This forces Windows to load XamlBridge.dll into explorer.exe immediately.
+    SendMessageTimeoutW(hwndTray, WM_NULL, 0, 0, SMTO_NORMAL, 500, nullptr);
+
+    CF_LOG(Info, "XamlBridge: hook installed (tid=" << explorerTid << ")");
+}
+
+void Renderer::UpdateSharedState() {
+    if (!m_pSharedState) return;
+
+    // Bump version to signal change to worker thread
+    InterlockedIncrement(const_cast<volatile LONG*>(&m_pSharedState->version));
+
+    bool blurOn = m_taskbarBlur && (m_blurAmount > 0) && m_taskbarEnabled;
+
+    InterlockedExchange(const_cast<volatile LONG*>(&m_pSharedState->blurEnabled),
+                        blurOn ? 1 : 0);
+    InterlockedExchange(const_cast<volatile LONG*>(&m_pSharedState->opacityPct),
+                        static_cast<LONG>(m_taskbarOpacity));
+    InterlockedExchange(const_cast<volatile LONG*>(&m_pSharedState->colorR),
+                        static_cast<LONG>(m_taskbarColorR));
+    InterlockedExchange(const_cast<volatile LONG*>(&m_pSharedState->colorG),
+                        static_cast<LONG>(m_taskbarColorG));
+    InterlockedExchange(const_cast<volatile LONG*>(&m_pSharedState->colorB),
+                        static_cast<LONG>(m_taskbarColorB));
+    InterlockedExchange(const_cast<volatile LONG*>(&m_pSharedState->blurAmount),
+                        static_cast<LONG>(m_blurAmount));
+
+    InterlockedIncrement(const_cast<volatile LONG*>(&m_pSharedState->version));
+}
+
+void Renderer::ShutdownXamlBridge() {
+    if (m_pSharedState) {
+        // Signal worker thread to stop
+        InterlockedExchange(
+            const_cast<volatile LONG*>(&m_pSharedState->shutdownRequest), 1);
+        // Give it time to restore taskbar appearance
+        Sleep(300);
+    }
+
+    if (m_hInjHook) {
+        UnhookWindowsHookEx(m_hInjHook);
+        m_hInjHook = nullptr;
+    }
+
+    if (m_pSharedState) {
+        UnmapViewOfFile(m_pSharedState);
+        m_pSharedState = nullptr;
+    }
+
+    if (m_hSharedMem) {
+        CloseHandle(m_hSharedMem);
+        m_hSharedMem = nullptr;
+    }
+
+    // Note: m_hXamlBridge is intentionally NOT freed with FreeLibrary here.
+    // The DLL is still loaded in explorer.exe's address space. The worker thread
+    // in explorer will shut down after reading shutdownRequest=1 from shared mem
+    // and the hook being removed. Calling FreeLibrary on our side only removes
+    // our reference; explorer's reference persists until explorer restarts.
+    m_hXamlBridge = nullptr;
+
+    CF_LOG(Info, "XamlBridge shutdown complete");
 }
 
 } // namespace GlassBar

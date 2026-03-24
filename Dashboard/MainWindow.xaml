@@ -221,6 +221,29 @@
                                         <ToolTipService.ToolTip>Apply acrylic blur behind the Taskbar overlay</ToolTipService.ToolTip>
                                     </ToggleSwitch>
                                 </Grid>
+
+                                <!-- Blur amount (XamlBridge — all Win11 builds) -->
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="82"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="28"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center" Spacing="1">
+                                        <TextBlock Text="Blur amount" FontSize="11"/>
+                                        <TextBlock Text="XamlBridge" FontSize="9"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                    <Slider Grid.Column="1" x:Name="BlurAmountSlider"
+                                            Minimum="0" Maximum="100" StepFrequency="1"
+                                            ValueChanged="BlurAmount_ValueChanged">
+                                        <ToolTipService.ToolTip>Acrylic blur intensity via XamlBridge injection (0 = off, requires Win11 22H2+)</ToolTipService.ToolTip>
+                                    </Slider>
+                                    <TextBlock Grid.Column="2" x:Name="BlurAmountValue"
+                                               TextAlignment="Right" VerticalAlignment="Center"
+                                               FontSize="10"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
 

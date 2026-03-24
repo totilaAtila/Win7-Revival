@@ -107,6 +107,10 @@ namespace GlassBar.Dashboard
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool CoreProcessMessages();
 
+        // Set XamlBridge blur amount (0=off, 1-100=intensity).
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void CoreSetTaskbarBlurAmount(int amount);
+
         // Register a global hotkey to toggle the taskbar overlay.
         // vk: virtual-key code; modifiers: MOD_CONTROL=0x2, MOD_ALT=0x1, MOD_SHIFT=0x4, MOD_WIN=0x8
         // Pass vk=0 to disable.

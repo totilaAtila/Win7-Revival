@@ -145,6 +145,20 @@ namespace GlassBar.Dashboard
             set { if (SetProperty(ref _startBlur, value)) _config.StartBlur = value; }
         }
 
+        private int _blurAmount;
+        public int BlurAmount
+        {
+            get => _blurAmount;
+            set
+            {
+                if (SetProperty(ref _blurAmount, value))
+                {
+                    _config.BlurAmount = value;
+                    _core.SetTaskbarBlurAmount(value);
+                }
+            }
+        }
+
         // S-B: Keep Start Menu open for Dashboard preview (not persisted)
         private bool _startMenuPinned;
         public bool StartMenuPinned
@@ -266,6 +280,7 @@ namespace GlassBar.Dashboard
                 StartEnabled = _config.StartEnabled;
                 TaskbarBlur = _config.TaskbarBlur;
                 StartBlur = _config.StartBlur;
+                _blurAmount = _config.BlurAmount;  // load without triggering setter
                 CoreEnabled = _config.CoreEnabled;
                 TaskbarColorR = _config.TaskbarColorR;
                 TaskbarColorG = _config.TaskbarColorG;
@@ -324,6 +339,7 @@ namespace GlassBar.Dashboard
                 _core.SetTaskbarColor(TaskbarColorR, TaskbarColorG, TaskbarColorB);
                 _core.SetTaskbarBlur(TaskbarBlur);
                 _core.SetStartBlur(StartBlur);
+                if (_blurAmount > 0) _core.SetTaskbarBlurAmount(_blurAmount);
 
                 // Apply Start Menu customization
                 _core.SetStartMenuOpacity(StartOpacity);

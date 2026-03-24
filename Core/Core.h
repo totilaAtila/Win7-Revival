@@ -34,6 +34,9 @@ public:
     void SetTaskbarColor(int r, int g, int b);
     void SetTaskbarBlur(bool enabled);
     void SetStartBlur(bool enabled);
+
+    // XamlBridge: blur amount 0-100 (0 = off, 1-100 = intensity)
+    void SetTaskbarBlurAmount(int amount);
     void SetStartMenuHookEnabled(bool enabled);
     void SetStartMenuOpacity(int opacity);
     void SetStartMenuBackgroundColor(DWORD rgb);
@@ -77,6 +80,7 @@ private:
     bool m_startEnabled = true;
     bool m_taskbarBlur = false;
     bool m_startBlur = false;
+    int  m_blurAmount = 0;
     int m_taskbarOpacity = 75;
     int m_startOpacity = 50;
 

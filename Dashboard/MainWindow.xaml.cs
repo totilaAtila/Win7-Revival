@@ -276,6 +276,8 @@ namespace GlassBar.Dashboard
                 TaskbarOpacitySlider.Value  = _viewModel.TaskbarOpacity;
                 TaskbarEnabledToggle.IsOn   = _viewModel.TaskbarEnabled;
                 TaskbarBlurToggle.IsOn      = _viewModel.TaskbarBlur;
+                BlurAmountSlider.Value      = _viewModel.BlurAmount;
+                BlurAmountValue.Text        = _viewModel.BlurAmount.ToString();
                 TaskbarColorRSlider.Value   = _viewModel.TaskbarColorR;
                 TaskbarColorGSlider.Value   = _viewModel.TaskbarColorG;
                 TaskbarColorBSlider.Value   = _viewModel.TaskbarColorB;
@@ -519,6 +521,16 @@ namespace GlassBar.Dashboard
         {
             if (!_isDetailInitialized) return;
             _viewModel.OnTaskbarBlurChanged(TaskbarBlurToggle.IsOn);
+        }
+
+        private CancellationTokenSource _cts_blurAmount = new();
+
+        private void BlurAmount_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+        {
+            int value = (int)e.NewValue;
+            BlurAmountValue.Text = value.ToString();
+            if (!_isDetailInitialized) return;
+            DebounceSlider(ref _cts_blurAmount, () => _viewModel.BlurAmount = value);
         }
 
         // ── Generic debounce helper ───────────────────────────────────────────

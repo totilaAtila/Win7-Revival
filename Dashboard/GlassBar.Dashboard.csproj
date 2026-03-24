@@ -32,6 +32,10 @@
           Link="GlassBar.Core.dll"
           CopyToOutputDirectory="PreserveNewest"
           Condition="Exists('..\Core\build\bin\Release\GlassBar.Core.dll')" />
+    <None Include="..\Core\build\bin\Release\GlassBar.XamlBridge.dll"
+          Link="GlassBar.XamlBridge.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('..\Core\build\bin\Release\GlassBar.XamlBridge.dll')" />
   </ItemGroup>
   <Target Name="WarnIfCoreDllMissing" BeforeTargets="Build">
     <Warning Text="GlassBar.Core.dll not found at ..\Core\build\bin\Release\. Build the Core C++ project first (cmake --build Core/build --config Release). The Dashboard will compile but crash at runtime without it."

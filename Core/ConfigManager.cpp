@@ -98,6 +98,15 @@ bool ConfigManager::Load() {
                 catch (const std::exception&) {}
             }
         }
+        else if (line.find("\"blurAmount\":") != std::string::npos) {
+            size_t pos = line.find(':');
+            if (pos != std::string::npos) {
+                std::string value = line.substr(pos + 1);
+                value.erase(std::remove(value.begin(), value.end(), ','), value.end());
+                try { tempConfig.blurAmount = std::clamp(std::stoi(value), 0, 100); }
+                catch (const std::exception&) {}
+            }
+        }
     }
 
     file.close();
@@ -131,7 +140,8 @@ bool ConfigManager::Save() {
     file << "  \"taskbarBlur\": " << (m_config.taskbarBlur ? "true" : "false") << ",\n";
     file << "  \"startBlur\": " << (m_config.startBlur ? "true" : "false") << ",\n";
     file << "  \"hotkeyVk\": " << m_config.hotkeyVk << ",\n";
-    file << "  \"hotkeyModifiers\": " << m_config.hotkeyModifiers << "\n";
+    file << "  \"hotkeyModifiers\": " << m_config.hotkeyModifiers << ",\n";
+    file << "  \"blurAmount\": " << m_config.blurAmount << "\n";
     file << "}\n";
     
     file.close();

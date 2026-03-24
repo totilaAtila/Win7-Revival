@@ -210,6 +210,18 @@ namespace GlassBar.Dashboard
             CoreNative.CoreSetStartMenuPinned(pinned);
         }
 
+        /// <summary>
+        /// Set XamlBridge blur intensity (0 = off, 1-100 = intensity).
+        /// On Win11 22H2+ this injects GlassBar.XamlBridge.dll into explorer.exe
+        /// and applies acrylic blur from within the owner process.
+        /// </summary>
+        public void SetTaskbarBlurAmount(int amount)
+        {
+            if (!_running) return;
+            Debug.WriteLine($"[CoreManager] SetTaskbarBlurAmount({amount})");
+            CoreNative.CoreSetTaskbarBlurAmount(amount);
+        }
+
         /// <summary>Register a global hotkey that toggles the taskbar overlay.</summary>
         /// <param name="vk">Virtual-key code (e.g. (int)'G' = 0x47). Pass 0 to disable.</param>
         /// <param name="modifiers">MOD_CONTROL=2, MOD_ALT=1, MOD_SHIFT=4, MOD_WIN=8 (combinable).</param>
