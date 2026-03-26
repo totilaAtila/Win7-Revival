@@ -1,0 +1,5 @@
+LIBRARY GlassBar.XamlBridge
+EXPORTS
+    XamlBridgeHookProc
+    DllGetClassObject
+    DllCanUnloadNow

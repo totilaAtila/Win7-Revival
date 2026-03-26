@@ -8,6 +8,15 @@
 
 namespace GlassBar {
 
+static std::string WideToUtf8(const wchar_t* wstr) {
+    if (!wstr || !*wstr) return "";
+    int size = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, nullptr, 0, nullptr, nullptr);
+    if (size <= 0) return "";
+    std::string result(size - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wstr, -1, &result[0], size, nullptr, nullptr);
+    return result;
+}
+
 Renderer::Renderer() {
 }
 
@@ -290,36 +299,22 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
         return;
     }
 
-    // Iter#6: SWCA confirmed inert on 25H2 (result=1, GetLastError=0 but zero visual
-    // effect). LWA_ALPHA is the only working transparency mechanism for 25H2+ taskbar.
-    // Iter#7: overlay window adds color tint on top of Shell_TrayWnd.
+    // Iter#10: For 25H2+ (build >= 26200), the taskbar background is XAML-rendered.
+    // All Win32/DWM approaches (LWA_ALPHA, DwmBlurBehind, SWCA cross- or in-process)
+    // cannot affect the XAML Rectangle#BackgroundFill that paints over the DWM backdrop.
+    //
+    // XamlBridge.dll (injected into explorer.exe) uses InitializeXamlDiagnosticsEx to
+    // register as a TAP (Taskbar Appearance Provider), receiving OnVisualTreeChange
+    // callbacks and setting Fill directly on Rectangle#BackgroundFill from within the
+    // XAML runtime — the only path that actually works (same mechanism as Windhawk).
+    //
+    // No overlay window needed: color/opacity are encoded in the SolidColorBrush ARGB,
+    // and blur is handled via AcrylicBrush. Icons are unaffected (only Fill changes).
     if (!isStartMenu && m_buildNumber >= 26200) {
-        LONG exStyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
-        if (enabled && opacity > 0) {
-            if (!(exStyle & WS_EX_LAYERED))
-                SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
-            BYTE alpha = static_cast<BYTE>(((100 - opacity) * 255) / 100);
-            SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
-            CF_LOG(Info, "[TASKBAR] Win25H2+ LWA_ALPHA applied: alpha=" << (int)alpha);
-
-            // Overlay for color tint (Iter#7)
-            EnsureOverlayWindow(hwnd);
-            auto it = m_overlayWindows.find(hwnd);
-            if (it != m_overlayWindows.end()) {
-                UpdateOverlayAppearance(it->second, r, g, b, opacity, true);
-            }
-        } else {
-            if (exStyle & WS_EX_LAYERED)
-                SetWindowLongW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
-            CF_LOG(Info, "[TASKBAR] Win25H2+ LWA disabled");
-
-            // Hide overlay
-            auto it = m_overlayWindows.find(hwnd);
-            if (it != m_overlayWindows.end()) {
-                ShowWindow(it->second, SW_HIDE);
-            }
-        }
-        // Fall through — SWCA call below is diagnostic-only (result=1, no visual effect).
+        if (!m_bridgeInited) InitXamlBridge();
+        UpdateSharedState();  // XamlBridge TAP reads shared state and refreshes shapes
+        CF_LOG(Info, "[TASKBAR] Win25H2+ delegated to XamlBridge TAP");
+        return;
     }
 
     ACCENT_POLICY accent = {};
@@ -426,7 +421,7 @@ void Renderer::EnsureOverlayWindow(HWND taskbarHwnd) {
         }
     }
 
-    // Reposition existing valid overlay
+    // Reposition existing valid overlay (TOPMOST above Shell_TrayWnd for color tint)
     auto it = m_overlayWindows.find(taskbarHwnd);
     if (it != m_overlayWindows.end()) {
         if (IsWindow(it->second)) {
@@ -434,13 +429,13 @@ void Renderer::EnsureOverlayWindow(HWND taskbarHwnd) {
             GetWindowRect(taskbarHwnd, &rc);
             SetWindowPos(it->second, HWND_TOPMOST,
                 rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
-                SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+                SWP_NOACTIVATE);
             return;
         }
         m_overlayWindows.erase(it);
     }
 
-    // Create overlay
+    // Create overlay — TOPMOST above Shell_TrayWnd, click-through, for color tint
     RECT rc;
     GetWindowRect(taskbarHwnd, &rc);
     HWND overlay = CreateWindowExW(
@@ -457,6 +452,9 @@ void Renderer::EnsureOverlayWindow(HWND taskbarHwnd) {
         return;
     }
     m_overlayWindows[taskbarHwnd] = overlay;
+    SetWindowPos(overlay, HWND_TOPMOST,
+        rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
+        SWP_NOACTIVATE);
     CF_LOG(Info, "[TASKBAR] Overlay created HWND=0x" << std::hex
                  << reinterpret_cast<uintptr_t>(overlay)
                  << " for taskbar 0x" << reinterpret_cast<uintptr_t>(taskbarHwnd) << std::dec);
@@ -471,8 +469,8 @@ void Renderer::UpdateOverlayAppearance(HWND overlayHwnd, int r, int g, int b, in
     }
 
     SetWindowLongPtrW(overlayHwnd, GWLP_USERDATA, (LONG_PTR)RGB(r, g, b));
-    // Match Shell_TrayWnd LWA formula: opacity=75 -> colorAlpha=63 (25% opaque = light tint).
-    // Overlay transparency tracks taskbar transparency so wallpaper stays visible through both.
+    // opacity=100 (fully transparent) -> colorAlpha=0 (no tint, just transparent bg).
+    // opacity=50 -> colorAlpha=127 (semi-visible color tint above Shell_TrayWnd).
     BYTE colorAlpha = static_cast<BYTE>(((100 - opacity) * 255) / 100);
     SetLayeredWindowAttributes(overlayHwnd, 0, colorAlpha, LWA_ALPHA);
     ShowWindow(overlayHwnd, SW_SHOWNA);
@@ -599,7 +597,7 @@ void Renderer::InitXamlBridge() {
 
     m_hXamlBridge = LoadLibraryExW(corePath, nullptr, 0);
     if (!m_hXamlBridge) {
-        CF_LOG(Error, "XamlBridge: LoadLibrary failed for '" << std::wstring(corePath).c_str()
+        CF_LOG(Error, "XamlBridge: LoadLibrary failed for '" << WideToUtf8(corePath)
                       << "' err=" << GetLastError());
         return;
     }
@@ -643,10 +641,12 @@ void Renderer::UpdateSharedState() {
     // Bump version to signal change to worker thread
     InterlockedIncrement(const_cast<volatile LONG*>(&m_pSharedState->version));
 
-    bool blurOn = m_taskbarBlur && (m_blurAmount > 0) && m_taskbarEnabled;
+    // Signal XamlBridge to apply transparency whenever taskbar effect is active.
+    // blurAmount=0 → XamlBridge uses TRANSPARENTGRADIENT; blurAmount>0 → ACRYLICBLUR.
+    bool transOn = m_taskbarEnabled && (m_taskbarOpacity > 0);
 
     InterlockedExchange(const_cast<volatile LONG*>(&m_pSharedState->blurEnabled),
-                        blurOn ? 1 : 0);
+                        transOn ? 1 : 0);
     InterlockedExchange(const_cast<volatile LONG*>(&m_pSharedState->opacityPct),
                         static_cast<LONG>(m_taskbarOpacity));
     InterlockedExchange(const_cast<volatile LONG*>(&m_pSharedState->colorR),
