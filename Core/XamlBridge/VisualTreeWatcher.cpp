@@ -601,19 +601,10 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
                     
                     XBLogFmt(L"  >>> Rectangle Name='%s'", name.c_str());
                     
-                    // Check if this is BackgroundFill or BackgroundStroke (unique names)
-                    if (name == L"BackgroundFill" || name == L"BackgroundStroke") {
-                        XBLogFmt(L"  *** FOUND %s via TAP (any Rectangle) - applying INSTANTLY ***", name.c_str());
-                        
-                        BrushTargetProp prop = (name == L"BackgroundStroke") 
-                            ? BrushTargetProp::Stroke 
-                            : BrushTargetProp::Fill;
-                        
-                        // Apply IMMEDIATELY synchronously for instant effect
-                        DispatchApplyToBgElement(fe, prop, L"[TAP]");
-                        
-                        XBLogFmt(L"  *** %s applied via TAP - effect should be INSTANT ***", name.c_str());
-                    }
+                    // TEST: Apply to ALL Rectangles (not just BackgroundFill) to verify pipeline
+                    XBLogFmt(L"  >>> TEST: Applying transparency to ANY Rectangle '%s'", name.c_str());
+                    DispatchApplyToBgElement(fe, BrushTargetProp::Fill, L"[TEST]");
+                    XBLogFmt(L"  >>> TEST: Applied - check if Rectangle '%s' changed visually", name.c_str());
                 }
             }
         }
