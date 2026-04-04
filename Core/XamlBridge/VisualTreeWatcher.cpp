@@ -18,10 +18,127 @@
 static std::atomic<int>            g_loggedElements   { 0 };
 static constexpr int               kMaxLoggedElements = 10000;
 static std::atomic<InstanceHandle> g_taskbarBgHandle  { 0 };
+static std::atomic<unsigned int>   g_fillPropertyIndex   { UINT_MAX };
+static std::atomic<unsigned int>   g_strokePropertyIndex { UINT_MAX };
 
 // ---------------------------------------------------------------------------
 // Brush helpers
 // ---------------------------------------------------------------------------
+
+static void FreePropertyChain(unsigned int sourceCount,
+    PropertyChainSource* sources,
+    unsigned int propertyCount,
+    PropertyChainValue* values)
+{
+    if (sources) {
+        for (unsigned int i = 0; i < sourceCount; ++i) {
+            SysFreeString(sources[i].TargetType);
+            SysFreeString(sources[i].Name);
+            SysFreeString(sources[i].SrcInfo.FileName);
+            SysFreeString(sources[i].SrcInfo.Hash);
+        }
+        CoTaskMemFree(sources);
+    }
+
+    if (values) {
+        for (unsigned int i = 0; i < propertyCount; ++i) {
+            SysFreeString(values[i].Type);
+            SysFreeString(values[i].DeclaringType);
+            SysFreeString(values[i].ValueType);
+            SysFreeString(values[i].ItemType);
+            SysFreeString(values[i].Value);
+            SysFreeString(values[i].PropertyName);
+        }
+        CoTaskMemFree(values);
+    }
+}
+
+static bool TryResolveHandle(const wux::FrameworkElement& element, InstanceHandle& outHandle)
+{
+    outHandle = 0;
+    if (!g_xamlDiagnostics) {
+        XBLog(L"TryResolveHandle: g_xamlDiagnostics is null");
+        return false;
+    }
+
+    try {
+        auto obj = element.as<winrt::Windows::Foundation::IInspectable>();
+        HRESULT hr = g_xamlDiagnostics->GetHandleFromIInspectable(
+            reinterpret_cast<::IInspectable*>(winrt::get_abi(obj)),
+            &outHandle);
+        if (FAILED(hr) || outHandle == 0) {
+            XBLogFmt(L"TryResolveHandle: GetHandleFromIInspectable failed hr=0x%08X", hr);
+            outHandle = 0;
+            return false;
+        }
+        return true;
+    }
+    catch (const winrt::hresult_error& ex) {
+        XBLogFmt(L"TryResolveHandle: threw 0x%08X: %s", ex.code(), ex.message().c_str());
+    }
+    catch (...) {
+        XBLog(L"TryResolveHandle: threw unknown");
+    }
+
+    return false;
+}
+
+static bool TryGetPropertyIndex(InstanceHandle handle, BrushTargetProp prop, unsigned int& outIndex)
+{
+    auto& cache = (prop == BrushTargetProp::Stroke) ? g_strokePropertyIndex : g_fillPropertyIndex;
+    unsigned int cached = cache.load();
+    if (cached != UINT_MAX) {
+        outIndex = cached;
+        return true;
+    }
+
+    if (!g_visualTreeService3) {
+        XBLog(L"TryGetPropertyIndex: g_visualTreeService3 is null");
+        return false;
+    }
+
+    unsigned int sourceCount = 0;
+    unsigned int propertyCount = 0;
+    PropertyChainSource* sources = nullptr;
+    PropertyChainValue* values = nullptr;
+    HRESULT hr = g_visualTreeService3->GetPropertyValuesChain(
+        handle, &sourceCount, &sources, &propertyCount, &values);
+    if (FAILED(hr) || !values) {
+        XBLogFmt(L"TryGetPropertyIndex: GetPropertyValuesChain failed hr=0x%08X handle=0x%llX",
+            hr, static_cast<unsigned long long>(handle));
+        FreePropertyChain(sourceCount, sources, propertyCount, values);
+        return false;
+    }
+
+    const wchar_t* wanted = (prop == BrushTargetProp::Stroke) ? L"Stroke" : L"Fill";
+    bool found = false;
+    for (unsigned int i = 0; i < propertyCount; ++i) {
+        if (values[i].PropertyName && wcscmp(values[i].PropertyName, wanted) == 0) {
+            outIndex = values[i].Index;
+            cache.store(outIndex);
+            XBLogFmt(L"TryGetPropertyIndex: %s index=%u handle=0x%llX",
+                wanted, outIndex, static_cast<unsigned long long>(handle));
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        XBLogFmt(L"TryGetPropertyIndex: %s not found on handle=0x%llX (properties=%u)",
+            wanted, static_cast<unsigned long long>(handle), propertyCount);
+        for (unsigned int i = 0; i < propertyCount && i < 32; ++i) {
+            XBLogFmt(L"  prop[%u]: index=%u name=%s type=%s valueType=%s",
+                i,
+                values[i].Index,
+                values[i].PropertyName ? values[i].PropertyName : L"(null)",
+                values[i].Type ? values[i].Type : L"(null)",
+                values[i].ValueType ? values[i].ValueType : L"(null)");
+        }
+    }
+
+    FreePropertyChain(sourceCount, sources, propertyCount, values);
+    return found;
+}
 
 BrushParams ReadBrushParams(const SharedBlurState* s)
 {
@@ -39,8 +156,7 @@ BrushParams ReadBrushParams(const SharedBlurState* s)
     return p;
 }
 
-// Must be called on the XAML UI thread (OnVisualTreeChange or dispatcher callback).
-void ApplyBrushParams(const wux::FrameworkElement& element, BrushTargetProp prop, const BrushParams& p)
+static void ApplyBrushParamsFallback(const wux::FrameworkElement& element, BrushTargetProp prop, const BrushParams& p)
 {
     auto targetProp = (prop == BrushTargetProp::Stroke)
         ? wuxs::Shape::StrokeProperty()
@@ -62,6 +178,83 @@ void ApplyBrushParams(const wux::FrameworkElement& element, BrushTargetProp prop
         propName, p.alpha, p.r, p.g, p.b, p.useBlur ? 1 : 0);
     element.SetValue(targetProp, brush);
     XBLogFmt(L"ApplyBrushParams: solid %s applied", propName);
+}
+
+void ApplyBrushParams(InstanceHandle handle, const wux::FrameworkElement& element, BrushTargetProp prop, const BrushParams& p)
+{
+    const wchar_t* propName = (prop == BrushTargetProp::Stroke) ? L"Stroke" : L"Fill";
+
+    if (handle == 0) {
+        InstanceHandle resolvedHandle = 0;
+        if (TryResolveHandle(element, resolvedHandle))
+            handle = resolvedHandle;
+    }
+
+    if (!g_visualTreeService3 || handle == 0) {
+        XBLogFmt(L"ApplyBrushParams: native path unavailable for %s (svc3=%d handle=0x%llX) -> fallback",
+            propName, g_visualTreeService3 ? 1 : 0, static_cast<unsigned long long>(handle));
+        ApplyBrushParamsFallback(element, prop, p);
+        return;
+    }
+
+    unsigned int propertyIndex = UINT_MAX;
+    if (!TryGetPropertyIndex(handle, prop, propertyIndex)) {
+        XBLogFmt(L"ApplyBrushParams: property index lookup failed for %s -> fallback", propName);
+        ApplyBrushParamsFallback(element, prop, p);
+        return;
+    }
+
+    if (!p.enabled) {
+        HRESULT hr = g_visualTreeService3->ClearProperty(handle, propertyIndex);
+        XBLogFmt(L"ApplyBrushParams: native ClearProperty(%s) hr=0x%08X handle=0x%llX index=%u",
+            propName, hr, static_cast<unsigned long long>(handle), propertyIndex);
+        if (SUCCEEDED(hr))
+            return;
+
+        XBLogFmt(L"ApplyBrushParams: native ClearProperty failed for %s -> fallback", propName);
+        ApplyBrushParamsFallback(element, prop, p);
+        return;
+    }
+
+    try {
+        wu::Color color{ p.alpha, p.r, p.g, p.b };
+        wuxm::SolidColorBrush brush{};
+        brush.Color(color);
+
+        InstanceHandle brushHandle = 0;
+        auto brushObj = brush.as<winrt::Windows::Foundation::IInspectable>();
+        HRESULT hr = g_xamlDiagnostics
+            ? g_xamlDiagnostics->GetHandleFromIInspectable(
+                reinterpret_cast<::IInspectable*>(winrt::get_abi(brushObj)),
+                &brushHandle)
+            : E_POINTER;
+        XBLogFmt(L"ApplyBrushParams: brush handle resolve for %s hr=0x%08X brushHandle=0x%llX",
+            propName, hr, static_cast<unsigned long long>(brushHandle));
+        if (FAILED(hr) || brushHandle == 0) {
+            XBLogFmt(L"ApplyBrushParams: brush handle resolve failed for %s -> fallback", propName);
+            ApplyBrushParamsFallback(element, prop, p);
+            return;
+        }
+
+        hr = g_visualTreeService3->SetProperty(handle, brushHandle, propertyIndex);
+        XBLogFmt(L"ApplyBrushParams: native SetProperty(%s) hr=0x%08X target=0x%llX value=0x%llX index=%u",
+            propName, hr,
+            static_cast<unsigned long long>(handle),
+            static_cast<unsigned long long>(brushHandle),
+            propertyIndex);
+        if (SUCCEEDED(hr))
+            return;
+    }
+    catch (const winrt::hresult_error& ex) {
+        XBLogFmt(L"ApplyBrushParams: native path threw 0x%08X on %s: %s",
+            ex.code(), propName, ex.message().c_str());
+    }
+    catch (...) {
+        XBLogFmt(L"ApplyBrushParams: native path threw unknown on %s", propName);
+    }
+
+    XBLogFmt(L"ApplyBrushParams: native SetProperty failed for %s -> fallback", propName);
+    ApplyBrushParamsFallback(element, prop, p);
 }
 
 // ---------------------------------------------------------------------------
@@ -86,57 +279,10 @@ static void RegisterAndApplyTarget(InstanceHandle handle, const wux::FrameworkEl
     }
 
     BrushParams p = ReadBrushParams(g_pState);
-    ApplyBrushParams(element, prop, p);
+    ApplyBrushParams(handle, element, prop, p);
 }
 
-static bool QueueShapeApply(
-    InstanceHandle handle,
-    const wux::FrameworkElement& element,
-    const wchar_t* elementName,
-    const wchar_t* logTag) noexcept
-{
-    try {
-        auto disp = element.Dispatcher();
-        if (!disp) {
-            XBLogFmt(L"%s %s: Dispatcher() returned null", logTag, elementName);
-            return false;
-        }
-
-        XBLogFmt(L"%s %s: queueing apply on Dispatcher", logTag, elementName);
-        auto action = disp.RunAsync(wuc::CoreDispatcherPriority::Normal,
-            [handle, element, tag = std::wstring(logTag), name = std::wstring(elementName)]() noexcept {
-                try {
-                    XBLogFmt(L"%s %s: dispatcher callback entered", tag.c_str(), name.c_str());
-                    BrushTargetProp prop = (name == L"BackgroundStroke")
-                        ? BrushTargetProp::Stroke
-                        : BrushTargetProp::Fill;
-                    XBLogFmt(L"%s %s: applying via DependencyProperty on Dispatcher", tag.c_str(), name.c_str());
-                    RegisterAndApplyTarget(handle, element, prop);
-                    XBLogFmt(L"%s %s: RegisterAndApplyTarget finished", tag.c_str(), name.c_str());
-                }
-                catch (const winrt::hresult_error& ex) {
-                    XBLogFmt(L"%s %s: dispatcher callback threw 0x%08X: %s",
-                        tag.c_str(), name.c_str(), ex.code(), ex.message().c_str());
-                }
-                catch (...) {
-                    XBLogFmt(L"%s %s: dispatcher callback threw unknown", tag.c_str(), name.c_str());
-                }
-            });
-
-        XBLogFmt(L"%s %s: Dispatcher.RunAsync returned %s", logTag, elementName, action ? L"action" : L"null");
-        return static_cast<bool>(action);
-    }
-    catch (const winrt::hresult_error& ex) {
-        XBLogFmt(L"%s %s: queueing threw 0x%08X: %s", logTag, elementName, ex.code(), ex.message().c_str());
-    }
-    catch (...) {
-        XBLogFmt(L"%s %s: queueing threw unknown", logTag, elementName);
-    }
-
-    return false;
-}
-
-static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, const wchar_t* logTag) noexcept
+static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, IXamlDiagnostics* diag, const wchar_t* logTag) noexcept
 {
     bool foundAny = false;
     try {
@@ -186,9 +332,19 @@ static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, const wchar_t* lo
                 bool isBgStroke = (grandName == L"BackgroundStroke");
                 if (!isBgFill && !isBgStroke) continue;
 
-                XBLogFmt(L"%s found %s - queueing dispatcher apply", logTag, grandName.c_str());
-                if (QueueShapeApply(0, grandFE, grandName.c_str(), logTag))
-                    foundAny = true;
+                InstanceHandle grandHandle = 0;
+                HRESULT hr = diag
+                    ? diag->GetHandleFromIInspectable(
+                        reinterpret_cast<::IInspectable*>(winrt::get_abi(grand)),
+                        &grandHandle)
+                    : E_POINTER;
+                XBLogFmt(L"%s found %s - handle resolve hr=0x%08X handle=0x%llX",
+                    logTag, grandName.c_str(), hr, static_cast<unsigned long long>(grandHandle));
+
+                BrushTargetProp prop = isBgStroke ? BrushTargetProp::Stroke : BrushTargetProp::Fill;
+                RegisterAndApplyTarget(grandHandle, grandFE, prop);
+                XBLogFmt(L"%s RegisterAndApplyTarget finished for %s", logTag, grandName.c_str());
+                foundAny = true;
             }
         }
     }
@@ -238,7 +394,7 @@ void VisualTreeWatcher::WalkTaskbarBgPostReplay() noexcept
     }
 
     XBLog(L"[PostReplay] walk started");
-    if (!WalkTaskbarBgTree(fe, L"[PostReplay]"))
+    if (!WalkTaskbarBgTree(fe, g_walkDiagnostics.get(), L"[PostReplay]"))
         XBLog(L"[PostReplay] no BackgroundFill/BackgroundStroke found");
 }
 
@@ -296,7 +452,7 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
             }
 
             XBLog(L"[Inline] walk started");
-            if (!WalkTaskbarBgTree(fe, L"[Inline]")) {
+            if (!WalkTaskbarBgTree(fe, m_diagnostics.get(), L"[Inline]")) {
                 g_walkDiagnostics = m_diagnostics;
                 g_walkNeeded.store(true);
                 XBLog(L"[Inline] no BackgroundFill/BackgroundStroke found - WorkerThread fallback requested");
@@ -342,7 +498,7 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
         BrushTargetProp prop = (runtimeName == L"BackgroundStroke")
             ? BrushTargetProp::Stroke
             : BrushTargetProp::Fill;
-        XBLogFmt(L"  >>> Applying brush to Name=%s via DependencyProperty", runtimeName.c_str());
+        XBLogFmt(L"  >>> Applying brush to Name=%s via native/managed bridge", runtimeName.c_str());
         RegisterAndApplyTarget(element.Handle, fe, prop);
     }
     catch (...) {}

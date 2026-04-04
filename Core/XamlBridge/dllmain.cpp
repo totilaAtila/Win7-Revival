@@ -23,6 +23,8 @@ winrt::com_ptr<VisualTreeWatcher> g_visualTreeWatcher;
 // WorkerThread walk dispatch — written by callback thread, consumed by WorkerThread
 std::atomic<bool>                g_walkNeeded     { false };
 winrt::com_ptr<IXamlDiagnostics> g_walkDiagnostics;
+winrt::com_ptr<IXamlDiagnostics> g_xamlDiagnostics;
+winrt::com_ptr<IVisualTreeService3> g_visualTreeService3;
 
 static HANDLE            g_hWorkerThread = nullptr;
 
@@ -139,8 +141,8 @@ static DWORD WINAPI WorkerThread(LPVOID)
                     auto disp = entry.element.Dispatcher();
                     if (!disp) continue;
                     disp.RunAsync(wuc::CoreDispatcherPriority::Normal,
-                        [element = entry.element, prop = entry.prop, params]() noexcept {
-                            try { ApplyBrushParams(element, prop, params); }
+                        [handle = entry.handle, element = entry.element, prop = entry.prop, params]() noexcept {
+                            try { ApplyBrushParams(handle, element, prop, params); }
                             catch (...) {}
                         });
                 }
@@ -165,12 +167,12 @@ static DWORD WINAPI WorkerThread(LPVOID)
                 auto disp = entry.element.Dispatcher();
                 if (!disp) continue;
                 disp.RunAsync(wuc::CoreDispatcherPriority::High,
-                    [element = entry.element, prop = entry.prop]() noexcept {
+                    [handle = entry.handle, element = entry.element, prop = entry.prop]() noexcept {
                         try {
                             BrushParams p{};
                             p.enabled = false;
                             p.useBlur = false;
-                            ApplyBrushParams(element, prop, p);
+                            ApplyBrushParams(handle, element, prop, p);
                         }
                         catch (...) {}
                     });
@@ -181,6 +183,9 @@ static DWORD WINAPI WorkerThread(LPVOID)
     }
 
     g_visualTreeWatcher = nullptr;  // release before CoUninitialize
+    g_visualTreeService3 = nullptr;
+    g_xamlDiagnostics = nullptr;
+    g_walkDiagnostics = nullptr;
 
     UnmapViewOfFile(g_pState);
     g_pState = nullptr;

@@ -76,6 +76,8 @@ extern std::vector<ShapeEntry>  g_knownShapes;
 extern std::mutex               g_shapesMtx;
 extern std::atomic<bool>                g_walkNeeded;
 extern winrt::com_ptr<IXamlDiagnostics> g_walkDiagnostics;
+extern winrt::com_ptr<IXamlDiagnostics> g_xamlDiagnostics;
+extern winrt::com_ptr<IVisualTreeService3> g_visualTreeService3;
 
 // ---------------------------------------------------------------------------
 // Logging (defined in dllmain.cpp)
@@ -87,4 +89,4 @@ void XBLogFmt(const wchar_t* fmt, ...);
 // Brush helpers (defined in VisualTreeWatcher.cpp)
 // ---------------------------------------------------------------------------
 BrushParams ReadBrushParams(const SharedBlurState* s);
-void        ApplyBrushParams(const wux::FrameworkElement& element, BrushTargetProp prop, const BrushParams& p);
+void        ApplyBrushParams(InstanceHandle handle, const wux::FrameworkElement& element, BrushTargetProp prop, const BrushParams& p);

@@ -19,6 +19,7 @@ static void AdviseThreadBody(AdviseArgs* a)
     XBLog(L"AdviseThread: creating watcher...");
     auto watcher = winrt::make_self<VisualTreeWatcher>();
     watcher->m_diagnostics = a->diag;
+    g_xamlDiagnostics = a->diag;
 
     // Keep global ref so watcher lives beyond this thread frame
     g_visualTreeWatcher = watcher;
@@ -26,9 +27,15 @@ static void AdviseThreadBody(AdviseArgs* a)
     // Prefer IVisualTreeService3 (same QI target as Windhawk) — may give more complete replay
     HRESULT hr = E_NOINTERFACE;
     if (auto svc3 = a->diag.try_as<IVisualTreeService3>()) {
+        g_visualTreeService3 = svc3;
         XBLog(L"AdviseThread: AdviseVisualTreeChange via IVisualTreeService3...");
         hr = svc3->AdviseVisualTreeChange(watcher.as<IVisualTreeServiceCallback>().get());
         XBLogFmt(L"AdviseVisualTreeChange (svc3): hr=0x%08X", hr);
+    } else if (auto svc3FromSvc = a->svc.try_as<IVisualTreeService3>()) {
+        g_visualTreeService3 = svc3FromSvc;
+        XBLog(L"AdviseThread: AdviseVisualTreeChange via IVisualTreeService3 (QI from svc)...");
+        hr = svc3FromSvc->AdviseVisualTreeChange(watcher.as<IVisualTreeServiceCallback>().get());
+        XBLogFmt(L"AdviseVisualTreeChange (svc3 from svc): hr=0x%08X", hr);
     }
     if (FAILED(hr)) {
         XBLog(L"AdviseThread: AdviseVisualTreeChange via IVisualTreeService (fallback)...");
