@@ -20,6 +20,10 @@ static constexpr int               kMaxLoggedElements = 10000;
 static std::atomic<InstanceHandle> g_taskbarBgHandle  { 0 };
 static std::atomic<unsigned int>   g_fillPropertyIndex   { UINT_MAX };
 static std::atomic<unsigned int>   g_strokePropertyIndex { UINT_MAX };
+static std::mutex                  g_timersMtx;
+static std::vector<wust::ThreadPoolTimer> g_pendingTimers;
+
+static void RegisterAndApplyTarget(InstanceHandle handle, const wux::FrameworkElement& element, BrushTargetProp prop);
 
 // ---------------------------------------------------------------------------
 // Brush helpers
@@ -183,6 +187,9 @@ static void ApplyBrushParamsFallback(const wux::FrameworkElement& element, Brush
 void ApplyBrushParams(InstanceHandle handle, const wux::FrameworkElement& element, BrushTargetProp prop, const BrushParams& p)
 {
     const wchar_t* propName = (prop == BrushTargetProp::Stroke) ? L"Stroke" : L"Fill";
+    XBLogFmt(L">>> ApplyBrushParams ENTERED: handle=0x%llX prop=%s enabled=%d alpha=%d rgb=(%d,%d,%d) useBlur=%d",
+        static_cast<unsigned long long>(handle), propName, p.enabled ? 1 : 0,
+        p.alpha, p.r, p.g, p.b, p.useBlur ? 1 : 0);
 
     if (handle == 0) {
         InstanceHandle resolvedHandle = 0;
@@ -257,6 +264,96 @@ void ApplyBrushParams(InstanceHandle handle, const wux::FrameworkElement& elemen
     ApplyBrushParamsFallback(element, prop, p);
 }
 
+static bool QueueDelayedApply(
+    InstanceHandle handle,
+    const wux::FrameworkElement& element,
+    BrushTargetProp prop,
+    const wchar_t* logTag,
+    const wchar_t* elementName,
+    int delayMs) noexcept
+{
+    try {
+        auto disp = element.Dispatcher();
+        if (!disp) {
+            XBLogFmt(L"%s %s: Dispatcher() returned null for delayed apply (%d ms)",
+                logTag, elementName, delayMs);
+            return false;
+        }
+
+        auto runApply = [handle, element, prop,
+                         tag = std::wstring(logTag),
+                         name = std::wstring(elementName),
+                         delayMs]() noexcept {
+            try {
+                XBLogFmt(L"%s [%dms] dispatcher apply entered for %s handle=0x%llX",
+                    tag.c_str(), delayMs, name.c_str(), static_cast<unsigned long long>(handle));
+                RegisterAndApplyTarget(handle, element, prop);
+                XBLogFmt(L"%s [%dms] RegisterAndApplyTarget finished for %s",
+                    tag.c_str(), delayMs, name.c_str());
+            }
+            catch (const winrt::hresult_error& ex) {
+                XBLogFmt(L"%s [%dms] dispatcher apply threw 0x%08X for %s: %s",
+                    tag.c_str(), delayMs, ex.code(), name.c_str(), ex.message().c_str());
+            }
+            catch (const std::exception& ex) {
+                XBLogFmt(L"%s [%dms] dispatcher apply std::exception for %s: %S",
+                    tag.c_str(), delayMs, name.c_str(), ex.what());
+            }
+            catch (...) {
+                XBLogFmt(L"%s [%dms] dispatcher apply threw unknown for %s",
+                    tag.c_str(), delayMs, name.c_str());
+            }
+        };
+
+        if (delayMs <= 0) {
+            XBLogFmt(L"%s %s: queueing dispatcher apply (%d ms)", logTag, elementName, delayMs);
+            auto action = disp.RunAsync(wuc::CoreDispatcherPriority::Normal, runApply);
+            XBLogFmt(L"%s %s: Dispatcher.RunAsync returned %s for %d ms",
+                logTag, elementName, action ? L"action" : L"null", delayMs);
+            return static_cast<bool>(action);
+        }
+
+        auto timer = wust::ThreadPoolTimer::CreateTimer(
+            [disp, runApply, tag = std::wstring(logTag), name = std::wstring(elementName), delayMs]
+            (wust::ThreadPoolTimer const&) noexcept {
+                try {
+                    XBLogFmt(L"%s %s: timer fired after %d ms", tag.c_str(), name.c_str(), delayMs);
+                    disp.RunAsync(wuc::CoreDispatcherPriority::High, runApply);
+                }
+                catch (const winrt::hresult_error& ex) {
+                    XBLogFmt(L"%s %s: timer callback threw 0x%08X after %d ms: %s",
+                        tag.c_str(), name.c_str(), ex.code(), delayMs, ex.message().c_str());
+                }
+                catch (...) {
+                    XBLogFmt(L"%s %s: timer callback threw unknown after %d ms",
+                        tag.c_str(), name.c_str(), delayMs);
+                }
+            },
+            std::chrono::milliseconds(delayMs));
+
+        {
+            std::lock_guard<std::mutex> lk(g_timersMtx);
+            g_pendingTimers.push_back(timer);
+        }
+        XBLogFmt(L"%s %s: scheduled delayed apply timer (%d ms)", logTag, elementName, delayMs);
+        return true;
+    }
+    catch (const winrt::hresult_error& ex) {
+        XBLogFmt(L"%s %s: QueueDelayedApply threw 0x%08X for %d ms: %s",
+            logTag, elementName, ex.code(), delayMs, ex.message().c_str());
+    }
+    catch (const std::exception& ex) {
+        XBLogFmt(L"%s %s: QueueDelayedApply std::exception for %d ms: %S",
+            logTag, elementName, delayMs, ex.what());
+    }
+    catch (...) {
+        XBLogFmt(L"%s %s: QueueDelayedApply threw unknown for %d ms",
+            logTag, elementName, delayMs);
+    }
+
+    return false;
+}
+
 // ---------------------------------------------------------------------------
 // RegisterAndApplyShape
 // handle == 0 for VTH-walked shapes (no diagnostic handle available);
@@ -264,6 +361,9 @@ void ApplyBrushParams(InstanceHandle handle, const wux::FrameworkElement& elemen
 // ---------------------------------------------------------------------------
 static void RegisterAndApplyTarget(InstanceHandle handle, const wux::FrameworkElement& element, BrushTargetProp prop)
 {
+    XBLogFmt(L"RegisterAndApplyTarget: ENTER handle=0x%llX prop=%s",
+        static_cast<unsigned long long>(handle),
+        prop == BrushTargetProp::Stroke ? L"Stroke" : L"Fill");
     {
         std::lock_guard<std::mutex> lk(g_shapesMtx);
         bool found = false;
@@ -279,7 +379,13 @@ static void RegisterAndApplyTarget(InstanceHandle handle, const wux::FrameworkEl
     }
 
     BrushParams p = ReadBrushParams(g_pState);
+    XBLogFmt(L"RegisterAndApplyTarget: calling ApplyBrushParams handle=0x%llX prop=%s",
+        static_cast<unsigned long long>(handle),
+        prop == BrushTargetProp::Stroke ? L"Stroke" : L"Fill");
     ApplyBrushParams(handle, element, prop, p);
+    XBLogFmt(L"RegisterAndApplyTarget: ApplyBrushParams returned handle=0x%llX prop=%s",
+        static_cast<unsigned long long>(handle),
+        prop == BrushTargetProp::Stroke ? L"Stroke" : L"Fill");
 }
 
 static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, IXamlDiagnostics* diag, const wchar_t* logTag) noexcept
@@ -301,8 +407,10 @@ static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, IXamlDiagnostics*
             int grandCount = wuxm::VisualTreeHelper::GetChildrenCount(intermFE);
             XBLogFmt(L"%s child[%d] Name='%s' grandchildren=%d",
                 logTag, ci, intermFE.Name().c_str(), grandCount);
+            XBLogFmt(L"%s ABOUT TO ENTER grandchildren loop: gi < %d", logTag, grandCount);
 
             for (int gi = 0; gi < grandCount; ++gi) {
+                XBLogFmt(L"%s Loop iteration START: gi=%d", logTag, gi);
                 winrt::Windows::Foundation::IInspectable grand;
                 try {
                     grand = wuxm::VisualTreeHelper::GetChild(intermFE, gi);
@@ -342,17 +450,29 @@ static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, IXamlDiagnostics*
                     logTag, grandName.c_str(), hr, static_cast<unsigned long long>(grandHandle));
 
                 BrushTargetProp prop = isBgStroke ? BrushTargetProp::Stroke : BrushTargetProp::Fill;
-                RegisterAndApplyTarget(grandHandle, grandFE, prop);
-                XBLogFmt(L"%s RegisterAndApplyTarget finished for %s", logTag, grandName.c_str());
+                XBLogFmt(L"%s queueing delayed apply for %s (0 ms)", logTag, grandName.c_str());
+                bool queuedNow = QueueDelayedApply(grandHandle, grandFE, prop, logTag, grandName.c_str(), 0);
+                XBLogFmt(L"%s delayed apply queue result for %s (0 ms): %d", logTag, grandName.c_str(), queuedNow ? 1 : 0);
+                if (isBgFill) {
+                    XBLogFmt(L"%s queueing delayed retry for %s (500 ms)", logTag, grandName.c_str());
+                    bool queuedRetry = QueueDelayedApply(grandHandle, grandFE, prop, logTag, grandName.c_str(), 500);
+                    XBLogFmt(L"%s delayed apply queue result for %s (500 ms): %d", logTag, grandName.c_str(), queuedRetry ? 1 : 0);
+                }
                 foundAny = true;
             }
         }
     }
     catch (const winrt::hresult_error& ex) {
-        XBLogFmt(L"%s walk threw 0x%08X: %s", logTag, ex.code(), ex.message().c_str());
+        XBLogFmt(L"%s walk threw winrt::hresult_error 0x%08X: %s", logTag, ex.code(), ex.message().c_str());
+        return false;
+    }
+    catch (const std::exception& ex) {
+        XBLogFmt(L"%s walk threw std::exception: %S", logTag, ex.what());
+        return false;
     }
     catch (...) {
-        XBLogFmt(L"%s walk threw unknown exception", logTag);
+        XBLogFmt(L"%s walk threw UNKNOWN exception", logTag);
+        return false;
     }
 
     return foundAny;
@@ -501,7 +621,16 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
         XBLogFmt(L"  >>> Applying brush to Name=%s via native/managed bridge", runtimeName.c_str());
         RegisterAndApplyTarget(element.Handle, fe, prop);
     }
-    catch (...) {}
+    catch (const winrt::hresult_error& ex) {
+        XBLogFmt(L"OnVisualTreeChange: winrt::hresult_error 0x%08X: %s",
+            ex.code(), ex.message().c_str());
+    }
+    catch (const std::exception& ex) {
+        XBLogFmt(L"OnVisualTreeChange: std::exception: %S", ex.what());
+    }
+    catch (...) {
+        XBLog(L"OnVisualTreeChange: UNKNOWN exception type");
+    }
 
     return S_OK;
 }

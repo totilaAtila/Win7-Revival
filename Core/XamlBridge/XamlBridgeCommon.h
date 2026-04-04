@@ -15,6 +15,7 @@
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.UI.h>
 #include <winrt/Windows.UI.Core.h>
+#include <winrt/Windows.System.Threading.h>
 #include <winrt/Windows.UI.Xaml.h>
 #include <winrt/Windows.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Xaml.Shapes.h>
@@ -30,6 +31,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdarg>
+#include <exception>
 
 #include "SharedBlurState.h"
 
@@ -38,6 +40,7 @@
 // ---------------------------------------------------------------------------
 namespace wu   = winrt::Windows::UI;
 namespace wuc  = winrt::Windows::UI::Core;
+namespace wust = winrt::Windows::System::Threading;
 namespace wux  = winrt::Windows::UI::Xaml;
 namespace wuxm = winrt::Windows::UI::Xaml::Media;
 namespace wuxs = winrt::Windows::UI::Xaml::Shapes;
