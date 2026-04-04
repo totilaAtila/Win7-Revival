@@ -62,6 +62,7 @@ namespace GlassBar.Dashboard
 
         private const int CMD_SHOW = 1;
         private const int CMD_EXIT = 2;
+        private static readonly IntPtr IDI_APPLICATION = new(32512);
 
         // ── P/Invoke declarations ────────────────────────────────────────────────
 
@@ -103,6 +104,12 @@ namespace GlassBar.Dashboard
         [DllImport("user32.dll")]
         private static extern bool SetForegroundWindow(IntPtr hWnd);
 
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern uint RegisterWindowMessage(string lpString);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr LoadIcon(IntPtr hInstance, IntPtr lpIconName);
+
         // ── WndProc delegate ─────────────────────────────────────────────────────
 
         private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg,
@@ -113,6 +120,7 @@ namespace GlassBar.Dashboard
         private readonly IntPtr        _hwnd;
         private readonly Action        _onShow;
         private readonly Action        _onExit;
+        private readonly uint          _taskbarCreatedMessage;
         private          IntPtr        _oldWndProc;
         private readonly WndProcDelegate _newWndProc; // must stay referenced to prevent GC
         private          IntPtr        _hIcon;
@@ -127,6 +135,7 @@ namespace GlassBar.Dashboard
             _hwnd   = hwnd;
             _onShow = onShow;
             _onExit = onExit;
+            _taskbarCreatedMessage = RegisterWindowMessage("TaskbarCreated");
 
             // Keep delegate alive — GC must not collect it while subclassing is active
             _newWndProc = TrayWndProc;
@@ -135,6 +144,8 @@ namespace GlassBar.Dashboard
 
             if (System.IO.File.Exists(iconPath))
                 _hIcon = LoadImage(IntPtr.Zero, iconPath, IMAGE_ICON, 32, 32, LR_LOADFROMFILE);
+            if (_hIcon == IntPtr.Zero)
+                _hIcon = LoadIcon(IntPtr.Zero, IDI_APPLICATION);
 
             AddTrayIcon();
         }
@@ -170,16 +181,23 @@ namespace GlassBar.Dashboard
             Remove();
         }
 
+        public void EnsureAdded()
+        {
+            if (_disposed || _added) return;
+            AddTrayIcon();
+        }
+
         // ── Private helpers ──────────────────────────────────────────────────────
 
         private void AddTrayIcon()
         {
+            if (_disposed || _added) return;
+
             var nid = BuildNid();
             nid.uFlags = NIF_MESSAGE | NIF_TIP;
             if (_hIcon != IntPtr.Zero) nid.uFlags |= NIF_ICON;
             nid.szTip  = "GlassBar";
-            Shell_NotifyIconW(NIM_ADD, ref nid);
-            _added = true;
+            _added = Shell_NotifyIconW(NIM_ADD, ref nid);
         }
 
         private NOTIFYICONDATA BuildNid()
@@ -195,6 +213,13 @@ namespace GlassBar.Dashboard
 
         private IntPtr TrayWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
         {
+            if (msg == _taskbarCreatedMessage)
+            {
+                _added = false;
+                AddTrayIcon();
+                return IntPtr.Zero;
+            }
+
             if (msg == WM_APP_TRAY)
             {
                 uint evt = (uint)(lParam.ToInt64() & 0xFFFF);

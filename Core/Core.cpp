@@ -29,8 +29,14 @@ bool Core::Initialize() {
     }
 
     Config config = m_config->GetConfig();
-    CF_LOG(Info, "Config loaded: Taskbar=" << config.taskbarOpacity
-                 << "%, Start=" << config.startOpacity << "%");
+    CF_LOG(Info, "Startup config snapshot: Taskbar enabled=" << (config.taskbarEnabled ? "true" : "false")
+                 << " opacity=" << config.taskbarOpacity
+                 << " RGB=(" << config.taskbarColorR << ", " << config.taskbarColorG << ", " << config.taskbarColorB << ")"
+                 << " blur=" << (config.taskbarBlur ? "true" : "false")
+                 << " amount=" << config.blurAmount
+                 << " | Start enabled=" << (config.startEnabled ? "true" : "false")
+                 << " opacity=" << config.startOpacity
+                 << " blur=" << (config.startBlur ? "true" : "false"));
 
     // Store config values
     m_taskbarOpacity = config.taskbarOpacity;
@@ -39,6 +45,19 @@ bool Core::Initialize() {
     m_startEnabled = config.startEnabled;
     m_taskbarBlur = config.taskbarBlur;
     m_startBlur = config.startBlur;
+    m_taskbarColorR = config.taskbarColorR;
+    m_taskbarColorG = config.taskbarColorG;
+    m_taskbarColorB = config.taskbarColorB;
+    m_startBgColor = RGB(config.startBgColorR, config.startBgColorG, config.startBgColorB);
+    m_startTextColor = RGB(config.startTextColorR, config.startTextColorG, config.startTextColorB);
+    m_startBorderColor = RGB(config.startBorderColorR, config.startBorderColorG, config.startBorderColorB);
+    m_startShowControlPanel = config.startShowControlPanel;
+    m_startShowDeviceManager = config.startShowDeviceManager;
+    m_startShowInstalledApps = config.startShowInstalledApps;
+    m_startShowDocuments = config.startShowDocuments;
+    m_startShowPictures = config.startShowPictures;
+    m_startShowVideos = config.startShowVideos;
+    m_startShowRecentFiles = config.startShowRecentFiles;
 
     // Load blur amount
     m_blurAmount = config.blurAmount;
@@ -61,8 +80,10 @@ bool Core::Initialize() {
     m_renderer->SetStartOpacity(m_startOpacity);
     m_renderer->SetTaskbarEnabled(m_taskbarEnabled);
     m_renderer->SetStartEnabled(m_startEnabled);
+    m_renderer->SetTaskbarColor(m_taskbarColorR, m_taskbarColorG, m_taskbarColorB);
     m_renderer->SetTaskbarBlur(m_taskbarBlur);
     m_renderer->SetStartBlur(m_startBlur);
+    m_renderer->SetTaskbarBlurAmount(m_blurAmount);
 
     // Initialize shell target locator (finds taskbar/start windows)
     if (!m_locator->Initialize(this)) {
@@ -80,6 +101,23 @@ bool Core::Initialize() {
         CF_LOG(Error, "StartMenuWindow initialization failed");
         return false;
     }
+    m_startMenuWindow->SetOpacity(m_startOpacity);
+    m_startMenuWindow->SetBackgroundColor(m_startBgColor);
+    m_startMenuWindow->SetTextColor(m_startTextColor);
+    m_startMenuWindow->SetMenuItems(m_startShowControlPanel, m_startShowDeviceManager, m_startShowInstalledApps,
+                                    m_startShowDocuments, m_startShowPictures, m_startShowVideos, m_startShowRecentFiles);
+    m_startMenuWindow->SetBorderColor(m_startBorderColor);
+    m_startMenuWindow->SetBlur(m_startBlur);
+    CF_LOG(Info, "Start Menu config applied from Core mirror: bg=0x" << std::hex << m_startBgColor
+                 << " text=0x" << m_startTextColor
+                 << " border=0x" << m_startBorderColor
+                 << std::dec << " items=[CP=" << (m_startShowControlPanel ? "1" : "0")
+                 << " DM=" << (m_startShowDeviceManager ? "1" : "0")
+                 << " IA=" << (m_startShowInstalledApps ? "1" : "0")
+                 << " D=" << (m_startShowDocuments ? "1" : "0")
+                 << " P=" << (m_startShowPictures ? "1" : "0")
+                 << " V=" << (m_startShowVideos ? "1" : "0")
+                 << " RF=" << (m_startShowRecentFiles ? "1" : "0") << "]");
 
     // Initialize Start Menu Hook (intercepts Windows key and Start button clicks).
     // Must be installed AFTER StartMenuWindow::Initialize() so the hook thread is
@@ -278,6 +316,7 @@ void Core::SetTaskbarOpacity(int opacity) {
     if (m_config) {
         m_config->SetTaskbarOpacity(opacity);
     }
+    CF_LOG(Info, "Taskbar opacity set to " << opacity << "%");
 }
 
 void Core::SetStartOpacity(int opacity) {
@@ -290,6 +329,7 @@ void Core::SetStartOpacity(int opacity) {
     if (m_config) {
         m_config->SetStartOpacity(opacity);
     }
+    CF_LOG(Info, "Start opacity set to " << opacity << "%");
 }
 
 void Core::SetTaskbarEnabled(bool enabled) {
@@ -302,6 +342,7 @@ void Core::SetTaskbarEnabled(bool enabled) {
     if (m_config) {
         m_config->SetTaskbarEnabled(enabled);
     }
+    CF_LOG(Info, "Taskbar transparency " << (enabled ? "enabled" : "disabled"));
 }
 
 void Core::SetStartEnabled(bool enabled) {
@@ -314,13 +355,20 @@ void Core::SetStartEnabled(bool enabled) {
     if (m_config) {
         m_config->SetStartEnabled(enabled);
     }
+    CF_LOG(Info, "Start transparency " << (enabled ? "enabled" : "disabled"));
 }
 
 void Core::SetTaskbarColor(int r, int g, int b) {
+    m_taskbarColorR = std::clamp(r, 0, 255);
+    m_taskbarColorG = std::clamp(g, 0, 255);
+    m_taskbarColorB = std::clamp(b, 0, 255);
     if (m_renderer) {
-        m_renderer->SetTaskbarColor(r, g, b);
+        m_renderer->SetTaskbarColor(m_taskbarColorR, m_taskbarColorG, m_taskbarColorB);
     }
-    CF_LOG(Info, "Taskbar color set to RGB(" << r << ", " << g << ", " << b << ")");
+    if (m_config) {
+        m_config->SetTaskbarColor(m_taskbarColorR, m_taskbarColorG, m_taskbarColorB);
+    }
+    CF_LOG(Info, "Taskbar color set to RGB(" << m_taskbarColorR << ", " << m_taskbarColorG << ", " << m_taskbarColorB << ")");
 }
 
 void Core::SetTaskbarBlur(bool enabled) {
@@ -331,6 +379,7 @@ void Core::SetTaskbarBlur(bool enabled) {
     if (m_config) {
         m_config->SetTaskbarBlur(enabled);
     }
+    CF_LOG(Info, "Taskbar blur " << (enabled ? "enabled" : "disabled"));
 }
 
 void Core::SetStartBlur(bool enabled) {
@@ -345,6 +394,7 @@ void Core::SetStartBlur(bool enabled) {
     if (m_startMenuWindow) {
         m_startMenuWindow->SetBlur(enabled);
     }
+    CF_LOG(Info, "Start blur " << (enabled ? "enabled" : "disabled"));
 }
 
 void Core::SetStartMenuHookEnabled(bool enabled) {
@@ -355,6 +405,10 @@ void Core::SetStartMenuHookEnabled(bool enabled) {
 }
 
 void Core::SetStartMenuOpacity(int opacity) {
+    m_startOpacity = opacity;
+    if (m_config) {
+        m_config->SetStartOpacity(opacity);
+    }
     if (m_startMenuWindow) {
         m_startMenuWindow->SetOpacity(opacity);
         CF_LOG(Info, "Start Menu opacity set to " << opacity << "%");
@@ -362,25 +416,49 @@ void Core::SetStartMenuOpacity(int opacity) {
 }
 
 void Core::SetStartMenuBackgroundColor(DWORD rgb) {
+    m_startBgColor = static_cast<COLORREF>(rgb);
+    if (m_config) {
+        m_config->SetStartMenuBackgroundColor(GetRValue(m_startBgColor), GetGValue(m_startBgColor), GetBValue(m_startBgColor));
+    }
     if (m_startMenuWindow) {
-        m_startMenuWindow->SetBackgroundColor(static_cast<COLORREF>(rgb));
+        m_startMenuWindow->SetBackgroundColor(m_startBgColor);
         CF_LOG(Info, "Start Menu background color set to 0x" << std::hex << rgb << std::dec);
     }
 }
 
 void Core::SetStartMenuTextColor(DWORD rgb) {
+    m_startTextColor = static_cast<COLORREF>(rgb);
+    if (m_config) {
+        m_config->SetStartMenuTextColor(GetRValue(m_startTextColor), GetGValue(m_startTextColor), GetBValue(m_startTextColor));
+    }
     if (m_startMenuWindow) {
-        m_startMenuWindow->SetTextColor(static_cast<COLORREF>(rgb));
+        m_startMenuWindow->SetTextColor(m_startTextColor);
         CF_LOG(Info, "Start Menu text color set to 0x" << std::hex << rgb << std::dec);
     }
 }
 
 void Core::SetStartMenuItems(bool controlPanel, bool deviceManager, bool installedApps,
                              bool documents, bool pictures, bool videos, bool recentFiles) {
+    m_startShowControlPanel = controlPanel;
+    m_startShowDeviceManager = deviceManager;
+    m_startShowInstalledApps = installedApps;
+    m_startShowDocuments = documents;
+    m_startShowPictures = pictures;
+    m_startShowVideos = videos;
+    m_startShowRecentFiles = recentFiles;
+    if (m_config) {
+        m_config->SetStartMenuItems(controlPanel, deviceManager, installedApps, documents, pictures, videos, recentFiles);
+    }
     if (m_startMenuWindow) {
         m_startMenuWindow->SetMenuItems(controlPanel, deviceManager, installedApps,
                                         documents, pictures, videos, recentFiles);
-        CF_LOG(Info, "Start Menu items updated");
+        CF_LOG(Info, "Start Menu items updated: CP=" << (controlPanel ? "1" : "0")
+                     << " DM=" << (deviceManager ? "1" : "0")
+                     << " IA=" << (installedApps ? "1" : "0")
+                     << " D=" << (documents ? "1" : "0")
+                     << " P=" << (pictures ? "1" : "0")
+                     << " V=" << (videos ? "1" : "0")
+                     << " RF=" << (recentFiles ? "1" : "0"));
     }
 }
 
@@ -412,8 +490,12 @@ void Core::SetStartMenuPinned(bool pinned) {
 }
 
 void Core::SetStartMenuBorderColor(DWORD rgb) {
+    m_startBorderColor = static_cast<COLORREF>(rgb);
+    if (m_config) {
+        m_config->SetStartMenuBorderColor(GetRValue(m_startBorderColor), GetGValue(m_startBorderColor), GetBValue(m_startBorderColor));
+    }
     if (m_startMenuWindow) {
-        m_startMenuWindow->SetBorderColor(static_cast<COLORREF>(rgb));
+        m_startMenuWindow->SetBorderColor(m_startBorderColor);
         CF_LOG(Info, "Start Menu border color set to 0x" << std::hex << rgb << std::dec);
     }
 }
@@ -421,6 +503,7 @@ void Core::SetStartMenuBorderColor(DWORD rgb) {
 void Core::SetTaskbarBlurAmount(int amount) {
     m_blurAmount = std::clamp(amount, 0, 100);
     if (m_renderer) m_renderer->SetTaskbarBlurAmount(m_blurAmount);
+    if (m_config) m_config->SetBlurAmount(m_blurAmount);
     CF_LOG(Info, "Taskbar blur amount set to " << m_blurAmount);
 }
 

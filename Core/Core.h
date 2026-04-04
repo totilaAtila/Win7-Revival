@@ -77,12 +77,25 @@ private:
     bool m_taskbarFound = false;
     bool m_startDetected = false;
     bool m_taskbarEnabled = true;
-    bool m_startEnabled = true;
+    bool m_startEnabled = false;
     bool m_taskbarBlur = false;
     bool m_startBlur = false;
     int  m_blurAmount = 0;
     int m_taskbarOpacity = 75;
     int m_startOpacity = 50;
+    int m_taskbarColorR = 0;
+    int m_taskbarColorG = 0;
+    int m_taskbarColorB = 0;
+    COLORREF m_startBgColor = RGB(40, 40, 45);
+    COLORREF m_startTextColor = RGB(255, 255, 255);
+    COLORREF m_startBorderColor = RGB(60, 60, 65);
+    bool m_startShowControlPanel = true;
+    bool m_startShowDeviceManager = true;
+    bool m_startShowInstalledApps = true;
+    bool m_startShowDocuments = true;
+    bool m_startShowPictures = true;
+    bool m_startShowVideos = true;
+    bool m_startShowRecentFiles = true;
 
     std::unique_ptr<ConfigManager> m_config;
     std::unique_ptr<ShellTargetLocator> m_locator;

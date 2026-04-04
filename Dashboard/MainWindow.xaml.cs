@@ -85,6 +85,7 @@ namespace GlassBar.Dashboard
         {
             if (_exitRequested) return;
             args.Cancel = true;
+            _trayIconManager?.EnsureAdded();
             _appWindow.Hide();
         }
 

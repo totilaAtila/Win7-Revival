@@ -256,6 +256,7 @@ namespace GlassBar.Dashboard
             try
             {
                 // Load config
+                using var suppressAutoSave = _config.SuppressAutoSave();
                 await _config.LoadAsync();
                 Debug.WriteLine("Config loaded successfully");
 
@@ -273,38 +274,8 @@ namespace GlassBar.Dashboard
                     // Do NOT clear IsFirstRun here — wait until init succeeds below.
                 }
 
-                // Apply loaded config to properties
-                TaskbarOpacity = _config.TaskbarOpacity;
-                StartOpacity = _config.StartOpacity;
-                TaskbarEnabled = _config.TaskbarEnabled;
-                StartEnabled = _config.StartEnabled;
-                TaskbarBlur = _config.TaskbarBlur;
-                StartBlur = _config.StartBlur;
-                _blurAmount = _config.BlurAmount;  // load without triggering setter
-                CoreEnabled = _config.CoreEnabled;
-                TaskbarColorR = _config.TaskbarColorR;
-                TaskbarColorG = _config.TaskbarColorG;
-                TaskbarColorB = _config.TaskbarColorB;
-
-                StartBgColorR = _config.StartBgColorR;
-                StartBgColorG = _config.StartBgColorG;
-                StartBgColorB = _config.StartBgColorB;
-
-                StartTextColorR = _config.StartTextColorR;
-                StartTextColorG = _config.StartTextColorG;
-                StartTextColorB = _config.StartTextColorB;
-
-                StartShowControlPanel = _config.StartShowControlPanel;
-                StartShowDeviceManager = _config.StartShowDeviceManager;
-                StartShowInstalledApps = _config.StartShowInstalledApps;
-                StartShowDocuments = _config.StartShowDocuments;
-                StartShowPictures = _config.StartShowPictures;
-                StartShowVideos = _config.StartShowVideos;
-                StartShowRecentFiles = _config.StartShowRecentFiles;
-
-                StartBorderColorR = _config.StartBorderColorR;
-                StartBorderColorG = _config.StartBorderColorG;
-                StartBorderColorB = _config.StartBorderColorB;
+                // Apply loaded config to properties without triggering save-on-load.
+                HydrateViewModelFromConfig();
 
                 // Read startup state from registry (not stored in config.json)
                 _runAtStartup = StartupManager.IsEnabled();
@@ -312,6 +283,7 @@ namespace GlassBar.Dashboard
 
                 // Initialize Core engine (native DLL)
                 bool success = _core.Initialize();
+                suppressAutoSave.Dispose();
 
                 if (!success)
                 {
@@ -332,6 +304,7 @@ namespace GlassBar.Dashboard
                 ConnectionStatus = "✓ Core engine running";
 
                 // Apply initial settings to Core
+                LogStartupSnapshot("InitializeAsync startup batch");
                 _core.SetTaskbarOpacity(TaskbarOpacity);
                 _core.SetStartOpacity(StartOpacity);
                 _core.SetTaskbarEnabled(TaskbarEnabled);
@@ -398,6 +371,7 @@ namespace GlassBar.Dashboard
                     await Task.Delay(100); // Brief delay for Core to settle
 
                     // Reapply settings
+                    LogStartupSnapshot("SetCoreRunningAsync restart batch");
                     _core.SetTaskbarOpacity(TaskbarOpacity);
                     _core.SetStartOpacity(StartOpacity);
                     _core.SetTaskbarEnabled(TaskbarEnabled);
@@ -679,8 +653,83 @@ namespace GlassBar.Dashboard
         /// <summary>Modifier mask loaded from config.</summary>
         public int LoadedHotkeyModifiers => _config.HotkeyModifiers;
 
+        private void HydrateViewModelFromConfig()
+        {
+            _taskbarOpacity = _config.TaskbarOpacity;
+            _startOpacity = _config.StartOpacity;
+            _taskbarEnabled = _config.TaskbarEnabled;
+            _startEnabled = _config.StartEnabled;
+            _taskbarBlur = _config.TaskbarBlur;
+            _startBlur = _config.StartBlur;
+            _blurAmount = _config.BlurAmount;
+            _coreEnabled = _config.CoreEnabled;
+            _taskbarColorR = _config.TaskbarColorR;
+            _taskbarColorG = _config.TaskbarColorG;
+            _taskbarColorB = _config.TaskbarColorB;
+
+            _startBgColorR = _config.StartBgColorR;
+            _startBgColorG = _config.StartBgColorG;
+            _startBgColorB = _config.StartBgColorB;
+            _startTextColorR = _config.StartTextColorR;
+            _startTextColorG = _config.StartTextColorG;
+            _startTextColorB = _config.StartTextColorB;
+
+            _startShowControlPanel = _config.StartShowControlPanel;
+            _startShowDeviceManager = _config.StartShowDeviceManager;
+            _startShowInstalledApps = _config.StartShowInstalledApps;
+            _startShowDocuments = _config.StartShowDocuments;
+            _startShowPictures = _config.StartShowPictures;
+            _startShowVideos = _config.StartShowVideos;
+            _startShowRecentFiles = _config.StartShowRecentFiles;
+
+            _startBorderColorR = _config.StartBorderColorR;
+            _startBorderColorG = _config.StartBorderColorG;
+            _startBorderColorB = _config.StartBorderColorB;
+
+            RaisePropertyChanged(nameof(TaskbarOpacity));
+            RaisePropertyChanged(nameof(StartOpacity));
+            RaisePropertyChanged(nameof(TaskbarEnabled));
+            RaisePropertyChanged(nameof(StartEnabled));
+            RaisePropertyChanged(nameof(TaskbarBlur));
+            RaisePropertyChanged(nameof(StartBlur));
+            RaisePropertyChanged(nameof(BlurAmount));
+            RaisePropertyChanged(nameof(CoreEnabled));
+            RaisePropertyChanged(nameof(TaskbarColorR));
+            RaisePropertyChanged(nameof(TaskbarColorG));
+            RaisePropertyChanged(nameof(TaskbarColorB));
+            RaisePropertyChanged(nameof(StartBgColorR));
+            RaisePropertyChanged(nameof(StartBgColorG));
+            RaisePropertyChanged(nameof(StartBgColorB));
+            RaisePropertyChanged(nameof(StartTextColorR));
+            RaisePropertyChanged(nameof(StartTextColorG));
+            RaisePropertyChanged(nameof(StartTextColorB));
+            RaisePropertyChanged(nameof(StartShowControlPanel));
+            RaisePropertyChanged(nameof(StartShowDeviceManager));
+            RaisePropertyChanged(nameof(StartShowInstalledApps));
+            RaisePropertyChanged(nameof(StartShowDocuments));
+            RaisePropertyChanged(nameof(StartShowPictures));
+            RaisePropertyChanged(nameof(StartShowVideos));
+            RaisePropertyChanged(nameof(StartShowRecentFiles));
+            RaisePropertyChanged(nameof(StartBorderColorR));
+            RaisePropertyChanged(nameof(StartBorderColorG));
+            RaisePropertyChanged(nameof(StartBorderColorB));
+        }
+
+        private void LogStartupSnapshot(string label)
+        {
+            Debug.WriteLine($"[Startup] {label}: Taskbar enabled={TaskbarEnabled} opacity={TaskbarOpacity} RGB=({TaskbarColorR},{TaskbarColorG},{TaskbarColorB}) blur={TaskbarBlur} amount={BlurAmount}");
+            Debug.WriteLine($"[Startup] {label}: Start enabled={StartEnabled} opacity={StartOpacity} blur={StartBlur} bg=({StartBgColorR},{StartBgColorG},{StartBgColorB}) text=({StartTextColorR},{StartTextColorG},{StartTextColorB}) border=({StartBorderColorR},{StartBorderColorG},{StartBorderColorB})");
+            Debug.WriteLine($"[Startup] {label}: Start items CP={StartShowControlPanel} DM={StartShowDeviceManager} IA={StartShowInstalledApps} D={StartShowDocuments} P={StartShowPictures} V={StartShowVideos} RF={StartShowRecentFiles}");
+            Debug.WriteLine($"[Startup] {label}: Hotkey vk=0x{_config.HotkeyVk:X2} mod=0x{_config.HotkeyModifiers:X}");
+        }
+
         // INotifyPropertyChanged implementation
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        private void RaisePropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
 
         protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
         {

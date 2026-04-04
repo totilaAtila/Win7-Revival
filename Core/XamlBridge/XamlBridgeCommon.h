@@ -32,6 +32,7 @@
 #include <cstdio>
 #include <cstdarg>
 #include <exception>
+#include <cstdlib>
 
 #include "SharedBlurState.h"
 
