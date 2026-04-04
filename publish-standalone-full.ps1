@@ -107,6 +107,20 @@ Copy-Item $xamlBridgeSource -Destination $publishPath -Force
 Write-Host "  [OK] GlassBar.Core.dll copied" -ForegroundColor Green
 Write-Host "  [OK] GlassBar.XamlBridge.dll copied" -ForegroundColor Green
 
+# Ensure config.json exists in %LOCALAPPDATA%\GlassBar\ (prevents "Config not found" on first run)
+$configDir = "$env:LOCALAPPDATA\GlassBar"
+$configDst = "$configDir\config.json"
+$configSrc = "$PSScriptRoot\config.json"
+if (Test-Path $configDst) {
+    Write-Host "  [OK] config.json already present at AppData" -ForegroundColor Green
+} elseif (Test-Path $configSrc) {
+    if (-not (Test-Path $configDir)) { New-Item -ItemType Directory -Path $configDir | Out-Null }
+    Copy-Item $configSrc $configDst -Force
+    Write-Host "  [OK] Default config.json deployed to AppData" -ForegroundColor Green
+} else {
+    Write-Host "  [WARN] config.json not found in script dir - skipping" -ForegroundColor Yellow
+}
+
 # Step 5: Create comprehensive documentation
 Write-Host "`n[5/6] Creating user documentation..." -ForegroundColor Yellow
 

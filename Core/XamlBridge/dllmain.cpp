@@ -25,6 +25,8 @@ std::atomic<bool>                g_walkNeeded     { false };
 winrt::com_ptr<IXamlDiagnostics> g_walkDiagnostics;
 winrt::com_ptr<IXamlDiagnostics> g_xamlDiagnostics;
 winrt::com_ptr<IVisualTreeService3> g_visualTreeService3;
+winrt::Windows::Foundation::IAsyncOperation<bool> g_bgFillAsyncAction{ nullptr };
+winrt::Windows::Foundation::IAsyncOperation<bool> g_bgStrokeAsyncAction{ nullptr };
 
 static HANDLE            g_hWorkerThread = nullptr;
 

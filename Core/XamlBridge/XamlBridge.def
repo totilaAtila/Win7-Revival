@@ -1,5 +1,5 @@
-LIBRARY GlassBar.XamlBridge
+LIBRARY GlassBar.XamlBridge.dll
 EXPORTS
     XamlBridgeHookProc
-    DllGetClassObject
-    DllCanUnloadNow
+    DllGetClassObject   PRIVATE
+    DllCanUnloadNow     PRIVATE

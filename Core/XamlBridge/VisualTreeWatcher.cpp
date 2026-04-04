@@ -1,13 +1,8 @@
 //
-// VisualTreeWatcher.cpp - Tree monitoring + brush application  [ITER #14]
+// VisualTreeWatcher.cpp - Tree monitoring + brush application  [ITER #16]
 //
-// ITER #14 changes vs ITER #13:
-//   - TaskbarBackground now resolves and walks inline on the callback that sees it.
-//   - WorkerThread walk remains as a fallback when inline resolve/walk fails.
-//   - Shared walk logic lives in WalkTaskbarBgTree() so both paths stay identical.
-// ITER #15 diagnostic:
-//   - Force SolidColorBrush / Transparent for XamlBridge taskbar path.
-//   - Temporarily bypass AcrylicBrush so we can prove the Fill pipeline first.
+// Apply path aligned with Windhawk: TryRunAsync(High) + store IAsyncOperation<bool>
+// to prevent cancellation. Reads SharedBlurState inside the dispatcher callback.
 //
 #include "VisualTreeWatcher.h"
 #include "TAPObject.h"
@@ -20,319 +15,66 @@ static constexpr int               kMaxLoggedElements = 10000;
 static std::atomic<InstanceHandle> g_taskbarBgHandle  { 0 };
 static std::atomic<unsigned int>   g_fillPropertyIndex   { UINT_MAX };
 static std::atomic<unsigned int>   g_strokePropertyIndex { UINT_MAX };
-static std::mutex                  g_timersMtx;
-static std::vector<wust::ThreadPoolTimer> g_pendingTimers;
-
 static void RegisterAndApplyTarget(InstanceHandle handle, const wux::FrameworkElement& element, BrushTargetProp prop);
-static bool QueueDelayedApply(
-    InstanceHandle handle,
-    const wux::FrameworkElement& element,
+
+// ---------------------------------------------------------------------------
+// DispatchApplyToBgElement — Windhawk-aligned apply path for BackgroundFill/Stroke
+// Uses TryRunAsync(High) + stores IAsyncAction to prevent cancellation on drop.
+// Reads SharedBlurState INSIDE the callback (current state at apply time).
+// ---------------------------------------------------------------------------
+static void DispatchApplyToBgElement(
+    const wux::FrameworkElement& fe,
     BrushTargetProp prop,
-    const wchar_t* logTag,
-    const wchar_t* elementName,
-    int delayMs) noexcept;
-
-static void FreeCollectionElements(unsigned int count, CollectionElementValue* values)
+    const wchar_t* logTag)
 {
-    if (!values) return;
-    for (unsigned int i = 0; i < count; ++i) {
-        SysFreeString(values[i].ValueType);
-        SysFreeString(values[i].Value);
-    }
-    CoTaskMemFree(values);
-}
-
-static bool TryParseHandleString(const wchar_t* text, InstanceHandle& outHandle)
-{
-    outHandle = 0;
-    if (!text || !*text)
-        return false;
-
-    wchar_t* end = nullptr;
-    unsigned long long value = wcstoull(text, &end, 0);
-    if (end == text || (end && *end != L'\0'))
-        return false;
-
-    outHandle = static_cast<InstanceHandle>(value);
-    return outHandle != 0;
-}
-
-static bool TryGetObjectPropertyHandle(
-    InstanceHandle objectHandle,
-    const wchar_t* propertyName,
-    InstanceHandle& outValueHandle)
-{
-    outValueHandle = 0;
-    if (!g_visualTreeService3) {
-        XBLogFmt(L"TryGetObjectPropertyHandle(%s): g_visualTreeService3 is null", propertyName);
-        return false;
+    auto disp = fe.Dispatcher();
+    if (!disp) {
+        XBLogFmt(L"%s DispatchApply: no Dispatcher", logTag);
+        return;
     }
 
-    unsigned int propertyIndex = UINT_MAX;
-    HRESULT hr = g_visualTreeService3->GetPropertyIndex(objectHandle, propertyName, &propertyIndex);
-    if (FAILED(hr)) {
-        XBLogFmt(L"TryGetObjectPropertyHandle(%s): GetPropertyIndex failed hr=0x%08X object=0x%llX",
-            propertyName, hr, static_cast<unsigned long long>(objectHandle));
-        return false;
-    }
+    auto targetProp = (prop == BrushTargetProp::Stroke)
+        ? wuxs::Shape::StrokeProperty()
+        : wuxs::Shape::FillProperty();
 
-    hr = g_visualTreeService3->GetProperty(objectHandle, propertyIndex, &outValueHandle);
-    XBLogFmt(L"TryGetObjectPropertyHandle(%s): GetProperty hr=0x%08X object=0x%llX index=%u value=0x%llX",
-        propertyName,
-        hr,
-        static_cast<unsigned long long>(objectHandle),
-        propertyIndex,
-        static_cast<unsigned long long>(outValueHandle));
-    if (FAILED(hr) || outValueHandle == 0) {
-        outValueHandle = 0;
-        return false;
-    }
+    // Capture DependencyObject (not FrameworkElement) to match Windhawk pattern
+    auto elementDo = fe.as<wux::DependencyObject>();
 
-    return true;
-}
-
-static bool TryGetCollectionPropertyHandles(
-    InstanceHandle objectHandle,
-    const wchar_t* propertyName,
-    std::vector<InstanceHandle>& outHandles)
-{
-    outHandles.clear();
-
-    InstanceHandle collectionHandle = 0;
-    if (!TryGetObjectPropertyHandle(objectHandle, propertyName, collectionHandle))
-        return false;
-
-    unsigned int count = 0;
-    HRESULT hr = g_visualTreeService3->GetCollectionCount(collectionHandle, &count);
-    XBLogFmt(L"TryGetCollectionPropertyHandles(%s): GetCollectionCount hr=0x%08X collection=0x%llX count=%u",
-        propertyName, hr, static_cast<unsigned long long>(collectionHandle), count);
-    if (FAILED(hr) || count == 0)
-        return false;
-
-    unsigned int fetched = count;
-    CollectionElementValue* values = nullptr;
-    hr = g_visualTreeService3->GetCollectionElements(collectionHandle, 0, &fetched, &values);
-    XBLogFmt(L"TryGetCollectionPropertyHandles(%s): GetCollectionElements hr=0x%08X fetched=%u",
-        propertyName, hr, fetched);
-    if (FAILED(hr) || !values) {
-        FreeCollectionElements(fetched, values);
-        return false;
-    }
-
-    for (unsigned int i = 0; i < fetched; ++i) {
-        InstanceHandle childHandle = 0;
-        bool parsed = TryParseHandleString(values[i].Value, childHandle);
-        XBLogFmt(L"  collection[%u]: value=%s parsed=%d handle=0x%llX bits=0x%llX valueType=%s",
-            i,
-            values[i].Value ? values[i].Value : L"(null)",
-            parsed ? 1 : 0,
-            static_cast<unsigned long long>(childHandle),
-            static_cast<unsigned long long>(values[i].MetadataBits),
-            values[i].ValueType ? values[i].ValueType : L"(null)");
-        if (parsed && childHandle != 0)
-            outHandles.push_back(childHandle);
-    }
-
-    FreeCollectionElements(fetched, values);
-    return !outHandles.empty();
-}
-
-static std::wstring DescribeHandleObject(IXamlDiagnostics* diag, InstanceHandle handle)
-{
-    if (!diag || handle == 0)
-        return L"(diag=null or handle=0)";
-
-    try {
-        winrt::Windows::Foundation::IInspectable obj;
-        HRESULT hr = diag->GetIInspectableFromHandle(
-            handle,
-            reinterpret_cast<::IInspectable**>(winrt::put_abi(obj)));
-        if (FAILED(hr) || !obj)
-            return L"GetIInspectableFromHandle failed";
-
-        std::wstring className;
-        try {
-            className = winrt::get_class_name(obj).c_str();
-        }
-        catch (...) {
-            className = L"(class unknown)";
-        }
-
-        auto fe = obj.try_as<wux::FrameworkElement>();
-        std::wstring name = fe ? std::wstring(fe.Name().c_str()) : L"";
-        return className + L" Name='" + name + L"'";
-    }
-    catch (...) {
-        return L"(describe threw)";
-    }
-}
-
-static bool TryQueueTargetByHandle(
-    InstanceHandle handle,
-    IXamlDiagnostics* diag,
-    const wchar_t* logTag,
-    const wchar_t* stageLabel)
-{
-    if (!diag || handle == 0)
-        return false;
-
-    try {
-        winrt::Windows::Foundation::IInspectable obj;
-        HRESULT hr = diag->GetIInspectableFromHandle(
-            handle,
-            reinterpret_cast<::IInspectable**>(winrt::put_abi(obj)));
-        XBLogFmt(L"%s %s: GetIInspectableFromHandle hr=0x%08X handle=0x%llX",
-            logTag, stageLabel, hr, static_cast<unsigned long long>(handle));
-        if (FAILED(hr) || !obj)
-            return false;
-
-        auto fe = obj.try_as<wux::FrameworkElement>();
-        if (!fe) {
-            XBLogFmt(L"%s %s: handle=0x%llX is not FrameworkElement",
-                logTag, stageLabel, static_cast<unsigned long long>(handle));
-            return false;
-        }
-
-        auto runtimeName = fe.Name();
-        std::wstring className;
-        try {
-            className = winrt::get_class_name(obj).c_str();
-        }
-        catch (...) {
-            className = L"(class unknown)";
-        }
-
-        XBLogFmt(L"%s %s: handle=0x%llX class=%s name=%s",
-            logTag,
-            stageLabel,
-            static_cast<unsigned long long>(handle),
-            className.c_str(),
-            runtimeName.c_str());
-
-        bool isFill = (runtimeName == L"BackgroundFill");
-        bool isStroke = (runtimeName == L"BackgroundStroke");
-        if (!isFill && !isStroke)
-            return false;
-
-        BrushTargetProp prop = isStroke ? BrushTargetProp::Stroke : BrushTargetProp::Fill;
-        bool queuedNow = QueueDelayedApply(handle, fe, prop, logTag, runtimeName.c_str(), 0);
-        XBLogFmt(L"%s %s: QueueDelayedApply %s (0 ms) => %d",
-            logTag, stageLabel, runtimeName.c_str(), queuedNow ? 1 : 0);
-        if (isFill) {
-            bool queuedRetry = QueueDelayedApply(handle, fe, prop, logTag, runtimeName.c_str(), 500);
-            XBLogFmt(L"%s %s: QueueDelayedApply %s (500 ms) => %d",
-                logTag, stageLabel, runtimeName.c_str(), queuedRetry ? 1 : 0);
-        }
-        return true;
-    }
-    catch (const winrt::hresult_error& ex) {
-        XBLogFmt(L"%s %s: TryQueueTargetByHandle threw 0x%08X: %s",
-            logTag, stageLabel, ex.code(), ex.message().c_str());
-    }
-    catch (const std::exception& ex) {
-        XBLogFmt(L"%s %s: TryQueueTargetByHandle std::exception: %S",
-            logTag, stageLabel, ex.what());
-    }
-    catch (...) {
-        XBLogFmt(L"%s %s: TryQueueTargetByHandle threw unknown", logTag, stageLabel);
-    }
-
-    return false;
-}
-
-static bool QueryTaskbarBackgroundByHandle(InstanceHandle bgHandle, IXamlDiagnostics* diag, const wchar_t* logTag)
-{
-    if (!bgHandle || !diag || !g_visualTreeService3) {
-        XBLogFmt(L"%s native query unavailable bg=0x%llX diag=%d svc3=%d",
-            logTag,
-            static_cast<unsigned long long>(bgHandle),
-            diag ? 1 : 0,
-            g_visualTreeService3 ? 1 : 0);
-        return false;
-    }
-
-    bool foundAny = false;
-    std::vector<InstanceHandle> level1;
-    std::vector<InstanceHandle> level2;
-
-    const wchar_t* directCandidates[] = { L"Child", L"Content", L"ContentTemplateRoot" };
-    for (const wchar_t* propName : directCandidates) {
-        InstanceHandle childHandle = 0;
-        if (TryGetObjectPropertyHandle(bgHandle, propName, childHandle)) {
-            XBLogFmt(L"%s bg.%s => handle=0x%llX %s",
-                logTag,
-                propName,
-                static_cast<unsigned long long>(childHandle),
-                DescribeHandleObject(diag, childHandle).c_str());
-            level1.push_back(childHandle);
-        }
-    }
-
-    const wchar_t* collectionCandidates[] = { L"Children", L"Items" };
-    for (const wchar_t* propName : collectionCandidates) {
-        std::vector<InstanceHandle> handles;
-        if (TryGetCollectionPropertyHandles(bgHandle, propName, handles)) {
-            XBLogFmt(L"%s bg.%s => %u handles", logTag, propName, static_cast<unsigned int>(handles.size()));
-            for (auto handle : handles) {
-                XBLogFmt(L"%s bg.%s child handle=0x%llX %s",
-                    logTag,
-                    propName,
-                    static_cast<unsigned long long>(handle),
-                    DescribeHandleObject(diag, handle).c_str());
-                level1.push_back(handle);
-            }
-        }
-    }
-
-    if (level1.empty()) {
-        XBLogFmt(L"%s no level1 handles discovered for TaskbarBackground handle=0x%llX",
-            logTag, static_cast<unsigned long long>(bgHandle));
-        return false;
-    }
-
-    for (auto handle : level1) {
-        if (TryQueueTargetByHandle(handle, diag, logTag, L"[L1]"))
-            foundAny = true;
-
-        for (const wchar_t* propName : directCandidates) {
-            InstanceHandle childHandle = 0;
-            if (TryGetObjectPropertyHandle(handle, propName, childHandle)) {
-                XBLogFmt(L"%s level1.%s => handle=0x%llX %s",
-                    logTag,
-                    propName,
-                    static_cast<unsigned long long>(childHandle),
-                    DescribeHandleObject(diag, childHandle).c_str());
-                level2.push_back(childHandle);
-            }
-        }
-
-        for (const wchar_t* propName : collectionCandidates) {
-            std::vector<InstanceHandle> handles;
-            if (TryGetCollectionPropertyHandles(handle, propName, handles)) {
-                XBLogFmt(L"%s level1.%s => %u handles", logTag, propName, static_cast<unsigned int>(handles.size()));
-                for (auto grandHandle : handles) {
-                    XBLogFmt(L"%s level1.%s child handle=0x%llX %s",
-                        logTag,
-                        propName,
-                        static_cast<unsigned long long>(grandHandle),
-                        DescribeHandleObject(diag, grandHandle).c_str());
-                    level2.push_back(grandHandle);
+    auto asyncOp = disp.TryRunAsync(
+        wuc::CoreDispatcherPriority::High,
+        [elementDo, targetProp, tag = std::wstring(logTag)]() noexcept {
+            try {
+                XBLogFmt(L"%s dispatch callback: reading state", tag.c_str());
+                auto p = ReadBrushParams(g_pState);
+                if (!p.enabled) {
+                    elementDo.ClearValue(targetProp);
+                    XBLogFmt(L"%s dispatch callback: ClearValue (disabled)", tag.c_str());
+                    return;
                 }
+                wu::Color color{ p.alpha, p.r, p.g, p.b };
+                wuxm::SolidColorBrush brush{};
+                brush.Color(color);
+                elementDo.SetValue(targetProp, brush);
+                XBLogFmt(L"%s dispatch callback: SetValue alpha=%d rgb=(%d,%d,%d)",
+                    tag.c_str(), p.alpha, p.r, p.g, p.b);
             }
-        }
-    }
+            catch (const winrt::hresult_error& ex) {
+                XBLogFmt(L"%s dispatch callback threw 0x%08X: %s",
+                    tag.c_str(), ex.code(), ex.message().c_str());
+            }
+            catch (...) {
+                XBLogFmt(L"%s dispatch callback threw unknown", tag.c_str());
+            }
+        });
 
-    for (auto handle : level2) {
-        if (TryQueueTargetByHandle(handle, diag, logTag, L"[L2]"))
-            foundAny = true;
-    }
+    // Store IAsyncOperation<bool> — prevents it from being dropped/cancelled immediately
+    if (prop == BrushTargetProp::Stroke)
+        g_bgStrokeAsyncAction = asyncOp;
+    else
+        g_bgFillAsyncAction = asyncOp;
 
-    if (!foundAny) {
-        XBLogFmt(L"%s native query completed but did not find BackgroundFill/BackgroundStroke",
-            logTag);
-    }
-
-    return foundAny;
+    XBLogFmt(L"%s DispatchApply: TryRunAsync(High) => %s",
+        logTag, asyncOp ? L"queued" : L"null (dispatcher busy/closing)");
 }
 
 // ---------------------------------------------------------------------------
@@ -574,96 +316,6 @@ void ApplyBrushParams(InstanceHandle handle, const wux::FrameworkElement& elemen
     ApplyBrushParamsFallback(element, prop, p);
 }
 
-static bool QueueDelayedApply(
-    InstanceHandle handle,
-    const wux::FrameworkElement& element,
-    BrushTargetProp prop,
-    const wchar_t* logTag,
-    const wchar_t* elementName,
-    int delayMs) noexcept
-{
-    try {
-        auto disp = element.Dispatcher();
-        if (!disp) {
-            XBLogFmt(L"%s %s: Dispatcher() returned null for delayed apply (%d ms)",
-                logTag, elementName, delayMs);
-            return false;
-        }
-
-        auto runApply = [handle, element, prop,
-                         tag = std::wstring(logTag),
-                         name = std::wstring(elementName),
-                         delayMs]() noexcept {
-            try {
-                XBLogFmt(L"%s [%dms] dispatcher apply entered for %s handle=0x%llX",
-                    tag.c_str(), delayMs, name.c_str(), static_cast<unsigned long long>(handle));
-                RegisterAndApplyTarget(handle, element, prop);
-                XBLogFmt(L"%s [%dms] RegisterAndApplyTarget finished for %s",
-                    tag.c_str(), delayMs, name.c_str());
-            }
-            catch (const winrt::hresult_error& ex) {
-                XBLogFmt(L"%s [%dms] dispatcher apply threw 0x%08X for %s: %s",
-                    tag.c_str(), delayMs, ex.code(), name.c_str(), ex.message().c_str());
-            }
-            catch (const std::exception& ex) {
-                XBLogFmt(L"%s [%dms] dispatcher apply std::exception for %s: %S",
-                    tag.c_str(), delayMs, name.c_str(), ex.what());
-            }
-            catch (...) {
-                XBLogFmt(L"%s [%dms] dispatcher apply threw unknown for %s",
-                    tag.c_str(), delayMs, name.c_str());
-            }
-        };
-
-        if (delayMs <= 0) {
-            XBLogFmt(L"%s %s: queueing dispatcher apply (%d ms)", logTag, elementName, delayMs);
-            auto action = disp.RunAsync(wuc::CoreDispatcherPriority::Normal, runApply);
-            XBLogFmt(L"%s %s: Dispatcher.RunAsync returned %s for %d ms",
-                logTag, elementName, action ? L"action" : L"null", delayMs);
-            return static_cast<bool>(action);
-        }
-
-        auto timer = wust::ThreadPoolTimer::CreateTimer(
-            [disp, runApply, tag = std::wstring(logTag), name = std::wstring(elementName), delayMs]
-            (wust::ThreadPoolTimer const&) noexcept {
-                try {
-                    XBLogFmt(L"%s %s: timer fired after %d ms", tag.c_str(), name.c_str(), delayMs);
-                    disp.RunAsync(wuc::CoreDispatcherPriority::High, runApply);
-                }
-                catch (const winrt::hresult_error& ex) {
-                    XBLogFmt(L"%s %s: timer callback threw 0x%08X after %d ms: %s",
-                        tag.c_str(), name.c_str(), ex.code(), delayMs, ex.message().c_str());
-                }
-                catch (...) {
-                    XBLogFmt(L"%s %s: timer callback threw unknown after %d ms",
-                        tag.c_str(), name.c_str(), delayMs);
-                }
-            },
-            std::chrono::milliseconds(delayMs));
-
-        {
-            std::lock_guard<std::mutex> lk(g_timersMtx);
-            g_pendingTimers.push_back(timer);
-        }
-        XBLogFmt(L"%s %s: scheduled delayed apply timer (%d ms)", logTag, elementName, delayMs);
-        return true;
-    }
-    catch (const winrt::hresult_error& ex) {
-        XBLogFmt(L"%s %s: QueueDelayedApply threw 0x%08X for %d ms: %s",
-            logTag, elementName, ex.code(), delayMs, ex.message().c_str());
-    }
-    catch (const std::exception& ex) {
-        XBLogFmt(L"%s %s: QueueDelayedApply std::exception for %d ms: %S",
-            logTag, elementName, delayMs, ex.what());
-    }
-    catch (...) {
-        XBLogFmt(L"%s %s: QueueDelayedApply threw unknown for %d ms",
-            logTag, elementName, delayMs);
-    }
-
-    return false;
-}
-
 // ---------------------------------------------------------------------------
 // RegisterAndApplyShape
 // handle == 0 for VTH-walked shapes (no diagnostic handle available);
@@ -834,14 +486,8 @@ static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, IXamlDiagnostics*
                     logTag, grandName.c_str(), hr, static_cast<unsigned long long>(grandHandle));
 
                 BrushTargetProp prop = isBgStroke ? BrushTargetProp::Stroke : BrushTargetProp::Fill;
-                XBLogFmt(L"%s queueing delayed apply for %s (0 ms)", logTag, grandName.c_str());
-                bool queuedNow = QueueDelayedApply(grandHandle, grandFE, prop, logTag, grandName.c_str(), 0);
-                XBLogFmt(L"%s delayed apply queue result for %s (0 ms): %d", logTag, grandName.c_str(), queuedNow ? 1 : 0);
-                if (isBgFill) {
-                    XBLogFmt(L"%s queueing delayed retry for %s (500 ms)", logTag, grandName.c_str());
-                    bool queuedRetry = QueueDelayedApply(grandHandle, grandFE, prop, logTag, grandName.c_str(), 500);
-                    XBLogFmt(L"%s delayed apply queue result for %s (500 ms): %d", logTag, grandName.c_str(), queuedRetry ? 1 : 0);
-                }
+                XBLogFmt(L"%s dispatching apply for %s", logTag, grandName.c_str());
+                DispatchApplyToBgElement(grandFE, prop, logTag);
                 foundAny = true;
             }
         }
@@ -933,13 +579,10 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
             wcscmp(element.Type, L"Taskbar.TaskbarBackground") == 0);
         if (isTaskbarBg) {
             g_taskbarBgHandle.store(element.Handle);
-            XBLogFmt(L"  *** TaskbarBackground handle=0x%llX - native handle query starting ***",
+            g_walkDiagnostics = m_diagnostics;
+            g_walkNeeded.store(true);
+            XBLogFmt(L"  *** TaskbarBackground handle=0x%llX - walk scheduled ***",
                 static_cast<unsigned long long>(element.Handle));
-            bool foundViaNativeQuery = QueryTaskbarBackgroundByHandle(element.Handle, m_diagnostics.get(), L"[NativeQuery]");
-            XBLogFmt(L"  *** TaskbarBackground native query result: found=%d ***", foundViaNativeQuery ? 1 : 0);
-            if (!foundViaNativeQuery) {
-                XBLog(L"  *** Native query did not find BackgroundFill / BackgroundStroke; still watching TAP child notifications ***");
-            }
             return S_OK;
         }
 
@@ -983,12 +626,7 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
             : BrushTargetProp::Fill;
         if (isChildOfBg && (runtimeName == L"BackgroundFill" || runtimeName == L"BackgroundStroke")) {
             XBLogFmt(L"  >>> FOUND %s via TAP child notification <<<", runtimeName.c_str());
-            bool queuedNow = QueueDelayedApply(element.Handle, fe, prop, L"[TAP]", runtimeName.c_str(), 0);
-            XBLogFmt(L"  >>> QueueDelayedApply %s (0 ms) => %d", runtimeName.c_str(), queuedNow ? 1 : 0);
-            if (runtimeName == L"BackgroundFill") {
-                bool queuedRetry = QueueDelayedApply(element.Handle, fe, prop, L"[TAP]", runtimeName.c_str(), 500);
-                XBLogFmt(L"  >>> QueueDelayedApply %s (500 ms) => %d", runtimeName.c_str(), queuedRetry ? 1 : 0);
-            }
+            DispatchApplyToBgElement(fe, prop, L"[TAP]");
             return S_OK;
         }
 
