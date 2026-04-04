@@ -575,13 +575,13 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
         }
         
         // Detect Rectangle elements that might be BackgroundFill or BackgroundStroke
-        InstanceHandle bgHandle = g_taskbarBgHandle.load();
+        // Check ANY Rectangle (not just direct children) since BackgroundFill is a grandchild
         bool isRectangle = element.Type && wcsstr(element.Type, L"Rectangle") != nullptr;
         
-        if (isRectangle && bgHandle != 0) {
-            XBLogFmt(L"  >>> Rectangle detected: parent=0x%llX (TaskbarBg=0x%llX)",
-                static_cast<unsigned long long>(relation.Parent),
-                static_cast<unsigned long long>(bgHandle));
+        if (isRectangle) {
+            XBLogFmt(L"  >>> Rectangle detected: Type=%s parent=0x%llX",
+                element.Type ? element.Type : L"(null)",
+                static_cast<unsigned long long>(relation.Parent));
             
             // Get FrameworkElement to check Name
             winrt::Windows::Foundation::IInspectable obj;
@@ -601,9 +601,9 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
                     
                     XBLogFmt(L"  >>> Rectangle Name='%s'", name.c_str());
                     
-                    // Check if this is BackgroundFill or BackgroundStroke
+                    // Check if this is BackgroundFill or BackgroundStroke (unique names)
                     if (name == L"BackgroundFill" || name == L"BackgroundStroke") {
-                        XBLogFmt(L"  *** FOUND %s via TAP notification - applying INSTANTLY ***", name.c_str());
+                        XBLogFmt(L"  *** FOUND %s via TAP (any Rectangle) - applying INSTANTLY ***", name.c_str());
                         
                         BrushTargetProp prop = (name == L"BackgroundStroke") 
                             ? BrushTargetProp::Stroke 
