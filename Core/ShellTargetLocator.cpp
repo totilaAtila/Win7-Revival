@@ -12,8 +12,9 @@ static std::string WideToUtf8(const wchar_t* wstr) {
     int size = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, nullptr, 0, nullptr, nullptr);
     if (size <= 0) return "";
 
-    std::string result(size - 1, 0);
-    WideCharToMultiByte(CP_UTF8, 0, wstr, -1, &result[0], size, nullptr, nullptr);
+    std::string result(size, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wstr, -1, result.data(), size, nullptr, nullptr);
+    result.pop_back(); // drop the UTF-8 terminator written by WideCharToMultiByte
     return result;
 }
 

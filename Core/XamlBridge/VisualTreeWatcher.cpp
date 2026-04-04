@@ -48,9 +48,9 @@ void ApplyBrushParams(const wux::FrameworkElement& element, BrushTargetProp prop
     const wchar_t* propName = (prop == BrushTargetProp::Stroke) ? L"Stroke" : L"Fill";
 
     if (!p.enabled) {
-        XBLogFmt(L"ApplyBrushParams: enabled=0 -> Transparent on %s", propName);
-        element.SetValue(targetProp, wuxm::SolidColorBrush{ wu::Colors::Transparent() });
-        XBLogFmt(L"ApplyBrushParams: transparent %s applied", propName);
+        XBLogFmt(L"ApplyBrushParams: enabled=0 -> ClearValue on %s", propName);
+        element.ClearValue(targetProp);
+        XBLogFmt(L"ApplyBrushParams: cleared local %s value", propName);
         return;
     }
 

@@ -168,10 +168,8 @@ static DWORD WINAPI WorkerThread(LPVOID)
                     [element = entry.element, prop = entry.prop]() noexcept {
                         try {
                             BrushParams p{};
-                            p.enabled = true;
+                            p.enabled = false;
                             p.useBlur = false;
-                            p.alpha = 255;
-                            p.r = 32; p.g = 32; p.b = 32;
                             ApplyBrushParams(element, prop, p);
                         }
                         catch (...) {}
