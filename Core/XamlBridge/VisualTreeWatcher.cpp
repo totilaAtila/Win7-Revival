@@ -389,6 +389,7 @@ static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, IXamlDiagnostics*
 
             if (!intermFE) continue;
 
+            XBLogFmt(L"%s child[%d] BEFORE Name() call", logTag, ci);
             std::wstring intermName;
             try {
                 intermName = intermFE.Name().c_str();
@@ -407,6 +408,8 @@ static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, IXamlDiagnostics*
                 XBLogFmt(L"%s child[%d] Name() threw unknown", logTag, ci);
                 continue;
             }
+
+            XBLogFmt(L"%s child[%d] AFTER Name() call, checking grandchildren", logTag, ci);
 
             int grandCount = 0;
             try {
