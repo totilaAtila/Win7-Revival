@@ -20,6 +20,10 @@ std::mutex               g_shapesMtx;
 // Global watcher reference — keeps VisualTreeWatcher alive after AdviseThread exits
 winrt::com_ptr<VisualTreeWatcher> g_visualTreeWatcher;
 
+// WorkerThread walk dispatch — written by callback thread, consumed by WorkerThread
+std::atomic<bool>                g_walkNeeded     { false };
+winrt::com_ptr<IXamlDiagnostics> g_walkDiagnostics;
+
 static HANDLE            g_hWorkerThread = nullptr;
 
 // ---------------------------------------------------------------------------
@@ -132,16 +136,22 @@ static DWORD WINAPI WorkerThread(LPVOID)
             XBLogFmt(L"WorkerThread: dispatching to %zu known shapes", g_knownShapes.size());
             for (const auto& entry : g_knownShapes) {
                 try {
-                    auto disp = entry.shape.Dispatcher();
+                    auto disp = entry.element.Dispatcher();
                     if (!disp) continue;
                     disp.RunAsync(wuc::CoreDispatcherPriority::Normal,
-                        [shape = entry.shape, params]() noexcept {
-                            try { ApplyBrushParams(shape, params); }
+                        [element = entry.element, prop = entry.prop, params]() noexcept {
+                            try { ApplyBrushParams(element, prop, params); }
                             catch (...) {}
                         });
                 }
                 catch (...) {}
             }
+        }
+
+        if (g_walkNeeded.exchange(false)) {
+            XBLog(L"WorkerThread: walk requested");
+            if (g_visualTreeWatcher)
+                g_visualTreeWatcher->WalkTaskbarBgPostReplay();
         }
 
         Sleep(150);
@@ -152,13 +162,17 @@ static DWORD WINAPI WorkerThread(LPVOID)
         std::lock_guard<std::mutex> lk(g_shapesMtx);
         for (const auto& entry : g_knownShapes) {
             try {
-                auto disp = entry.shape.Dispatcher();
+                auto disp = entry.element.Dispatcher();
                 if (!disp) continue;
                 disp.RunAsync(wuc::CoreDispatcherPriority::High,
-                    [shape = entry.shape]() noexcept {
+                    [element = entry.element, prop = entry.prop]() noexcept {
                         try {
-                            wu::Color c{ 255, 32, 32, 32 };
-                            shape.Fill(wuxm::SolidColorBrush{ c });
+                            BrushParams p{};
+                            p.enabled = true;
+                            p.useBlur = false;
+                            p.alpha = 255;
+                            p.r = 32; p.g = 32; p.b = 32;
+                            ApplyBrushParams(element, prop, p);
                         }
                         catch (...) {}
                     });

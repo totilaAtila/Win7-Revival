@@ -1,22 +1,23 @@
 //
-// VisualTreeWatcher.cpp — Tree monitoring + brush application  [ITER #12]
+// VisualTreeWatcher.cpp - Tree monitoring + brush application  [ITER #14]
 //
-// ITER #12 changes vs ITER #11:
-//   - isTaskbarBg: resolves Taskbar.TaskbarBackground IInspectable (was skipped before)
-//   - VTH walk: when TaskbarBackground arrives, actively walk its descendants with
-//     VisualTreeHelper::GetChild to find Rectangle#BackgroundFill/BackgroundStroke
-//     (bypasses incomplete AdviseVisualTreeChange replay that stops at TaskbarBackground)
-//   - RegisterAndApplyShape helper: dedup + apply, supports both handle-tracked and
-//     VTH-walked (handle=0) shapes
+// ITER #14 changes vs ITER #13:
+//   - TaskbarBackground now resolves and walks inline on the callback that sees it.
+//   - WorkerThread walk remains as a fallback when inline resolve/walk fails.
+//   - Shared walk logic lives in WalkTaskbarBgTree() so both paths stay identical.
+// ITER #15 diagnostic:
+//   - Force SolidColorBrush / Transparent for XamlBridge taskbar path.
+//   - Temporarily bypass AcrylicBrush so we can prove the Fill pipeline first.
 //
 #include "VisualTreeWatcher.h"
+#include "TAPObject.h"
 
 // ---------------------------------------------------------------------------
 // Diagnostic state (shared across all watcher instances)
 // ---------------------------------------------------------------------------
-static std::atomic<int>            g_loggedElements    { 0 };
-static constexpr int               kMaxLoggedElements  = 10000; // full dump
-static std::atomic<InstanceHandle> g_taskbarBgHandle   { 0 };   // handle of Taskbar.TaskbarBackground
+static std::atomic<int>            g_loggedElements   { 0 };
+static constexpr int               kMaxLoggedElements = 10000;
+static std::atomic<InstanceHandle> g_taskbarBgHandle  { 0 };
 
 // ---------------------------------------------------------------------------
 // Brush helpers
@@ -27,8 +28,8 @@ BrushParams ReadBrushParams(const SharedBlurState* s)
     BrushParams p = {};
     if (!s) return p;
     LONG en  = InterlockedCompareExchange(const_cast<volatile LONG*>(&s->blurEnabled), 0, 0);
-    LONG op  = InterlockedCompareExchange(const_cast<volatile LONG*>(&s->opacityPct),  75, 75);
-    LONG amt = InterlockedCompareExchange(const_cast<volatile LONG*>(&s->blurAmount),   0, 0);
+    LONG op  = InterlockedCompareExchange(const_cast<volatile LONG*>(&s->opacityPct), 75, 75);
+    LONG amt = InterlockedCompareExchange(const_cast<volatile LONG*>(&s->blurAmount), 0, 0);
     p.enabled = (en != 0);
     p.useBlur = (amt > 0);
     p.alpha   = static_cast<BYTE>(((100 - op) * 255) / 100);
@@ -38,28 +39,29 @@ BrushParams ReadBrushParams(const SharedBlurState* s)
     return p;
 }
 
-// Must be called on the XAML UI thread (OnVisualTreeChange or RunAsync callback)
-void ApplyBrushParams(const wuxs::Shape& shape, const BrushParams& p)
+// Must be called on the XAML UI thread (OnVisualTreeChange or dispatcher callback).
+void ApplyBrushParams(const wux::FrameworkElement& element, BrushTargetProp prop, const BrushParams& p)
 {
+    auto targetProp = (prop == BrushTargetProp::Stroke)
+        ? wuxs::Shape::StrokeProperty()
+        : wuxs::Shape::FillProperty();
+    const wchar_t* propName = (prop == BrushTargetProp::Stroke) ? L"Stroke" : L"Fill";
+
     if (!p.enabled) {
-        shape.Fill(wuxm::SolidColorBrush{ wu::Colors::Transparent() });
+        XBLogFmt(L"ApplyBrushParams: enabled=0 -> Transparent on %s", propName);
+        element.SetValue(targetProp, wuxm::SolidColorBrush{ wu::Colors::Transparent() });
+        XBLogFmt(L"ApplyBrushParams: transparent %s applied", propName);
         return;
     }
+
     wu::Color color{ p.alpha, p.r, p.g, p.b };
-    if (p.useBlur) {
-        try {
-            wuxm::AcrylicBrush acrylic{};
-            acrylic.BackgroundSource(wuxm::AcrylicBackgroundSource::HostBackdrop);
-            acrylic.TintColor(color);
-            acrylic.TintOpacity(static_cast<double>(p.alpha) / 255.0);
-            shape.Fill(acrylic);
-            return;
-        }
-        catch (...) {}
-    }
+
     wuxm::SolidColorBrush brush{};
     brush.Color(color);
-    shape.Fill(brush);
+    XBLogFmt(L"ApplyBrushParams: using SolidColorBrush on %s alpha=%d rgb=(%d,%d,%d) blurRequested=%d",
+        propName, p.alpha, p.r, p.g, p.b, p.useBlur ? 1 : 0);
+    element.SetValue(targetProp, brush);
+    XBLogFmt(L"ApplyBrushParams: solid %s applied", propName);
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +69,7 @@ void ApplyBrushParams(const wuxs::Shape& shape, const BrushParams& p)
 // handle == 0 for VTH-walked shapes (no diagnostic handle available);
 // dedup by handle (if != 0) or by raw COM pointer (if handle == 0).
 // ---------------------------------------------------------------------------
-static void RegisterAndApplyShape(InstanceHandle handle, const wuxs::Shape& shape)
+static void RegisterAndApplyTarget(InstanceHandle handle, const wux::FrameworkElement& element, BrushTargetProp prop)
 {
     {
         std::lock_guard<std::mutex> lk(g_shapesMtx);
@@ -76,25 +78,177 @@ static void RegisterAndApplyShape(InstanceHandle handle, const wuxs::Shape& shap
             found = std::any_of(g_knownShapes.begin(), g_knownShapes.end(),
                 [handle](const ShapeEntry& e) { return e.handle == handle; });
         } else {
-            // VTH-walked shape: compare by COM identity (C++/WinRT operator==)
             found = std::any_of(g_knownShapes.begin(), g_knownShapes.end(),
-                [&shape](const ShapeEntry& e) { return e.shape == shape; });
+                [&element, prop](const ShapeEntry& e) { return e.prop == prop && e.element == element; });
         }
         if (!found)
-            g_knownShapes.emplace_back(handle, shape);
+            g_knownShapes.emplace_back(handle, element, prop);
     }
+
     BrushParams p = ReadBrushParams(g_pState);
-    ApplyBrushParams(shape, p);
+    ApplyBrushParams(element, prop, p);
+}
+
+static bool QueueShapeApply(
+    InstanceHandle handle,
+    const wux::FrameworkElement& element,
+    const wchar_t* elementName,
+    const wchar_t* logTag) noexcept
+{
+    try {
+        auto disp = element.Dispatcher();
+        if (!disp) {
+            XBLogFmt(L"%s %s: Dispatcher() returned null", logTag, elementName);
+            return false;
+        }
+
+        XBLogFmt(L"%s %s: queueing apply on Dispatcher", logTag, elementName);
+        auto action = disp.RunAsync(wuc::CoreDispatcherPriority::Normal,
+            [handle, element, tag = std::wstring(logTag), name = std::wstring(elementName)]() noexcept {
+                try {
+                    XBLogFmt(L"%s %s: dispatcher callback entered", tag.c_str(), name.c_str());
+                    BrushTargetProp prop = (name == L"BackgroundStroke")
+                        ? BrushTargetProp::Stroke
+                        : BrushTargetProp::Fill;
+                    XBLogFmt(L"%s %s: applying via DependencyProperty on Dispatcher", tag.c_str(), name.c_str());
+                    RegisterAndApplyTarget(handle, element, prop);
+                    XBLogFmt(L"%s %s: RegisterAndApplyTarget finished", tag.c_str(), name.c_str());
+                }
+                catch (const winrt::hresult_error& ex) {
+                    XBLogFmt(L"%s %s: dispatcher callback threw 0x%08X: %s",
+                        tag.c_str(), name.c_str(), ex.code(), ex.message().c_str());
+                }
+                catch (...) {
+                    XBLogFmt(L"%s %s: dispatcher callback threw unknown", tag.c_str(), name.c_str());
+                }
+            });
+
+        XBLogFmt(L"%s %s: Dispatcher.RunAsync returned %s", logTag, elementName, action ? L"action" : L"null");
+        return static_cast<bool>(action);
+    }
+    catch (const winrt::hresult_error& ex) {
+        XBLogFmt(L"%s %s: queueing threw 0x%08X: %s", logTag, elementName, ex.code(), ex.message().c_str());
+    }
+    catch (...) {
+        XBLogFmt(L"%s %s: queueing threw unknown", logTag, elementName);
+    }
+
+    return false;
+}
+
+static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, const wchar_t* logTag) noexcept
+{
+    bool foundAny = false;
+    try {
+        int bgChildCount = wuxm::VisualTreeHelper::GetChildrenCount(fe);
+        XBLogFmt(L"%s child count: %d", logTag, bgChildCount);
+        for (int ci = 0; ci < bgChildCount; ++ci) {
+            auto intermediate = wuxm::VisualTreeHelper::GetChild(fe, ci);
+            if (!intermediate) {
+                XBLogFmt(L"%s child[%d] = nullptr", logTag, ci);
+                continue;
+            }
+
+            auto intermFE = intermediate.try_as<wux::FrameworkElement>();
+            if (!intermFE) continue;
+
+            int grandCount = wuxm::VisualTreeHelper::GetChildrenCount(intermFE);
+            XBLogFmt(L"%s child[%d] Name='%s' grandchildren=%d",
+                logTag, ci, intermFE.Name().c_str(), grandCount);
+
+            for (int gi = 0; gi < grandCount; ++gi) {
+                winrt::Windows::Foundation::IInspectable grand;
+                try {
+                    grand = wuxm::VisualTreeHelper::GetChild(intermFE, gi);
+                    XBLogFmt(L"%s GetChild[%d][%d] = %s",
+                        logTag, ci, gi, grand ? L"valid" : L"nullptr");
+                }
+                catch (const winrt::hresult_error& ex) {
+                    XBLogFmt(L"%s GetChild[%d][%d] threw 0x%08X", logTag, ci, gi, ex.code());
+                    continue;
+                }
+                catch (...) {
+                    XBLogFmt(L"%s GetChild[%d][%d] threw unknown", logTag, ci, gi);
+                    continue;
+                }
+
+                if (!grand) continue;
+
+                auto grandFE = grand.try_as<wux::FrameworkElement>();
+                if (!grandFE) {
+                    XBLogFmt(L"%s grandchild[%d][%d] not FrameworkElement", logTag, ci, gi);
+                    continue;
+                }
+
+                auto grandName = grandFE.Name();
+                XBLogFmt(L"%s grandchild[%d][%d] Name='%s'", logTag, ci, gi, grandName.c_str());
+                bool isBgFill   = (grandName == L"BackgroundFill");
+                bool isBgStroke = (grandName == L"BackgroundStroke");
+                if (!isBgFill && !isBgStroke) continue;
+
+                XBLogFmt(L"%s found %s - queueing dispatcher apply", logTag, grandName.c_str());
+                if (QueueShapeApply(0, grandFE, grandName.c_str(), logTag))
+                    foundAny = true;
+            }
+        }
+    }
+    catch (const winrt::hresult_error& ex) {
+        XBLogFmt(L"%s walk threw 0x%08X: %s", logTag, ex.code(), ex.message().c_str());
+    }
+    catch (...) {
+        XBLogFmt(L"%s walk threw unknown exception", logTag);
+    }
+
+    return foundAny;
+}
+
+// ---------------------------------------------------------------------------
+// WalkTaskbarBgPostReplay
+// Called from WorkerThread fallback path when inline resolve/walk could not finish.
+// ---------------------------------------------------------------------------
+void VisualTreeWatcher::WalkTaskbarBgPostReplay() noexcept
+{
+    XBLog(L"[WalkPostReplay] entered");
+    InstanceHandle bgHandle = g_taskbarBgHandle.load();
+    XBLogFmt(L"[WalkPostReplay] bgHandle=0x%llX  g_walkDiagnostics=%s",
+        static_cast<unsigned long long>(bgHandle),
+        g_walkDiagnostics ? L"OK" : L"NULL");
+    if (bgHandle == 0) {
+        XBLog(L"WalkTaskbarBgPostReplay: no handle stored - TaskbarBackground not seen in replay");
+        return;
+    }
+    if (!g_walkDiagnostics) {
+        XBLog(L"WalkTaskbarBgPostReplay: g_walkDiagnostics is null");
+        return;
+    }
+
+    winrt::Windows::Foundation::IInspectable obj;
+    HRESULT hr = g_walkDiagnostics->GetIInspectableFromHandle(
+        bgHandle,
+        reinterpret_cast<::IInspectable**>(winrt::put_abi(obj)));
+    if (FAILED(hr) || !obj) {
+        XBLogFmt(L"WalkTaskbarBgPostReplay: GetIInspectableFromHandle failed hr=0x%08X", hr);
+        return;
+    }
+
+    auto fe = obj.try_as<wux::FrameworkElement>();
+    if (!fe) {
+        XBLog(L"WalkTaskbarBgPostReplay: try_as<FrameworkElement> failed");
+        return;
+    }
+
+    XBLog(L"[PostReplay] walk started");
+    if (!WalkTaskbarBgTree(fe, L"[PostReplay]"))
+        XBLog(L"[PostReplay] no BackgroundFill/BackgroundStroke found");
 }
 
 // ---------------------------------------------------------------------------
 // VisualTreeWatcher::OnVisualTreeChange
 // ---------------------------------------------------------------------------
-
 HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
-    ParentChildRelation  relation,
-    VisualElement        element,
-    VisualMutationType   mutationType) noexcept
+    ParentChildRelation relation,
+    VisualElement element,
+    VisualMutationType mutationType) noexcept
 {
     try {
         if (mutationType == Remove) {
@@ -106,7 +260,6 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
             return S_OK;
         }
 
-        // --- Full diagnostic dump (parent handle + type + name) -----------------
         int idx = g_loggedElements.fetch_add(1);
         if (idx < kMaxLoggedElements) {
             XBLogFmt(L"  [%d] parent=0x%llX  Type=%-60s  Name=%s",
@@ -116,39 +269,59 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
                 element.Name ? element.Name : L"(null)");
         }
 
-        // Detect Taskbar.TaskbarBackground — store handle + will VTH-walk below
         bool isTaskbarBg = (element.Type &&
             wcscmp(element.Type, L"Taskbar.TaskbarBackground") == 0);
         if (isTaskbarBg) {
             g_taskbarBgHandle.store(element.Handle);
-            XBLogFmt(L"  *** TaskbarBackground handle=0x%llX stored — VTH walk pending ***",
+            XBLogFmt(L"  *** TaskbarBackground handle=0x%llX - resolving and walking inline from callback ***",
                 static_cast<unsigned long long>(element.Handle));
+
+            winrt::Windows::Foundation::IInspectable obj;
+            HRESULT hr = m_diagnostics->GetIInspectableFromHandle(
+                element.Handle,
+                reinterpret_cast<::IInspectable**>(winrt::put_abi(obj)));
+            if (FAILED(hr) || !obj) {
+                g_walkDiagnostics = m_diagnostics;
+                g_walkNeeded.store(true);
+                XBLogFmt(L"  *** Inline resolve FAILED hr=0x%08X - falling back to WorkerThread walk ***", hr);
+                return S_OK;
+            }
+
+            auto fe = obj.try_as<wux::FrameworkElement>();
+            if (!fe) {
+                g_walkDiagnostics = m_diagnostics;
+                g_walkNeeded.store(true);
+                XBLog(L"  *** Inline try_as<FrameworkElement> FAILED - falling back to WorkerThread walk ***");
+                return S_OK;
+            }
+
+            XBLog(L"[Inline] walk started");
+            if (!WalkTaskbarBgTree(fe, L"[Inline]")) {
+                g_walkDiagnostics = m_diagnostics;
+                g_walkNeeded.store(true);
+                XBLog(L"[Inline] no BackgroundFill/BackgroundStroke found - WorkerThread fallback requested");
+            }
+            return S_OK;
         }
 
-        // --- Path 1: direct child of TaskbarBackground — try ALL Shapes ----------
         InstanceHandle bgHandle = g_taskbarBgHandle.load();
         bool isChildOfBg = (bgHandle != 0 && relation.Parent == bgHandle);
-
         if (isChildOfBg) {
             XBLogFmt(L"  *** TaskbarBackground CHILD: Type=%s  Name=%s ***",
                 element.Type ? element.Type : L"(null)",
                 element.Name ? element.Name : L"(null)");
         }
 
-        // --- Path 2: any Rectangle anywhere in the tree -------------------------
         bool isRectangle = element.Type && wcsstr(element.Type, L"Rectangle") != nullptr;
-
-        // isTaskbarBg is now included so we proceed to resolve IInspectable for it
-        if (!isChildOfBg && !isRectangle && !isTaskbarBg)
+        if (!isChildOfBg && !isRectangle)
             return S_OK;
 
-        // Resolve handle → IInspectable
         winrt::Windows::Foundation::IInspectable obj;
         HRESULT hr = m_diagnostics->GetIInspectableFromHandle(
             element.Handle,
             reinterpret_cast<::IInspectable**>(winrt::put_abi(obj)));
         if (FAILED(hr) || !obj) {
-            if (isChildOfBg || isTaskbarBg)
+            if (isChildOfBg)
                 XBLogFmt(L"  *** GetIInspectableFromHandle FAILED hr=0x%08X ***", hr);
             return S_OK;
         }
@@ -156,43 +329,7 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
         auto fe = obj.try_as<wux::FrameworkElement>();
         if (!fe) return S_OK;
 
-        // --- VTH walk: TaskbarBackground → Grid(s) → Rectangle#BackgroundFill ---
-        if (isTaskbarBg) {
-            try {
-                int bgChildCount = wuxm::VisualTreeHelper::GetChildrenCount(fe);
-                XBLogFmt(L"  *** TaskbarBg VTH child count: %d ***", bgChildCount);
-                for (int ci = 0; ci < bgChildCount; ++ci) {
-                    auto intermediate = wuxm::VisualTreeHelper::GetChild(fe, ci);
-                    if (!intermediate) continue;
-                    auto intermFE = intermediate.try_as<wux::FrameworkElement>();
-                    if (!intermFE) continue;
-                    int grandCount = wuxm::VisualTreeHelper::GetChildrenCount(intermFE);
-                    XBLogFmt(L"  TaskbarBg VTH child[%d] Name='%s' grandchildren=%d",
-                        ci, intermFE.Name().c_str(), grandCount);
-                    for (int gi = 0; gi < grandCount; ++gi) {
-                        auto grand = wuxm::VisualTreeHelper::GetChild(intermFE, gi);
-                        if (!grand) continue;
-                        auto grandFE = grand.try_as<wux::FrameworkElement>();
-                        if (!grandFE) continue;
-                        auto grandName = grandFE.Name();
-                        XBLogFmt(L"    TaskbarBg VTH grandchild[%d][%d] Name='%s'",
-                            ci, gi, grandName.c_str());
-                        if (grandName != L"BackgroundFill" && grandName != L"BackgroundStroke")
-                            continue;
-                        auto shape = grandFE.try_as<wuxs::Shape>();
-                        if (!shape) continue;
-                        XBLogFmt(L"  >>> VTH walk: found %s — registering + applying brush",
-                            grandName.c_str());
-                        RegisterAndApplyShape(0, shape);
-                    }
-                }
-            }
-            catch (...) {}
-            return S_OK;
-        }
-
         auto runtimeName = fe.Name();
-
         if (isRectangle) {
             bool isBackground = (runtimeName == L"BackgroundFill");
             bool isStroke     = (runtimeName == L"BackgroundStroke");
@@ -202,24 +339,21 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
                 return S_OK;
         }
 
-        auto shape = fe.try_as<wuxs::Shape>();
-        if (!shape) {
-            if (isChildOfBg)
-                XBLogFmt(L"  *** TaskbarBackground child is not a Shape (no cast) ***");
-            return S_OK;
-        }
-
-        XBLogFmt(L"  >>> Applying brush to Name=%s", runtimeName.c_str());
-        RegisterAndApplyShape(element.Handle, shape);
+        BrushTargetProp prop = (runtimeName == L"BackgroundStroke")
+            ? BrushTargetProp::Stroke
+            : BrushTargetProp::Fill;
+        XBLogFmt(L"  >>> Applying brush to Name=%s via DependencyProperty", runtimeName.c_str());
+        RegisterAndApplyTarget(element.Handle, fe, prop);
     }
     catch (...) {}
+
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnElementStateChanged(
-    InstanceHandle      /*element*/,
-    VisualElementState  /*elementState*/,
-    LPCWSTR             /*context*/) noexcept
+    InstanceHandle /*element*/,
+    VisualElementState /*elementState*/,
+    LPCWSTR /*context*/) noexcept
 {
     return S_OK;
 }

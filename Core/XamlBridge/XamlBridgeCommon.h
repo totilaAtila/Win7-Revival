@@ -46,10 +46,17 @@ namespace wuxs = winrt::Windows::UI::Xaml::Shapes;
 // Shared types
 // ---------------------------------------------------------------------------
 
+enum class BrushTargetProp {
+    Fill,
+    Stroke
+};
+
 struct ShapeEntry {
-    InstanceHandle handle;
-    wuxs::Shape    shape;
-    ShapeEntry(InstanceHandle h, wuxs::Shape s) : handle(h), shape(std::move(s)) {}
+    InstanceHandle  handle;
+    wux::FrameworkElement element;
+    BrushTargetProp prop;
+    ShapeEntry(InstanceHandle h, wux::FrameworkElement e, BrushTargetProp p)
+        : handle(h), element(std::move(e)), prop(p) {}
 };
 
 struct BrushParams {
@@ -67,6 +74,8 @@ extern std::atomic<bool>        g_stopping;
 extern SharedBlurState*         g_pState;
 extern std::vector<ShapeEntry>  g_knownShapes;
 extern std::mutex               g_shapesMtx;
+extern std::atomic<bool>                g_walkNeeded;
+extern winrt::com_ptr<IXamlDiagnostics> g_walkDiagnostics;
 
 // ---------------------------------------------------------------------------
 // Logging (defined in dllmain.cpp)
@@ -78,4 +87,4 @@ void XBLogFmt(const wchar_t* fmt, ...);
 // Brush helpers (defined in VisualTreeWatcher.cpp)
 // ---------------------------------------------------------------------------
 BrushParams ReadBrushParams(const SharedBlurState* s);
-void        ApplyBrushParams(const wuxs::Shape& shape, const BrushParams& p);
+void        ApplyBrushParams(const wux::FrameworkElement& element, BrushTargetProp prop, const BrushParams& p);

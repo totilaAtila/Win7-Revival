@@ -36,6 +36,10 @@ static void AdviseThreadBody(AdviseArgs* a)
         XBLogFmt(L"AdviseVisualTreeChange (svc): hr=0x%08X", hr);
     }
 
+    // Note: AdviseVisualTreeChange does not return during normal operation —
+    // it stays registered for live mutations.  The tree walk is triggered from
+    // OnVisualTreeChange (via a spawned thread) when TaskbarBackground is seen.
+
     delete a;
 }
 

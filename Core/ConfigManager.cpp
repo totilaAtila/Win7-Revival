@@ -50,37 +50,37 @@ bool ConfigManager::Load() {
         // Remove whitespace
         line.erase(std::remove_if(line.begin(), line.end(), ::isspace), line.end());
 
-        if (line.find("\"taskbarOpacity\":") != std::string::npos) {
+        if (line.find("\"TaskbarOpacity\":") != std::string::npos) {
             size_t pos = line.find(':');
             if (pos != std::string::npos) {
                 std::string value = line.substr(pos + 1);
                 value.erase(std::remove(value.begin(), value.end(), ','), value.end());
                 try { tempConfig.taskbarOpacity = std::clamp(std::stoi(value), 0, 100); }
-                catch (const std::exception&) { CF_LOG(Warning, "Invalid taskbarOpacity in config, using default"); }
+                catch (const std::exception&) { CF_LOG(Warning, "Invalid TaskbarOpacity in config, using default"); }
             }
         }
-        else if (line.find("\"startOpacity\":") != std::string::npos) {
+        else if (line.find("\"StartOpacity\":") != std::string::npos) {
             size_t pos = line.find(':');
             if (pos != std::string::npos) {
                 std::string value = line.substr(pos + 1);
                 value.erase(std::remove(value.begin(), value.end(), ','), value.end());
                 try { tempConfig.startOpacity = std::clamp(std::stoi(value), 0, 100); }
-                catch (const std::exception&) { CF_LOG(Warning, "Invalid startOpacity in config, using default"); }
+                catch (const std::exception&) { CF_LOG(Warning, "Invalid StartOpacity in config, using default"); }
             }
         }
-        else if (line.find("\"taskbarEnabled\":") != std::string::npos) {
+        else if (line.find("\"TaskbarEnabled\":") != std::string::npos) {
             tempConfig.taskbarEnabled = (line.find("true") != std::string::npos);
         }
-        else if (line.find("\"startEnabled\":") != std::string::npos) {
+        else if (line.find("\"StartEnabled\":") != std::string::npos) {
             tempConfig.startEnabled = (line.find("true") != std::string::npos);
         }
-        else if (line.find("\"taskbarBlur\":") != std::string::npos) {
+        else if (line.find("\"TaskbarBlur\":") != std::string::npos) {
             tempConfig.taskbarBlur = (line.find("true") != std::string::npos);
         }
-        else if (line.find("\"startBlur\":") != std::string::npos) {
+        else if (line.find("\"StartBlur\":") != std::string::npos) {
             tempConfig.startBlur = (line.find("true") != std::string::npos);
         }
-        else if (line.find("\"hotkeyVk\":") != std::string::npos) {
+        else if (line.find("\"HotkeyVk\":") != std::string::npos) {
             size_t pos = line.find(':');
             if (pos != std::string::npos) {
                 std::string value = line.substr(pos + 1);
@@ -89,7 +89,7 @@ bool ConfigManager::Load() {
                 catch (const std::exception&) {}
             }
         }
-        else if (line.find("\"hotkeyModifiers\":") != std::string::npos) {
+        else if (line.find("\"HotkeyModifiers\":") != std::string::npos) {
             size_t pos = line.find(':');
             if (pos != std::string::npos) {
                 std::string value = line.substr(pos + 1);
@@ -98,7 +98,7 @@ bool ConfigManager::Load() {
                 catch (const std::exception&) {}
             }
         }
-        else if (line.find("\"blurAmount\":") != std::string::npos) {
+        else if (line.find("\"BlurAmount\":") != std::string::npos) {
             size_t pos = line.find(':');
             if (pos != std::string::npos) {
                 std::string value = line.substr(pos + 1);
@@ -133,15 +133,15 @@ bool ConfigManager::Save() {
     
     // Write JSON manually (formatted)
     file << "{\n";
-    file << "  \"taskbarOpacity\": " << m_config.taskbarOpacity << ",\n";
-    file << "  \"startOpacity\": " << m_config.startOpacity << ",\n";
-    file << "  \"taskbarEnabled\": " << (m_config.taskbarEnabled ? "true" : "false") << ",\n";
-    file << "  \"startEnabled\": " << (m_config.startEnabled ? "true" : "false") << ",\n";
-    file << "  \"taskbarBlur\": " << (m_config.taskbarBlur ? "true" : "false") << ",\n";
-    file << "  \"startBlur\": " << (m_config.startBlur ? "true" : "false") << ",\n";
-    file << "  \"hotkeyVk\": " << m_config.hotkeyVk << ",\n";
-    file << "  \"hotkeyModifiers\": " << m_config.hotkeyModifiers << ",\n";
-    file << "  \"blurAmount\": " << m_config.blurAmount << "\n";
+    file << "  \"TaskbarOpacity\": " << m_config.taskbarOpacity << ",\n";
+    file << "  \"StartOpacity\": " << m_config.startOpacity << ",\n";
+    file << "  \"TaskbarEnabled\": " << (m_config.taskbarEnabled ? "true" : "false") << ",\n";
+    file << "  \"StartEnabled\": " << (m_config.startEnabled ? "true" : "false") << ",\n";
+    file << "  \"TaskbarBlur\": " << (m_config.taskbarBlur ? "true" : "false") << ",\n";
+    file << "  \"StartBlur\": " << (m_config.startBlur ? "true" : "false") << ",\n";
+    file << "  \"HotkeyVk\": " << m_config.hotkeyVk << ",\n";
+    file << "  \"HotkeyModifiers\": " << m_config.hotkeyModifiers << ",\n";
+    file << "  \"BlurAmount\": " << m_config.blurAmount << "\n";
     file << "}\n";
     
     file.close();

@@ -11,6 +11,17 @@
 
 ---
 
+## Current Reality
+
+- **22H2 / 23H2:** the classic taskbar overlay path remains the stable implementation.
+- **24H2 / 25H2+:** taskbar rendering is currently **experimental** and uses an **XamlBridge / TAP-based path inside `explorer.exe`** while the Windows 11 XAML taskbar is being investigated.
+- The current 25H2+ local build can reach `TaskbarBackground` and `BackgroundFill`, but it still does **not** produce a visible taskbar effect.
+- A separate startup/config regression is also open: startup is slow and `GlassBar.log` may report defaults even when `%LOCALAPPDATA%\\GlassBar\\config.json` contains persisted values.
+
+This README now reflects the current local state of the project rather than the older fully-external-only taskbar description.
+
+---
+
 ## Features
 
 - **Taskbar Overlay** — Semi-transparent color overlay over the Windows 11 Taskbar
@@ -34,7 +45,7 @@
 - **System Theme Support** — Follows Windows light/dark theme automatically
 - **Click-Through** — Full Taskbar and Start Menu functionality preserved
 - **Explorer Restart Recovery** — Auto re-detects Taskbar/Start after Explorer crashes
-- **No Injection** — External overlay only; no system file modifications
+- **No system file modifications** — current 25H2+ taskbar experiments use Xaml diagnostics/TAP inside `explorer.exe`, but do not patch system files
 
 ---
 
@@ -190,14 +201,16 @@ GlassBar uses different rendering strategies depending on the Windows build, bec
 |----------------|-------|-----------|-------------|-----------------|----------------|-----------------|
 | **22H2** | < 22631 | `SetWindowCompositionAttribute` (SWCA) | ✅ Full control | ✅ Full control | ✅ Full Acrylic | ✅ Icons always fully opaque |
 | **23H2** | 22631 | SWCA | ✅ Full control | ✅ Full control | ✅ Full Acrylic | ✅ Icons always fully opaque |
-| **24H2 / 25H2+** | ≥ 26000 | `SetLayeredWindowAttributes` (LWA_ALPHA) fallback | ✅ Works | ✅ Works | ⚠️ No effect | ⚠️ Icons fade with transparency |
+| **24H2 / 25H2+** | ≥ 26000 | Experimental `XamlBridge` / TAP investigation (local branch reality) | ⚠️ In progress | ⚠️ In progress | ⚠️ In progress | ⚠️ Under investigation |
 
 ### Notes on 24H2 / 25H2+
 
-On Windows builds ≥ 26000, Microsoft removed support for SWCA-based transparency on `Shell_TrayWnd`. GlassBar falls back to applying `LWA_ALPHA` directly to the Taskbar window, which means:
+On Windows builds ≥ 26000, Microsoft removed support for the older SWCA-based assumptions on the XAML taskbar. The current local project state is no longer "24H2/25H2 solved"; instead:
 
-- **Transparency works**, but as opacity increases, Taskbar icons become proportionally less visible alongside the background. This is a platform limitation — the entire Taskbar window becomes translucent, not just the background layer.
-- **RGB color tint works** correctly on these builds. **Blur/Acrylic has no effect** (DWM ignores SWCA acrylic/blur states on the XAML taskbar).
+- the stable 22H2/23H2 path remains intact
+- the 24H2/25H2+ path is currently being reworked through an experimental `GlassBar.XamlBridge.dll` + XAML diagnostics/TAP approach inside `explorer.exe`
+- the latest local investigation can resolve `TaskbarBackground` and `BackgroundFill`, but still does not produce a visible taskbar effect
+- startup/config behavior on these builds also still needs stabilization
 
 This limitation is not unique to GlassBar. As of testing on Windows 25H2 (build 26000+):
 - **OpenShell** runs as an application but cannot display any transparency effect on either the Taskbar or Start Menu.
