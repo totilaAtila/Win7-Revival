@@ -619,7 +619,6 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
         }
 
         return S_OK;
-        RegisterAndApplyTarget(element.Handle, fe, prop);
     }
     catch (const winrt::hresult_error& ex) {
         XBLogFmt(L"OnVisualTreeChange: winrt::hresult_error 0x%08X: %s",
