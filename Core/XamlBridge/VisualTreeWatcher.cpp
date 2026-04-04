@@ -568,10 +568,22 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
             wcscmp(element.Type, L"Taskbar.TaskbarBackground") == 0);
         if (isTaskbarBg) {
             g_taskbarBgHandle.store(element.Handle);
-            XBLogFmt(L"  *** TaskbarBackground handle=0x%llX - applying INLINE for instant effect ***",
+            XBLogFmt(L"  *** TaskbarBackground handle=0x%llX detected - waiting for TAP to notify Rectangle children ***",
                 static_cast<unsigned long long>(element.Handle));
+            // NO manual walk - we wait for TAP to notify us of BackgroundFill/BackgroundStroke rectangles
+            return S_OK;
+        }
+        
+        // Detect Rectangle elements that might be BackgroundFill or BackgroundStroke
+        InstanceHandle bgHandle = g_taskbarBgHandle.load();
+        bool isRectangle = element.Type && wcsstr(element.Type, L"Rectangle") != nullptr;
+        
+        if (isRectangle && bgHandle != 0) {
+            XBLogFmt(L"  >>> Rectangle detected: parent=0x%llX (TaskbarBg=0x%llX)",
+                static_cast<unsigned long long>(relation.Parent),
+                static_cast<unsigned long long>(bgHandle));
             
-            // Get FrameworkElement immediately
+            // Get FrameworkElement to check Name
             winrt::Windows::Foundation::IInspectable obj;
             HRESULT hr = m_diagnostics->GetIInspectableFromHandle(
                 element.Handle,
@@ -580,21 +592,30 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
             if (SUCCEEDED(hr) && obj) {
                 auto fe = obj.try_as<wux::FrameworkElement>();
                 if (fe) {
-                    XBLog(L"  >>> Walking TaskbarBackground INLINE for instant apply...");
-                    bool found = WalkTaskbarBgTree(fe, m_diagnostics.get(), L"[Inline]");
-                    if (found) {
-                        XBLog(L"  >>> BackgroundFill/Stroke found and applied INLINE");
-                    } else {
-                        XBLog(L"  >>> Walk completed but BackgroundFill not found");
+                    std::wstring name;
+                    try {
+                        name = fe.Name().c_str();
+                    } catch (...) {
+                        name = L"";
                     }
-                } else {
-                    XBLog(L"  >>> try_as<FrameworkElement> failed - cannot walk");
+                    
+                    XBLogFmt(L"  >>> Rectangle Name='%s'", name.c_str());
+                    
+                    // Check if this is BackgroundFill or BackgroundStroke
+                    if (name == L"BackgroundFill" || name == L"BackgroundStroke") {
+                        XBLogFmt(L"  *** FOUND %s via TAP notification - applying INSTANTLY ***", name.c_str());
+                        
+                        BrushTargetProp prop = (name == L"BackgroundStroke") 
+                            ? BrushTargetProp::Stroke 
+                            : BrushTargetProp::Fill;
+                        
+                        // Apply IMMEDIATELY synchronously for instant effect
+                        DispatchApplyToBgElement(fe, prop, L"[TAP]");
+                        
+                        XBLogFmt(L"  *** %s applied via TAP - effect should be INSTANT ***", name.c_str());
+                    }
                 }
-            } else {
-                XBLogFmt(L"  >>> GetIInspectableFromHandle failed hr=0x%08X - cannot walk", hr);
             }
-            
-            return S_OK;
         }
 
         InstanceHandle bgHandle = g_taskbarBgHandle.load();
