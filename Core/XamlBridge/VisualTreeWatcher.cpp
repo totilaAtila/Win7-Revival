@@ -395,18 +395,92 @@ static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, IXamlDiagnostics*
         int bgChildCount = wuxm::VisualTreeHelper::GetChildrenCount(fe);
         XBLogFmt(L"%s child count: %d", logTag, bgChildCount);
         for (int ci = 0; ci < bgChildCount; ++ci) {
-            auto intermediate = wuxm::VisualTreeHelper::GetChild(fe, ci);
+            XBLogFmt(L"%s child loop enter: ci=%d", logTag, ci);
+
+            winrt::Windows::Foundation::IInspectable intermediate;
+            try {
+                intermediate = wuxm::VisualTreeHelper::GetChild(fe, ci);
+                XBLogFmt(L"%s GetChild(fe,%d) returned %s", logTag, ci, intermediate ? L"valid" : L"nullptr");
+            }
+            catch (const winrt::hresult_error& ex) {
+                XBLogFmt(L"%s GetChild(fe,%d) threw 0x%08X: %s", logTag, ci, ex.code(), ex.message().c_str());
+                continue;
+            }
+            catch (const std::exception& ex) {
+                XBLogFmt(L"%s GetChild(fe,%d) std::exception: %S", logTag, ci, ex.what());
+                continue;
+            }
+            catch (...) {
+                XBLogFmt(L"%s GetChild(fe,%d) threw unknown", logTag, ci);
+                continue;
+            }
+
             if (!intermediate) {
                 XBLogFmt(L"%s child[%d] = nullptr", logTag, ci);
                 continue;
             }
 
-            auto intermFE = intermediate.try_as<wux::FrameworkElement>();
+            wux::FrameworkElement intermFE{ nullptr };
+            try {
+                intermFE = intermediate.try_as<wux::FrameworkElement>();
+                XBLogFmt(L"%s child[%d] try_as<FrameworkElement> => %s", logTag, ci, intermFE ? L"OK" : L"NULL");
+            }
+            catch (const winrt::hresult_error& ex) {
+                XBLogFmt(L"%s child[%d] try_as<FrameworkElement> threw 0x%08X: %s",
+                    logTag, ci, ex.code(), ex.message().c_str());
+                continue;
+            }
+            catch (const std::exception& ex) {
+                XBLogFmt(L"%s child[%d] try_as<FrameworkElement> std::exception: %S", logTag, ci, ex.what());
+                continue;
+            }
+            catch (...) {
+                XBLogFmt(L"%s child[%d] try_as<FrameworkElement> threw unknown", logTag, ci);
+                continue;
+            }
+
             if (!intermFE) continue;
 
-            int grandCount = wuxm::VisualTreeHelper::GetChildrenCount(intermFE);
-            XBLogFmt(L"%s child[%d] Name='%s' grandchildren=%d",
-                logTag, ci, intermFE.Name().c_str(), grandCount);
+            std::wstring intermName;
+            try {
+                intermName = intermFE.Name().c_str();
+                XBLogFmt(L"%s child[%d] Name() => '%s'", logTag, ci, intermName.c_str());
+            }
+            catch (const winrt::hresult_error& ex) {
+                XBLogFmt(L"%s child[%d] Name() threw 0x%08X: %s",
+                    logTag, ci, ex.code(), ex.message().c_str());
+                continue;
+            }
+            catch (const std::exception& ex) {
+                XBLogFmt(L"%s child[%d] Name() std::exception: %S", logTag, ci, ex.what());
+                continue;
+            }
+            catch (...) {
+                XBLogFmt(L"%s child[%d] Name() threw unknown", logTag, ci);
+                continue;
+            }
+
+            int grandCount = 0;
+            try {
+                grandCount = wuxm::VisualTreeHelper::GetChildrenCount(intermFE);
+                XBLogFmt(L"%s child[%d] Name='%s' grandchildren=%d",
+                    logTag, ci, intermName.c_str(), grandCount);
+            }
+            catch (const winrt::hresult_error& ex) {
+                XBLogFmt(L"%s GetChildrenCount(intermFE,%d) threw 0x%08X: %s",
+                    logTag, ci, ex.code(), ex.message().c_str());
+                continue;
+            }
+            catch (const std::exception& ex) {
+                XBLogFmt(L"%s GetChildrenCount(intermFE,%d) std::exception: %S",
+                    logTag, ci, ex.what());
+                continue;
+            }
+            catch (...) {
+                XBLogFmt(L"%s GetChildrenCount(intermFE,%d) threw unknown", logTag, ci);
+                continue;
+            }
+
             XBLogFmt(L"%s ABOUT TO ENTER grandchildren loop: gi < %d", logTag, grandCount);
 
             for (int gi = 0; gi < grandCount; ++gi) {
