@@ -579,10 +579,32 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
             wcscmp(element.Type, L"Taskbar.TaskbarBackground") == 0);
         if (isTaskbarBg) {
             g_taskbarBgHandle.store(element.Handle);
-            g_walkDiagnostics = m_diagnostics;
-            g_walkNeeded.store(true);
-            XBLogFmt(L"  *** TaskbarBackground handle=0x%llX - walk scheduled ***",
+            XBLogFmt(L"  *** TaskbarBackground handle=0x%llX - applying INLINE for instant effect ***",
                 static_cast<unsigned long long>(element.Handle));
+            
+            // Get FrameworkElement immediately
+            winrt::Windows::Foundation::IInspectable obj;
+            HRESULT hr = m_diagnostics->GetIInspectableFromHandle(
+                element.Handle,
+                reinterpret_cast<::IInspectable**>(winrt::put_abi(obj)));
+            
+            if (SUCCEEDED(hr) && obj) {
+                auto fe = obj.try_as<wux::FrameworkElement>();
+                if (fe) {
+                    XBLog(L"  >>> Walking TaskbarBackground INLINE for instant apply...");
+                    bool found = WalkTaskbarBgTree(fe, m_diagnostics.get(), L"[Inline]");
+                    if (found) {
+                        XBLog(L"  >>> BackgroundFill/Stroke found and applied INLINE");
+                    } else {
+                        XBLog(L"  >>> Walk completed but BackgroundFill not found");
+                    }
+                } else {
+                    XBLog(L"  >>> try_as<FrameworkElement> failed - cannot walk");
+                }
+            } else {
+                XBLogFmt(L"  >>> GetIInspectableFromHandle failed hr=0x%08X - cannot walk", hr);
+            }
+            
             return S_OK;
         }
 
