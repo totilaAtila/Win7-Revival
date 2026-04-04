@@ -578,6 +578,10 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
         // Check ANY Rectangle (not just direct children) since BackgroundFill is a grandchild
         bool isRectangle = element.Type && wcsstr(element.Type, L"Rectangle") != nullptr;
         
+        XBLogFmt(L"  >>> DEBUG: element.Type=%s isRectangle=%d", 
+            element.Type ? element.Type : L"(null)", 
+            isRectangle ? 1 : 0);
+        
         if (isRectangle) {
             XBLogFmt(L"  >>> Rectangle detected: Type=%s parent=0x%llX",
                 element.Type ? element.Type : L"(null)",
