@@ -86,11 +86,26 @@ Pop-Location
 
 Write-Host "  [OK] Dashboard published with .NET runtime" -ForegroundColor Green
 
-# Step 4: Copy Core.dll
-Write-Host "`n[4/6] Copying native Core.dll..." -ForegroundColor Yellow
+# Step 4: Copy native DLLs explicitly from fresh Core build
+Write-Host "`n[4/6] Copying native DLLs..." -ForegroundColor Yellow
 $coreSource = ".\Core\build\bin\Release\GlassBar.Core.dll"
+$xamlBridgeSource = ".\Core\build\bin\Release\GlassBar.XamlBridge.dll"
+
+if (!(Test-Path $coreSource)) {
+    Write-Host "GlassBar.Core.dll not found after build!" -ForegroundColor Red
+    exit 1
+}
+
+if (!(Test-Path $xamlBridgeSource)) {
+    Write-Host "GlassBar.XamlBridge.dll not found after build!" -ForegroundColor Red
+    exit 1
+}
+
 Copy-Item $coreSource -Destination $publishPath -Force
-Write-Host "  [OK] Core.dll copied" -ForegroundColor Green
+Copy-Item $xamlBridgeSource -Destination $publishPath -Force
+
+Write-Host "  [OK] GlassBar.Core.dll copied" -ForegroundColor Green
+Write-Host "  [OK] GlassBar.XamlBridge.dll copied" -ForegroundColor Green
 
 # Step 5: Create comprehensive documentation
 Write-Host "`n[5/6] Creating user documentation..." -ForegroundColor Yellow
