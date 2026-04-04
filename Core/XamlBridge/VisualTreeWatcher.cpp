@@ -18,63 +18,40 @@ static std::atomic<unsigned int>   g_strokePropertyIndex { UINT_MAX };
 static void RegisterAndApplyTarget(InstanceHandle handle, const wux::FrameworkElement& element, BrushTargetProp prop);
 
 // ---------------------------------------------------------------------------
-// DispatchApplyToBgElement — Windhawk-aligned apply path for BackgroundFill/Stroke
-// Uses TryRunAsync(High) + stores IAsyncAction to prevent cancellation on drop.
-// Reads SharedBlurState INSIDE the callback (current state at apply time).
+// DispatchApplyToBgElement — INSTANT SYNCHRONOUS apply for BackgroundFill/Stroke
+// Applies transparency effect IMMEDIATELY inline (no dispatcher async) for Windhawk-style instant UX
 // ---------------------------------------------------------------------------
 static void DispatchApplyToBgElement(
     const wux::FrameworkElement& fe,
     BrushTargetProp prop,
     const wchar_t* logTag)
 {
-    auto disp = fe.Dispatcher();
-    if (!disp) {
-        XBLogFmt(L"%s DispatchApply: no Dispatcher", logTag);
-        return;
+    try {
+        XBLogFmt(L"%s DispatchApply: applying SYNCHRONOUSLY for instant effect", logTag);
+        
+        auto handle = GetHandleFromElement(fe);
+        if (handle == 0) {
+            XBLogFmt(L"%s DispatchApply: cannot get handle from element", logTag);
+            return;
+        }
+        
+        XBLogFmt(L"%s DispatchApply: got handle=0x%llX, calling RegisterAndApplyTarget", 
+            logTag, static_cast<unsigned long long>(handle));
+        
+        RegisterAndApplyTarget(handle, fe, prop);
+        
+        XBLogFmt(L"%s DispatchApply: COMPLETED synchronously - effect should be INSTANT", logTag);
     }
-
-    auto targetProp = (prop == BrushTargetProp::Stroke)
-        ? wuxs::Shape::StrokeProperty()
-        : wuxs::Shape::FillProperty();
-
-    // Capture DependencyObject (not FrameworkElement) to match Windhawk pattern
-    auto elementDo = fe.as<wux::DependencyObject>();
-
-    auto asyncOp = disp.TryRunAsync(
-        wuc::CoreDispatcherPriority::High,
-        [elementDo, targetProp, tag = std::wstring(logTag)]() noexcept {
-            try {
-                XBLogFmt(L"%s dispatch callback: reading state", tag.c_str());
-                auto p = ReadBrushParams(g_pState);
-                if (!p.enabled) {
-                    elementDo.ClearValue(targetProp);
-                    XBLogFmt(L"%s dispatch callback: ClearValue (disabled)", tag.c_str());
-                    return;
-                }
-                wu::Color color{ p.alpha, p.r, p.g, p.b };
-                wuxm::SolidColorBrush brush{};
-                brush.Color(color);
-                elementDo.SetValue(targetProp, brush);
-                XBLogFmt(L"%s dispatch callback: SetValue alpha=%d rgb=(%d,%d,%d)",
-                    tag.c_str(), p.alpha, p.r, p.g, p.b);
-            }
-            catch (const winrt::hresult_error& ex) {
-                XBLogFmt(L"%s dispatch callback threw 0x%08X: %s",
-                    tag.c_str(), ex.code(), ex.message().c_str());
-            }
-            catch (...) {
-                XBLogFmt(L"%s dispatch callback threw unknown", tag.c_str());
-            }
-        });
-
-    // Store IAsyncOperation<bool> — prevents it from being dropped/cancelled immediately
-    if (prop == BrushTargetProp::Stroke)
-        g_bgStrokeAsyncAction = asyncOp;
-    else
-        g_bgFillAsyncAction = asyncOp;
-
-    XBLogFmt(L"%s DispatchApply: TryRunAsync(High) => %s",
-        logTag, asyncOp ? L"queued" : L"null (dispatcher busy/closing)");
+    catch (const winrt::hresult_error& ex) {
+        XBLogFmt(L"%s DispatchApply threw 0x%08X: %s",
+            logTag, ex.code(), ex.message().c_str());
+    }
+    catch (const std::exception& ex) {
+        XBLogFmt(L"%s DispatchApply std::exception: %S", logTag, ex.what());
+    }
+    catch (...) {
+        XBLogFmt(L"%s DispatchApply threw unknown exception", logTag);
+    }
 }
 
 // ---------------------------------------------------------------------------
