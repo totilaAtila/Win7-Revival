@@ -618,51 +618,7 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
             }
         }
 
-        InstanceHandle bgHandle = g_taskbarBgHandle.load();
-        bool isChildOfBg = (bgHandle != 0 && relation.Parent == bgHandle);
-        if (isChildOfBg) {
-            XBLogFmt(L"  *** TaskbarBackground CHILD: Type=%s  Name=%s ***",
-                element.Type ? element.Type : L"(null)",
-                element.Name ? element.Name : L"(null)");
-        }
-
-        bool isRectangle = element.Type && wcsstr(element.Type, L"Rectangle") != nullptr;
-        if (!isChildOfBg && !isRectangle)
-            return S_OK;
-
-        winrt::Windows::Foundation::IInspectable obj;
-        HRESULT hr = m_diagnostics->GetIInspectableFromHandle(
-            element.Handle,
-            reinterpret_cast<::IInspectable**>(winrt::put_abi(obj)));
-        if (FAILED(hr) || !obj) {
-            if (isChildOfBg)
-                XBLogFmt(L"  *** GetIInspectableFromHandle FAILED hr=0x%08X ***", hr);
-            return S_OK;
-        }
-
-        auto fe = obj.try_as<wux::FrameworkElement>();
-        if (!fe) return S_OK;
-
-        auto runtimeName = fe.Name();
-        if (isRectangle) {
-            bool isBackground = (runtimeName == L"BackgroundFill");
-            bool isStroke     = (runtimeName == L"BackgroundStroke");
-            XBLogFmt(L"  Rectangle: Name=%s  isBackground=%d  isStroke=%d  childOfBg=%d",
-                runtimeName.c_str(), isBackground ? 1 : 0, isStroke ? 1 : 0, isChildOfBg ? 1 : 0);
-            if (!isBackground && !isStroke)
-                return S_OK;
-        }
-
-        BrushTargetProp prop = (runtimeName == L"BackgroundStroke")
-            ? BrushTargetProp::Stroke
-            : BrushTargetProp::Fill;
-        if (isChildOfBg && (runtimeName == L"BackgroundFill" || runtimeName == L"BackgroundStroke")) {
-            XBLogFmt(L"  >>> FOUND %s via TAP child notification <<<", runtimeName.c_str());
-            DispatchApplyToBgElement(fe, prop, L"[TAP]");
-            return S_OK;
-        }
-
-        XBLogFmt(L"  >>> Applying brush to Name=%s via native/managed bridge", runtimeName.c_str());
+        return S_OK;
         RegisterAndApplyTarget(element.Handle, fe, prop);
     }
     catch (const winrt::hresult_error& ex) {
