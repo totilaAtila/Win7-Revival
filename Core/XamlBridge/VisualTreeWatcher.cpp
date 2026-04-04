@@ -29,13 +29,22 @@ static void DispatchApplyToBgElement(
     try {
         XBLogFmt(L"%s DispatchApply: applying SYNCHRONOUSLY for instant effect", logTag);
         
-        auto handle = GetHandleFromElement(fe);
-        if (handle == 0) {
-            XBLogFmt(L"%s DispatchApply: cannot get handle from element", logTag);
-            return;
+        // Get handle from FrameworkElement
+        InstanceHandle handle = 0;
+        if (g_xamlDiagnostics) {
+            auto feObj = fe.as<winrt::Windows::Foundation::IInspectable>();
+            HRESULT hr = g_xamlDiagnostics->GetHandleFromIInspectable(
+                reinterpret_cast<::IInspectable*>(winrt::get_abi(feObj)),
+                &handle);
+            XBLogFmt(L"%s DispatchApply: GetHandleFromIInspectable hr=0x%08X handle=0x%llX",
+                logTag, hr, static_cast<unsigned long long>(handle));
         }
         
-        XBLogFmt(L"%s DispatchApply: got handle=0x%llX, calling RegisterAndApplyTarget", 
+        if (handle == 0) {
+            XBLogFmt(L"%s DispatchApply: cannot get handle from element - using handle=0", logTag);
+        }
+        
+        XBLogFmt(L"%s DispatchApply: calling RegisterAndApplyTarget with handle=0x%llX", 
             logTag, static_cast<unsigned long long>(handle));
         
         RegisterAndApplyTarget(handle, fe, prop);
