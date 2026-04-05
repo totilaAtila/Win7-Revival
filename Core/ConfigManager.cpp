@@ -138,12 +138,6 @@ bool ConfigManager::Load() {
         if (ParseBoolLine(line, "StartShowPictures", tempConfig.startShowPictures)) continue;
         if (ParseBoolLine(line, "StartShowVideos", tempConfig.startShowVideos)) continue;
         if (ParseBoolLine(line, "StartShowRecentFiles", tempConfig.startShowRecentFiles)) continue;
-        if (ParseBoolLine(line, "StartShowPlaceholder1", tempConfig.startShowPlaceholder1)) continue;
-        if (ParseBoolLine(line, "StartShowPlaceholder2", tempConfig.startShowPlaceholder2)) continue;
-        if (ParseBoolLine(line, "StartShowPlaceholder3", tempConfig.startShowPlaceholder3)) continue;
-        if (ParseBoolLine(line, "StartShowPlaceholder4", tempConfig.startShowPlaceholder4)) continue;
-        if (ParseBoolLine(line, "StartShowPlaceholder5", tempConfig.startShowPlaceholder5)) continue;
-
         if (ParseIntLine(line, "HotkeyVk", tempConfig.hotkeyVk, 0, 0xFF)) continue;
         if (ParseIntLine(line, "HotkeyModifiers", tempConfig.hotkeyModifiers, 0, 0xFFFF)) continue;
         if (ParseIntLine(line, "BlurAmount", tempConfig.blurAmount, 0, 100)) continue;
@@ -200,11 +194,6 @@ bool ConfigManager::Save() {
     file << "  \"StartShowPictures\": " << (m_config.startShowPictures ? "true" : "false") << ",\n";
     file << "  \"StartShowVideos\": " << (m_config.startShowVideos ? "true" : "false") << ",\n";
     file << "  \"StartShowRecentFiles\": " << (m_config.startShowRecentFiles ? "true" : "false") << ",\n";
-    file << "  \"StartShowPlaceholder1\": " << (m_config.startShowPlaceholder1 ? "true" : "false") << ",\n";
-    file << "  \"StartShowPlaceholder2\": " << (m_config.startShowPlaceholder2 ? "true" : "false") << ",\n";
-    file << "  \"StartShowPlaceholder3\": " << (m_config.startShowPlaceholder3 ? "true" : "false") << ",\n";
-    file << "  \"StartShowPlaceholder4\": " << (m_config.startShowPlaceholder4 ? "true" : "false") << ",\n";
-    file << "  \"StartShowPlaceholder5\": " << (m_config.startShowPlaceholder5 ? "true" : "false") << ",\n";
     file << "  \"StartBorderColorR\": " << m_config.startBorderColorR << ",\n";
     file << "  \"StartBorderColorG\": " << m_config.startBorderColorG << ",\n";
     file << "  \"StartBorderColorB\": " << m_config.startBorderColorB << ",\n";

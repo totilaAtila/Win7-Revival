@@ -34,11 +34,6 @@ namespace GlassBar.Dashboard
         public bool StartShowPictures { get; set; } = true;
         public bool StartShowVideos { get; set; } = true;
         public bool StartShowRecentFiles { get; set; } = true;
-        public bool StartShowPlaceholder1 { get; set; } = false;
-        public bool StartShowPlaceholder2 { get; set; } = false;
-        public bool StartShowPlaceholder3 { get; set; } = false;
-        public bool StartShowPlaceholder4 { get; set; } = false;
-        public bool StartShowPlaceholder5 { get; set; } = false;
         // Start Menu Border/Accent Color (S-E)
         public int StartBorderColorR { get; set; } = 60;
         public int StartBorderColorG { get; set; } = 60;
