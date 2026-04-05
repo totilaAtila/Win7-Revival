@@ -120,6 +120,8 @@ static DWORD WINAPI WorkerThread(LPVOID)
     InjectGlassBarTAP();
 
     LONG lastVersion = -1;
+    // Kept alive across Sleep so TryRunAsync callbacks are not cancelled before firing
+    std::vector<winrt::Windows::Foundation::IAsyncOperation<bool>> s_pendingUpdateOps;
 
     while (!g_stopping.load()) {
         LONG shutdownReq = InterlockedCompareExchange(
@@ -136,17 +138,19 @@ static DWORD WINAPI WorkerThread(LPVOID)
                 curVersion, params.enabled ? 1 : 0, params.useBlur ? 1 : 0,
                 params.alpha, params.r, params.g, params.b);
 
+            s_pendingUpdateOps.clear();
             std::lock_guard<std::mutex> lk(g_shapesMtx);
             XBLogFmt(L"WorkerThread: dispatching to %zu known shapes", g_knownShapes.size());
             for (const auto& entry : g_knownShapes) {
                 try {
                     auto disp = entry.element.Dispatcher();
                     if (!disp) continue;
-                    disp.RunAsync(wuc::CoreDispatcherPriority::Normal,
+                    auto op = disp.TryRunAsync(wuc::CoreDispatcherPriority::High,
                         [handle = entry.handle, element = entry.element, prop = entry.prop, params]() noexcept {
                             try { ApplyBrushParams(handle, element, prop, params); }
                             catch (...) {}
                         });
+                    if (op) s_pendingUpdateOps.push_back(op);
                 }
                 catch (...) {}
             }

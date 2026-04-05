@@ -1,5 +1,5 @@
 //
-// VisualTreeWatcher.cpp - Tree monitoring + brush application  [ITER #16]
+// VisualTreeWatcher.cpp - Tree monitoring + brush application  [ITER #17]
 //
 // Apply path aligned with Windhawk: TryRunAsync(High) + store IAsyncOperation<bool>
 // to prevent cancellation. Reads SharedBlurState inside the dispatcher callback.
@@ -15,11 +15,12 @@ static constexpr int               kMaxLoggedElements = 10000;
 static std::atomic<InstanceHandle> g_taskbarBgHandle  { 0 };
 static std::atomic<unsigned int>   g_fillPropertyIndex   { UINT_MAX };
 static std::atomic<unsigned int>   g_strokePropertyIndex { UINT_MAX };
-static void RegisterAndApplyTarget(InstanceHandle handle, const wux::FrameworkElement& element, BrushTargetProp prop);
 
 // ---------------------------------------------------------------------------
-// DispatchApplyToBgElement — INSTANT SYNCHRONOUS apply for BackgroundFill/Stroke
-// Applies transparency effect IMMEDIATELY inline (no dispatcher async) for Windhawk-style instant UX
+// DispatchApplyToBgElement — Windhawk-aligned: TryRunAsync(High) on UI thread
+// Queues brush application to the XAML UI thread (the only thread that can
+// call SetValue on XAML elements). Stores IAsyncOperation<bool> to prevent
+// cancellation before the callback fires.
 // ---------------------------------------------------------------------------
 static void DispatchApplyToBgElement(
     const wux::FrameworkElement& fe,
@@ -27,33 +28,61 @@ static void DispatchApplyToBgElement(
     const wchar_t* logTag)
 {
     try {
-        XBLogFmt(L"%s DispatchApply: applying SYNCHRONOUSLY for instant effect", logTag);
-        
-        // Get handle from FrameworkElement
-        InstanceHandle handle = 0;
-        if (g_xamlDiagnostics) {
-            auto feObj = fe.as<winrt::Windows::Foundation::IInspectable>();
-            HRESULT hr = g_xamlDiagnostics->GetHandleFromIInspectable(
-                reinterpret_cast<::IInspectable*>(winrt::get_abi(feObj)),
-                &handle);
-            XBLogFmt(L"%s DispatchApply: GetHandleFromIInspectable hr=0x%08X handle=0x%llX",
-                logTag, hr, static_cast<unsigned long long>(handle));
+        auto disp = fe.Dispatcher();
+        if (!disp) {
+            XBLogFmt(L"%s DispatchApply: no Dispatcher on element", logTag);
+            return;
         }
-        
-        if (handle == 0) {
-            XBLogFmt(L"%s DispatchApply: cannot get handle from element - using handle=0", logTag);
+
+        auto targetProp = (prop == BrushTargetProp::Stroke)
+            ? wuxs::Shape::StrokeProperty()
+            : wuxs::Shape::FillProperty();
+        auto elementDo = fe.as<wux::DependencyObject>();
+
+        // Track in g_knownShapes so WorkerThread can re-apply on settings change
+        {
+            std::lock_guard<std::mutex> lk(g_shapesMtx);
+            bool found = std::any_of(g_knownShapes.begin(), g_knownShapes.end(),
+                [&fe, prop](const ShapeEntry& e) { return e.prop == prop && e.element == fe; });
+            if (!found)
+                g_knownShapes.emplace_back(InstanceHandle{0}, fe, prop);
         }
-        
-        XBLogFmt(L"%s DispatchApply: calling RegisterAndApplyTarget with handle=0x%llX", 
-            logTag, static_cast<unsigned long long>(handle));
-        
-        RegisterAndApplyTarget(handle, fe, prop);
-        
-        XBLogFmt(L"%s DispatchApply: COMPLETED synchronously - effect should be INSTANT", logTag);
+
+        XBLogFmt(L"%s DispatchApply: TryRunAsync(High) => queuing", logTag);
+        auto asyncOp = disp.TryRunAsync(wuc::CoreDispatcherPriority::High,
+            [elementDo, targetProp, tag = std::wstring(logTag)]() noexcept {
+                try {
+                    auto p = ReadBrushParams(g_pState);
+                    if (!p.enabled) {
+                        elementDo.ClearValue(targetProp);
+                        XBLogFmt(L"%s dispatch callback: ClearValue (enabled=0)", tag.c_str());
+                        return;
+                    }
+                    wu::Color color{ p.alpha, p.r, p.g, p.b };
+                    wuxm::SolidColorBrush brush{};
+                    brush.Color(color);
+                    elementDo.SetValue(targetProp, brush);
+                    XBLogFmt(L"%s dispatch callback: SetValue alpha=%d rgb=(%d,%d,%d)",
+                        tag.c_str(), p.alpha, p.r, p.g, p.b);
+                }
+                catch (const winrt::hresult_error& ex) {
+                    XBLogFmt(L"dispatch callback 0x%08X: %s", ex.code(), ex.message().c_str());
+                }
+                catch (...) {
+                    XBLog(L"dispatch callback threw unknown exception");
+                }
+            });
+
+        if (prop == BrushTargetProp::Stroke)
+            g_bgStrokeAsyncAction = asyncOp;
+        else
+            g_bgFillAsyncAction = asyncOp;
+
+        XBLogFmt(L"%s DispatchApply: TryRunAsync(High) => queued (asyncOp=%s)",
+            logTag, asyncOp ? L"valid" : L"null");
     }
     catch (const winrt::hresult_error& ex) {
-        XBLogFmt(L"%s DispatchApply threw 0x%08X: %s",
-            logTag, ex.code(), ex.message().c_str());
+        XBLogFmt(L"%s DispatchApply threw 0x%08X: %s", logTag, ex.code(), ex.message().c_str());
     }
     catch (const std::exception& ex) {
         XBLogFmt(L"%s DispatchApply std::exception: %S", logTag, ex.what());
@@ -302,40 +331,6 @@ void ApplyBrushParams(InstanceHandle handle, const wux::FrameworkElement& elemen
     ApplyBrushParamsFallback(element, prop, p);
 }
 
-// ---------------------------------------------------------------------------
-// RegisterAndApplyShape
-// handle == 0 for VTH-walked shapes (no diagnostic handle available);
-// dedup by handle (if != 0) or by raw COM pointer (if handle == 0).
-// ---------------------------------------------------------------------------
-static void RegisterAndApplyTarget(InstanceHandle handle, const wux::FrameworkElement& element, BrushTargetProp prop)
-{
-    XBLogFmt(L"RegisterAndApplyTarget: ENTER handle=0x%llX prop=%s",
-        static_cast<unsigned long long>(handle),
-        prop == BrushTargetProp::Stroke ? L"Stroke" : L"Fill");
-    {
-        std::lock_guard<std::mutex> lk(g_shapesMtx);
-        bool found = false;
-        if (handle != 0) {
-            found = std::any_of(g_knownShapes.begin(), g_knownShapes.end(),
-                [handle](const ShapeEntry& e) { return e.handle == handle; });
-        } else {
-            found = std::any_of(g_knownShapes.begin(), g_knownShapes.end(),
-                [&element, prop](const ShapeEntry& e) { return e.prop == prop && e.element == element; });
-        }
-        if (!found)
-            g_knownShapes.emplace_back(handle, element, prop);
-    }
-
-    BrushParams p = ReadBrushParams(g_pState);
-    XBLogFmt(L"RegisterAndApplyTarget: calling ApplyBrushParams handle=0x%llX prop=%s",
-        static_cast<unsigned long long>(handle),
-        prop == BrushTargetProp::Stroke ? L"Stroke" : L"Fill");
-    ApplyBrushParams(handle, element, prop, p);
-    XBLogFmt(L"RegisterAndApplyTarget: ApplyBrushParams returned handle=0x%llX prop=%s",
-        static_cast<unsigned long long>(handle),
-        prop == BrushTargetProp::Stroke ? L"Stroke" : L"Fill");
-}
-
 static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, IXamlDiagnostics* diag, const wchar_t* logTag) noexcept
 {
     bool foundAny = false;
@@ -568,45 +563,35 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
             wcscmp(element.Type, L"Taskbar.TaskbarBackground") == 0);
         if (isTaskbarBg) {
             g_taskbarBgHandle.store(element.Handle);
-            XBLogFmt(L"  *** TaskbarBackground handle=0x%llX detected - waiting for TAP to notify Rectangle children ***",
+            g_walkDiagnostics = m_diagnostics;
+            g_walkNeeded.store(true);
+            XBLogFmt(L"  *** TaskbarBackground handle=0x%llX - walk scheduled ***",
                 static_cast<unsigned long long>(element.Handle));
-            // NO manual walk - we wait for TAP to notify us of BackgroundFill/BackgroundStroke rectangles
             return S_OK;
         }
-        
-        // Detect Rectangle elements that might be BackgroundFill or BackgroundStroke
-        // Check ANY Rectangle (not just direct children) since BackgroundFill is a grandchild
+
+        // Catch BackgroundFill/BackgroundStroke if TAP delivers them as live Add notifications
         bool isRectangle = element.Type && wcsstr(element.Type, L"Rectangle") != nullptr;
-        
-        if (isRectangle) {
-            XBLogFmt(L"  >>> Rectangle detected: Type=%s parent=0x%llX",
-                element.Type ? element.Type : L"(null)",
-                static_cast<unsigned long long>(relation.Parent));
-            
-            // Get FrameworkElement to check Name
-            winrt::Windows::Foundation::IInspectable obj;
-            HRESULT hr = m_diagnostics->GetIInspectableFromHandle(
-                element.Handle,
-                reinterpret_cast<::IInspectable**>(winrt::put_abi(obj)));
-            
-            if (SUCCEEDED(hr) && obj) {
-                auto fe = obj.try_as<wux::FrameworkElement>();
-                if (fe) {
-                    std::wstring name;
-                    try {
-                        name = fe.Name().c_str();
-                    } catch (...) {
-                        name = L"";
-                    }
-                    
-                    XBLogFmt(L"  >>> Rectangle Name='%s'", name.c_str());
-                    
-                    // TEST: Apply to ALL Rectangles (not just BackgroundFill) to verify pipeline
-                    XBLogFmt(L"  >>> TEST: Applying transparency to ANY Rectangle '%s'", name.c_str());
-                    DispatchApplyToBgElement(fe, BrushTargetProp::Fill, L"[TEST]");
-                    XBLogFmt(L"  >>> TEST: Applied - check if Rectangle '%s' changed visually", name.c_str());
-                }
-            }
+        if (!isRectangle)
+            return S_OK;
+
+        winrt::Windows::Foundation::IInspectable obj;
+        HRESULT hr = m_diagnostics->GetIInspectableFromHandle(
+            element.Handle,
+            reinterpret_cast<::IInspectable**>(winrt::put_abi(obj)));
+        if (FAILED(hr) || !obj)
+            return S_OK;
+
+        auto fe = obj.try_as<wux::FrameworkElement>();
+        if (!fe) return S_OK;
+
+        auto runtimeName = fe.Name();
+        bool isBgFill   = (runtimeName == L"BackgroundFill");
+        bool isBgStroke = (runtimeName == L"BackgroundStroke");
+        if (isBgFill || isBgStroke) {
+            BrushTargetProp prop = isBgStroke ? BrushTargetProp::Stroke : BrushTargetProp::Fill;
+            XBLogFmt(L"  *** FOUND %s via TAP live notification ***", runtimeName.c_str());
+            DispatchApplyToBgElement(fe, prop, L"[TAP-live]");
         }
 
         return S_OK;

@@ -37,7 +37,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Build with reduced parallelism
-cmake --build . --config Release -- /m:1
+cmake --build . --config Release
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Core build failed!" -ForegroundColor Red
     Write-Host "Try closing other applications and run again." -ForegroundColor Yellow

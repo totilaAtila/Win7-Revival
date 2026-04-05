@@ -110,6 +110,7 @@ if(MSVC)
     target_compile_options(GlassBar.XamlBridge PRIVATE
         /W4
         /permissive-
+        /O1
     )
 
     set_property(TARGET GlassBar.XamlBridge PROPERTY
