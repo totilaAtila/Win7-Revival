@@ -235,6 +235,113 @@ if (g_tapScheduled.load()) {
 }
 ```
 
+### Codex P1 fix aplicat (commit cedaf15)
+
+Codex a semnalat că versiunea inițială ITER #19 folosea `g_tapScheduled.exchange(true)` — o poartă one-shot. Dacă prima apelare a hook proc-ului are loc înainte ca XAML islands să fie înregistrate, injecția eșua silențios și nicio reîncercare nu mai era posibilă.
+
+**Fix (commit cedaf15):** înlocuit one-shot cu `IsTapInited()` check + retry rate-limited 500ms.
+
+```cpp
+// TAPInjector.h — nou export
+bool IsTapInited();  // returnează g_tapInited.load()
+
+// TAPInjector.cpp — implementare
+bool IsTapInited() { return g_tapInited.load(); }
+// g_tapInited.store(true) setat DOAR după successCount > 0
+
+// dllmain.cpp — hook proc cu retry
+static std::atomic<bool>  g_tapScheduled      { false };
+static std::atomic<DWORD> g_lastTapAttemptTick { 0 };
+
+extern "C" LRESULT CALLBACK XamlBridgeHookProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+    if (nCode >= 0 && !IsTapInited()) {
+        g_tapScheduled.store(true);            // semnal "hook e activ" (nu "deja încercat")
+        DWORD now  = GetTickCount();
+        DWORD last = g_lastTapAttemptTick.load(std::memory_order_relaxed);
+        if (now - last >= 500u) {
+            g_lastTapAttemptTick.store(now, std::memory_order_relaxed);
+            XBLog(L"XamlBridgeHookProc: attempting TAP injection on Shell_TrayWnd thread [ITER #19]");
+            InjectGlassBarTAP();
+        }
+    }
+    return CallNextHookEx(nullptr, nCode, wParam, lParam);
+}
+```
+
+---
+
+## 6. Analiză comparativă: WindHawk vs GlassBar
+
+### 6.1 Mecanism de injecție
+
+| Aspect | WindHawk TaskbarStyler | GlassBar XamlBridge |
+|--------|----------------------|---------------------|
+| Cum intră în explorer.exe | Engine WindHawk injectează automat mod DLL | `WH_CALLWNDPROC` via `SetWindowsHookEx` pe `Shell_TrayWnd` |
+| Scheduling pe thread corect | `RunFromWindowThread(hwnd, fn)` — postează task în message queue | Hook proc **este deja** pe thread-ul target prin natura WH_CALLWNDPROC |
+| Trigger re-injecție | Hook `CreateWindowExW` — reacție exactă la apariția island-ului | Rate-limit 500ms pe orice mesaj WH_CALLWNDPROC |
+
+### 6.2 Găsirea XAML island window
+
+**WindHawk:** enumerează child windows ale `Shell_TrayWnd`, caută clasa `Windows.UI.Composition.DesktopWindowContentBridge`, extrage `HWND` și îl pasează la `InitializeXamlDiagnosticsEx`.
+
+**GlassBar:** loopează pipe names `VisualDiagConnection1..N` fără a ști HWND-ul — pasează `GetCurrentProcessId()` și lasă API-ul să localizeze.
+
+**Risc GlassBar:** Dacă Microsoft redenumește pipe-urile `VisualDiagConnectionN` (posibil în builds viitoare), abordarea noastră se rupe. Abordarea WindHawk via class name este mai rezistentă.
+
+### 6.3 Parametrii `InitializeXamlDiagnosticsEx`
+
+**WindHawk:**
+```cpp
+InitializeXamlDiagnosticsEx(
+    L"VisualDiagConnection1",
+    GetCurrentProcessId(),
+    nullptr,
+    szModulePath,         // calea către modul styler
+    CLSID_TabletInputPanel, // CLSID dummy de sistem — trucul cheie!
+    nullptr
+);
+```
+
+**GlassBar:**
+```cpp
+InitializeXamlDiagnosticsEx(
+    connectionName,       // VisualDiagConnectionN iterație
+    GetCurrentProcessId(),
+    nullptr,
+    dllPath,
+    CLSID_GlassBarTAP,   // propriul nostru CLSID
+    nullptr
+);
+```
+
+**Diferența critică:** WindHawk reutilizează `CLSID_TabletInputPanel` (CLSID de sistem) ca dummy — nu are nevoie de un TAP object real. Scopul lui e doar să obțină canalul de diagnostics și `IVisualTreeService3`. GlassBar înregistrează `CLSID_GlassBarTAP` propriu, care necesită `DllGetClassObject` funcțional și activare COM înainte ca `IVisualTreeService3` să fie ready.
+
+**Suprafață de eșec suplimentară în GlassBar:** dacă activarea COM eșuează, pierdem accesul la `IVisualTreeService3` chiar dacă diagnostics channel e disponibil.
+
+### 6.4 Strategie retry
+
+| | WindHawk | GlassBar ITER #19 (post Codex P1) |
+|--|---------|----------------------------------|
+| Trigger | `CreateWindowExW` hook — event-driven | `WH_CALLWNDPROC` + rate-limit 500ms |
+| Overhead | Zero (reacție exactă la creare island) | Mic (un check `IsTapInited()` per mesaj) |
+| Acuratețe timing | Perfect — rulează exact când island apare | Aproximativ — orice mesaj declanșează |
+
+### 6.5 Aplicarea efectului (brush-uri)
+
+Ambele folosesc `IVisualTreeService3::SetProperty`. Structura XAML tree țintită este identică:
+- `Rectangle#BackgroundFill` → `AcrylicBrush` / `SolidColorBrush`
+- `Rectangle#BackgroundStroke` → același
+- Sub `Taskbar.TaskbarBackground` → sub `Windows.UI.Composition.DesktopWindowContentBridge`
+
+Nicio diferență funcțională aici.
+
+### 6.6 Ce putem împrumuta de la WindHawk (ITER #20 candidat)
+
+1. **Skip custom CLSID** — reutilizează `CLSID_TabletInputPanel` sau alt CLSID de sistem ca dummy, elimină dependința de DllGetClassObject/COM factory (suprafață mai mică de eșec)
+2. **Hook `CreateWindowExW`** pentru re-injecție event-driven în loc de polling via mesaje — timing perfect, overhead zero
+3. **Fallback enumeration by window class** (`DesktopWindowContentBridge`) dacă pipe-urile `VisualDiagConnectionN` nu sunt găsite
+
 ### Dacă ITER #19 nu rezolvă: Next step (WindHawk-aligned)
 
 Dacă `Shell_TrayWnd` thread ≠ thread-ul XAML island pe 25H2, abordarea completă:
@@ -322,7 +429,7 @@ using PFN_INITIALIZE_XAML_DIAGNOSTICS_EX = HRESULT (WINAPI*)(
 | Session 24 | `main` | Faza 3 XamlBridge (shared memory + WH_CALLWNDPROC) | DLL injectat, brush nu produce efect |
 | Session 29 | checkpoint branch | ITER #1-#18: TAP/VisualTreeWatcher iterații | Tree walk merge, efect vizibil lipsă |
 | 2026-04-04 | `checkpoint/xamlbridge-25h2-2026-04-04` | PR #98 checkpoint + Codex review | Merged în main (SHA 50e04cb8) |
-| 2026-04-05 | `claude/xamlbridge-knowledge-refresh-TGQRn` | Dead code cleanup, MD sync, WindHawk research | Prezent — fix propus ITER #19 |
+| 2026-04-05 | `claude/xamlbridge-knowledge-refresh-TGQRn` | Dead code cleanup, MD sync, WindHawk research, ITER #19 + Codex P1 fix | PR #99 — build in progress |
 
 ---
 
@@ -330,12 +437,12 @@ using PFN_INITIALIZE_XAML_DIAGNOSTICS_EX = HRESULT (WINAPI*)(
 
 **Dacă continui investigația XamlBridge pe 25H2:**
 
-1. Citește acest fișier primul.
-2. Starea actuală: TAP se injectează, `SetSite` e apelat, `AdviseVisualTreeChange` OK, dar efect vizibil absent.
-3. **Fix propus (ITER #19):** Muta `InjectGlassBarTAP()` în `XamlBridgeHookProc` (thread Shell_TrayWnd).
-4. Fișiere cheie: `Core/XamlBridge/dllmain.cpp`, `TAPInjector.cpp`, `TAPObject.cpp`, `VisualTreeWatcher.cpp`.
-5. Referință primară: WindHawk `windows-11-taskbar-styler.wh.cpp` (secțiunea 4 din acest fișier).
-6. Dacă ITER #19 eșuează: implementează hookuri `CreateWindowExW` + `LoadLibraryExW` (abordarea completă WindHawk).
+1. Citește **tot** acest fișier prima dată.
+2. **Stare curentă (2026-04-05):** ITER #19 implementat (commit `236a629`) + Codex P1 fix (commit `cedaf15`, PR #99 in progress).
+3. `InjectGlassBarTAP()` rulează acum pe Shell_TrayWnd thread via `XamlBridgeHookProc`. Retry rate-limited 500ms până `IsTapInited()` = true.
+4. **Dacă ITER #19 nu produce efect vizibil pe 25H2:** aplică ITER #20 (secțiunea 6.6) — reutilizează CLSID dummy + hook `CreateWindowExW`.
+5. Fișiere cheie: `Core/XamlBridge/dllmain.cpp`, `TAPInjector.cpp`, `TAPObject.cpp`, `VisualTreeWatcher.cpp`.
+6. Comparație completă WindHawk vs GlassBar: **secțiunea 6** din acest fișier.
 
 **Dacă lucrezi pe altceva (Start Menu, Dashboard, etc.):**
 
