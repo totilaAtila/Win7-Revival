@@ -17,13 +17,15 @@ static std::atomic<bool> g_tapInited { false };
 void InjectGlassBarTAP()
 {
     if (g_tapInited.load()) return;
-    g_tapInited.store(true);   // prevent re-entry
+    // NOTE: do NOT set g_tapInited here — only mark success after at least one
+    // island registers.  If we return early (XAML not loaded yet, pfn absent, or
+    // zero islands found), the flag stays false so the caller can retry later.
 
     // LoadLibraryW is safe even if already loaded — just increments refcount
     HMODULE hXaml = LoadLibraryW(L"Windows.UI.Xaml.dll");
     XBLogFmt(L"InjectGlassBarTAP: Windows.UI.Xaml.dll handle=0x%p", hXaml);
     if (!hXaml) {
-        XBLog(L"InjectGlassBarTAP: XAML DLL not loaded — TAP cannot inject");
+        XBLog(L"InjectGlassBarTAP: XAML DLL not loaded — will retry on next call");
         return;
     }
 
@@ -31,7 +33,7 @@ void InjectGlassBarTAP()
         GetProcAddress(hXaml, "InitializeXamlDiagnosticsEx"));
     XBLogFmt(L"InjectGlassBarTAP: InitializeXamlDiagnosticsEx ptr=0x%p", pfn);
     if (!pfn) {
-        XBLog(L"InjectGlassBarTAP: InitializeXamlDiagnosticsEx not exported");
+        XBLog(L"InjectGlassBarTAP: InitializeXamlDiagnosticsEx not exported — will retry on next call");
         return;
     }
 
@@ -63,4 +65,10 @@ void InjectGlassBarTAP()
         }
     }
     XBLogFmt(L"InjectGlassBarTAP: done — %d island(s) registered", successCount);
+
+    if (successCount > 0) {
+        g_tapInited.store(true);  // lock only after confirmed success
+    } else {
+        XBLog(L"InjectGlassBarTAP: no islands registered — leaving g_tapInited=false for retry");
+    }
 }
