@@ -20,11 +20,9 @@ std::mutex               g_shapesMtx;
 // Global watcher reference — keeps VisualTreeWatcher alive after AdviseThread exits
 winrt::com_ptr<VisualTreeWatcher> g_visualTreeWatcher;
 
-// WorkerThread walk dispatch — written by callback thread, consumed by WorkerThread
-std::atomic<bool>                g_walkNeeded     { false };
-winrt::com_ptr<IXamlDiagnostics> g_walkDiagnostics;
 winrt::com_ptr<IXamlDiagnostics> g_xamlDiagnostics;
 winrt::com_ptr<IVisualTreeService3> g_visualTreeService3;
+winrt::Windows::Foundation::IAsyncOperation<bool> g_walkAsyncAction{ nullptr };
 winrt::Windows::Foundation::IAsyncOperation<bool> g_bgFillAsyncAction{ nullptr };
 winrt::Windows::Foundation::IAsyncOperation<bool> g_bgStrokeAsyncAction{ nullptr };
 
@@ -156,12 +154,6 @@ static DWORD WINAPI WorkerThread(LPVOID)
             }
         }
 
-        if (g_walkNeeded.exchange(false)) {
-            XBLog(L"WorkerThread: walk requested");
-            if (g_visualTreeWatcher)
-                g_visualTreeWatcher->WalkTaskbarBgPostReplay();
-        }
-
         Sleep(150);
     }
 
@@ -191,7 +183,7 @@ static DWORD WINAPI WorkerThread(LPVOID)
     g_visualTreeWatcher = nullptr;  // release before CoUninitialize
     g_visualTreeService3 = nullptr;
     g_xamlDiagnostics = nullptr;
-    g_walkDiagnostics = nullptr;
+    g_walkAsyncAction = nullptr;
 
     UnmapViewOfFile(g_pState);
     g_pState = nullptr;

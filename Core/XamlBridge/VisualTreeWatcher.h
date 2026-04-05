@@ -12,10 +12,6 @@ struct VisualTreeWatcher : winrt::implements<VisualTreeWatcher,
 {
     winrt::com_ptr<IXamlDiagnostics> m_diagnostics;
 
-    // Post-replay walk: called from AdviseThread after AdviseVisualTreeChange returns.
-    // Tree is fully connected at that point — no dispatcher needed.
-    void WalkTaskbarBgPostReplay() noexcept;
-
     HRESULT STDMETHODCALLTYPE OnVisualTreeChange(
         ParentChildRelation  relation,
         VisualElement        element,

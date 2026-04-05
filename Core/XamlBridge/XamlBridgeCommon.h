@@ -78,10 +78,9 @@ extern std::atomic<bool>        g_stopping;
 extern SharedBlurState*         g_pState;
 extern std::vector<ShapeEntry>  g_knownShapes;
 extern std::mutex               g_shapesMtx;
-extern std::atomic<bool>                g_walkNeeded;
-extern winrt::com_ptr<IXamlDiagnostics> g_walkDiagnostics;
 extern winrt::com_ptr<IXamlDiagnostics> g_xamlDiagnostics;
 extern winrt::com_ptr<IVisualTreeService3> g_visualTreeService3;
+extern winrt::Windows::Foundation::IAsyncOperation<bool> g_walkAsyncAction;
 extern winrt::Windows::Foundation::IAsyncOperation<bool> g_bgFillAsyncAction;
 extern winrt::Windows::Foundation::IAsyncOperation<bool> g_bgStrokeAsyncAction;
 

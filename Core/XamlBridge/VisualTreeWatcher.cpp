@@ -1,5 +1,5 @@
 //
-// VisualTreeWatcher.cpp - Tree monitoring + brush application  [ITER #17]
+// VisualTreeWatcher.cpp - Tree monitoring + brush application  [ITER #18]
 //
 // Apply path aligned with Windhawk: TryRunAsync(High) + store IAsyncOperation<bool>
 // to prevent cancellation. Reads SharedBlurState inside the dispatcher callback.
@@ -493,46 +493,6 @@ static bool WalkTaskbarBgTree(const wux::FrameworkElement& fe, IXamlDiagnostics*
 }
 
 // ---------------------------------------------------------------------------
-// WalkTaskbarBgPostReplay
-// Called from WorkerThread fallback path when inline resolve/walk could not finish.
-// ---------------------------------------------------------------------------
-void VisualTreeWatcher::WalkTaskbarBgPostReplay() noexcept
-{
-    XBLog(L"[WalkPostReplay] entered");
-    InstanceHandle bgHandle = g_taskbarBgHandle.load();
-    XBLogFmt(L"[WalkPostReplay] bgHandle=0x%llX  g_walkDiagnostics=%s",
-        static_cast<unsigned long long>(bgHandle),
-        g_walkDiagnostics ? L"OK" : L"NULL");
-    if (bgHandle == 0) {
-        XBLog(L"WalkTaskbarBgPostReplay: no handle stored - TaskbarBackground not seen in replay");
-        return;
-    }
-    if (!g_walkDiagnostics) {
-        XBLog(L"WalkTaskbarBgPostReplay: g_walkDiagnostics is null");
-        return;
-    }
-
-    winrt::Windows::Foundation::IInspectable obj;
-    HRESULT hr = g_walkDiagnostics->GetIInspectableFromHandle(
-        bgHandle,
-        reinterpret_cast<::IInspectable**>(winrt::put_abi(obj)));
-    if (FAILED(hr) || !obj) {
-        XBLogFmt(L"WalkTaskbarBgPostReplay: GetIInspectableFromHandle failed hr=0x%08X", hr);
-        return;
-    }
-
-    auto fe = obj.try_as<wux::FrameworkElement>();
-    if (!fe) {
-        XBLog(L"WalkTaskbarBgPostReplay: try_as<FrameworkElement> failed");
-        return;
-    }
-
-    XBLog(L"[PostReplay] walk started");
-    if (!WalkTaskbarBgTree(fe, g_walkDiagnostics.get(), L"[PostReplay]"))
-        XBLog(L"[PostReplay] no BackgroundFill/BackgroundStroke found");
-}
-
-// ---------------------------------------------------------------------------
 // VisualTreeWatcher::OnVisualTreeChange
 // ---------------------------------------------------------------------------
 HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
@@ -563,10 +523,34 @@ HRESULT STDMETHODCALLTYPE VisualTreeWatcher::OnVisualTreeChange(
             wcscmp(element.Type, L"Taskbar.TaskbarBackground") == 0);
         if (isTaskbarBg) {
             g_taskbarBgHandle.store(element.Handle);
-            g_walkDiagnostics = m_diagnostics;
-            g_walkNeeded.store(true);
-            XBLogFmt(L"  *** TaskbarBackground handle=0x%llX - walk scheduled ***",
-                static_cast<unsigned long long>(element.Handle));
+
+            // Queue walk directly to the XAML UI thread — avoids WorkerThread timing issues
+            // and ensures VisualTreeHelper::GetChild runs on the correct thread.
+            winrt::Windows::Foundation::IInspectable bgObj;
+            HRESULT hr = m_diagnostics->GetIInspectableFromHandle(
+                element.Handle,
+                reinterpret_cast<::IInspectable**>(winrt::put_abi(bgObj)));
+            XBLogFmt(L"  *** TaskbarBackground 0x%llX - GetIInspectable hr=0x%08X obj=%s ***",
+                static_cast<unsigned long long>(element.Handle), hr, bgObj ? L"OK" : L"NULL");
+            if (SUCCEEDED(hr) && bgObj) {
+                auto bgFe = bgObj.try_as<wux::FrameworkElement>();
+                if (bgFe) {
+                    auto disp = bgFe.Dispatcher();
+                    if (disp) {
+                        auto asyncOp = disp.TryRunAsync(wuc::CoreDispatcherPriority::High,
+                            [bgFe, diag = m_diagnostics]() noexcept {
+                                XBLog(L"[PostReplay] walk started (UI thread)");
+                                if (!WalkTaskbarBgTree(bgFe, diag.get(), L"[PostReplay]"))
+                                    XBLog(L"[PostReplay] no BackgroundFill/BackgroundStroke found");
+                            });
+                        g_walkAsyncAction = asyncOp;
+                        XBLogFmt(L"  *** TaskbarBackground - walk queued asyncOp=%s ***",
+                            asyncOp ? L"valid" : L"null");
+                        return S_OK;
+                    }
+                }
+            }
+            XBLogFmt(L"  *** TaskbarBackground - walk queue FAILED hr=0x%08X ***", hr);
             return S_OK;
         }
 
