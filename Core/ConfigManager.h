@@ -34,11 +34,6 @@ struct Config {
     bool startShowPictures = true;
     bool startShowVideos = true;
     bool startShowRecentFiles = true;
-    bool startShowPlaceholder1 = false;
-    bool startShowPlaceholder2 = false;
-    bool startShowPlaceholder3 = false;
-    bool startShowPlaceholder4 = false;
-    bool startShowPlaceholder5 = false;
     int hotkeyVk        = 0;      // 0 = disabled; virtual-key code (e.g. 'G' = 0x47)
     int hotkeyModifiers = 0;      // MOD_CONTROL | MOD_ALT | MOD_SHIFT | MOD_WIN
     int blurAmount      = 0;      // 0 = off; 1-100 = XamlBridge blur intensity

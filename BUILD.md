@@ -215,16 +215,18 @@ GlassBar/
 │   └── build/
 │       └── bin/
 │           └── Release/
-│               └── GlassBar.Core.dll          ← Native DLL (loaded by Dashboard)
+│               ├── GlassBar.Core.dll           ← Native DLL (loaded by Dashboard via P/Invoke)
+│               └── GlassBar.XamlBridge.dll     ← Injector DLL for 24H2/25H2+ TAP path
 │
 └── Dashboard/
     └── bin/
         └── Release/
             └── net8.0-windows10.0.22621.0/
                 └── win-x64/
-                    ├── GlassBar.Dashboard.exe  ← Entry point
-                    ├── GlassBar.Core.dll       ← Copied here automatically by MSBuild
-                    └── *.dll                   ← WinAppSDK / .NET dependencies
+                    ├── GlassBar.Dashboard.exe      ← Entry point
+                    ├── GlassBar.Core.dll           ← Copied here automatically by MSBuild
+                    ├── GlassBar.XamlBridge.dll     ← Copied alongside Core.dll
+                    └── *.dll                       ← WinAppSDK / .NET dependencies
 ```
 
 > The Dashboard `.csproj` contains a post-build step that copies `GlassBar.Core.dll`

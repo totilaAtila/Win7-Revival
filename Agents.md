@@ -11,16 +11,12 @@ GlassBar este un utilitar de personalizare pentru Windows 11 care oferă:
   Win7 two-column, construită din zero în GDI (C++). Interceptează Win key și click pe butonul
   Start prin low-level hooks, prezintă meniul custom și suprimă meniul nativ.
 
-Proiectul rulează **extern, fără injection** — nicio modificare a fișierelor de sistem,
-niciun hook în procesele Explorer sau StartMenuExperienceHost.
+Pe **22H2 / 23H2** proiectul rulează extern, fără injection — nicio modificare a fișierelor de sistem, niciun hook în procesele Explorer.
 
-
-**Nota de adevÄƒr local (2026-04-04):**
-- obiectivul arhitectural rÄƒmÃ¢ne varianta externÄƒ, fÄƒrÄƒ injection
-- dar implementarea localÄƒ curentÄƒ pentru **Windows 11 24H2 / 25H2+** include o cale
-  **experimentalÄƒ XamlBridge / TAP Ã®n explorer.exe** pentru investigaÈ›ia taskbar-ului XAML
-- nu se modificÄƒ fiÈ™iere de sistem, dar proiectul nu mai este strict "fÄƒrÄƒ injection"
-  Ã®n sensul documentului original
+**Nota de adevăr local (2026-04-05):**
+- pe **24H2 / 25H2+**, implementarea curentă include o cale **experimentală XamlBridge / TAP în `explorer.exe`** pentru investigația taskbar-ului XAML
+- nu se modifică fișiere de sistem, dar proiectul nu mai este strict "fără injection" în sensul documentului original pe aceste build-uri
+- calea experimentală poate găsi `TaskbarBackground` și `BackgroundFill` dar nu produce încă un efect vizibil confirmat
 
 ---
 
@@ -82,7 +78,7 @@ GlassBar.Core.dll  (C++20, Win32)
 |-------|---------|-----------------|
 | `Core` | `Core.h / Core.cpp` | Orchestrator principal; lifecycle, message loop, inițializare module |
 | `CoreApi` | `CoreApi.h / CoreApi.cpp` | Exporturi C API (`extern "C"`) pentru P/Invoke Dashboard |
-| `Renderer` | `Renderer.h / Renderer.cpp` | Transparență Taskbar via SWCA (22H2/23H2) sau LWA_ALPHA fallback (24H2+) |
+| `Renderer` | `Renderer.h / Renderer.cpp` | Transparență Taskbar via SWCA (22H2/23H2) sau LWA_ALPHA fallback; inițializare XamlBridge |
 | `StartMenuWindow` | `StartMenuWindow.h / .cpp` | Fereastră custom Win7-style (GDI painting, state, navigare, right-click menus) |
 | `StartMenuHook` | `StartMenuHook.h / .cpp` | Low-level hooks (`WH_KEYBOARD_LL`, `WH_MOUSE_LL`) pentru Win key și Start button |
 | `ShellTargetLocator` | `ShellTargetLocator.h / .cpp` | Detectare Taskbar (toate edge-urile, multi-monitor), monitoring prin background thread |
@@ -90,18 +86,31 @@ GlassBar.Core.dll  (C++20, Win32)
 | `ConfigManager` | `ConfigManager.h / .cpp` | Citire/scriere `config.json`; thread-safe getters/setters |
 | `Diagnostics` | `Diagnostics.h / .cpp` | Macro `CF_LOG` + scriere `%LOCALAPPDATA%\GlassBar\GlassBar.log` |
 
+**Module XamlBridge** (`Core/XamlBridge/` — `GlassBar.XamlBridge.dll`, injectat în `explorer.exe`):
+
+| Modul | Fișiere | Responsabilitate |
+|-------|---------|-----------------|
+| `dllmain` | `dllmain.cpp` | DLL entry point; `WorkerThread`; logging; `XamlBridgeHookProc` export; COM exports |
+| `TAPInjector` | `TAPInjector.h / .cpp` | Înregistrare `InitializeXamlDiagnosticsEx` pe toate `VisualDiagConnectionN` islands; retry după succes confirmat |
+| `VisualTreeWatcher` | `VisualTreeWatcher.h / .cpp` | `IVisualTreeServiceCallback2` — detectare `TaskbarBackground`, walk tree, aplicare brush via `ClearProperty` / `SetProperty` |
+| `TAPObject` | `TAPObject.h / .cpp` | COM factory (`DllGetClassObject`) + TAP class consumat de XAML diagnostics |
+| `XamlBridgeCommon` | `XamlBridgeCommon.h` | Globals comuni (`g_visualTreeService3`, `g_xamlDiagnostics`, `g_knownShapes`, etc.) |
+| `SharedBlurState` | `SharedBlurState.h` | Structură shared memory (`Local\GlassBar_XamlBridge_v1`) pentru IPC atomic Core ↔ XamlBridge |
+
 ### Module Dashboard (C#)
 
 | Fișier | Responsabilitate |
 |--------|-----------------|
 | `App.xaml.cs` | Single-instance (Mutex), `/autostart` flag, unhandled exception handler |
-| `MainWindow.xaml.cs` | UI principal, NavigationView tabs, debounce slidere, sync culori |
+| `MainWindow.xaml.cs` | UI principal, NavigationView tabs, debounce slidere, sync culori, auto-update infobar |
 | `MainViewModel.cs` | State management (INotifyPropertyChanged), forwardare setări la Core |
 | `CoreManager.cs` | P/Invoke wrapper high-level, message pump thread, lifecycle Core |
 | `CoreNative.cs` | Declarații P/Invoke pentru toate exporturile Core |
 | `ConfigManager.cs` | JSON persistence cu debounce save (250ms) |
 | `TrayIconManager.cs` | System tray icon via `Shell_NotifyIcon`, context menu (Show / Exit) |
 | `StartupManager.cs` | Autostart via `HKCU\...\Run` cu flag `/autostart` |
+| `UpdateChecker.cs` | Polling GitHub Releases API; notificare în UI când e disponibil un release nou |
+| `CoreExtractor.cs` | Extrage DLL-urile native din publish folder la prima rulare |
 
 ---
 
@@ -114,25 +123,34 @@ sockets sau orice alt canal IPC extern.
 
 ```cpp
 // Lifecycle
-GB_API void Core_Initialize();
-GB_API void Core_Shutdown();
-GB_API bool Core_IsRunning();
+GLASSBAR_API bool CoreInitialize();
+GLASSBAR_API void CoreShutdown();
 
 // Taskbar overlay
-GB_API void Core_SetTaskbarEnabled(bool enabled);
-GB_API void Core_SetTaskbarOpacity(int opacity);          // 0–100
-GB_API void Core_SetTaskbarColor(int r, int g, int b);
-GB_API void Core_SetTaskbarBlur(bool blur);
+GLASSBAR_API void CoreSetTaskbarEnabled(bool enabled);
+GLASSBAR_API void CoreSetTaskbarOpacity(int opacity);       // 0–100
+GLASSBAR_API void CoreSetTaskbarColor(int r, int g, int b);
+GLASSBAR_API void CoreSetTaskbarBlur(bool enabled);
+GLASSBAR_API void CoreSetTaskbarBlurAmount(int amount);     // 0–100 (XamlBridge intensity)
 
 // Start Menu
-GB_API void Core_SetStartEnabled(bool enabled);
-GB_API void Core_SetStartMenuOpacity(int opacity);        // 0–100
-GB_API void Core_SetStartMenuBgColor(int r, int g, int b);
-GB_API void Core_SetStartMenuTextColor(int r, int g, int b);
-GB_API void Core_SetStartMenuBorderColor(int r, int g, int b);
-GB_API void Core_SetStartMenuBlur(bool blur);
-GB_API void Core_SetStartMenuItemVisible(const wchar_t* item, bool visible);
-GB_API void Core_KeepStartMenuOpen(bool keep);
+GLASSBAR_API void CoreSetStartEnabled(bool enabled);
+GLASSBAR_API void CoreSetStartMenuOpacity(int opacity);     // 0–100
+GLASSBAR_API void CoreSetStartMenuBackgroundColor(unsigned int rgb);
+GLASSBAR_API void CoreSetStartMenuTextColor(unsigned int rgb);
+GLASSBAR_API void CoreSetStartMenuBorderColor(unsigned int rgb);
+GLASSBAR_API void CoreSetStartMenuBlur(bool enabled);
+GLASSBAR_API void CoreSetStartMenuHookEnabled(bool enabled);
+GLASSBAR_API void CoreSetStartMenuPinned(bool pinned);
+GLASSBAR_API void CoreSetStartMenuItems(bool cp, bool dm, bool ia, bool docs, bool pics, bool vids, bool recent);
+
+// Global hotkey
+GLASSBAR_API void CoreRegisterHotkey(int vk, int modifiers);
+GLASSBAR_API void CoreUnregisterHotkey();
+
+// Status / message pump
+GLASSBAR_API bool CoreProcessMessages();
+GLASSBAR_API void CoreGetStatus(CoreStatus* status);
 ```
 
 ---
@@ -191,8 +209,8 @@ Config salvată în: `%LOCALAPPDATA%\GlassBar\config.json`
 | System tray + autostart | ✅ Done |
 | Single-instance Dashboard | ✅ Done |
 | Search box | ⚠️ Vizibil, nefuncțional (placeholder) |
-| Global hotkey toggle overlay | ❌ Planned |
-| Auto-update check (GitHub releases) | ❌ Planned |
+| Global hotkey toggle overlay | ✅ Done |
+| Auto-update check (GitHub releases) | ✅ Done |
 
 ---
 

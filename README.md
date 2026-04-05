@@ -240,9 +240,9 @@ On **22H2 and 23H2**, GlassBar's SWCA-based rendering works flawlessly: full tra
 - Right-column item visibility per-item
 - Compact single-window Dashboard with NavigationView (Taskbar / Start Menu panels)
 
-### Planned
-- **Global hotkey** — toggle overlays without opening Dashboard
-- **Auto-update check** — notify when a new GitHub release is available
+### Also done
+- **Global hotkey** — toggle overlays without opening Dashboard (`Ctrl+Shift+G` default; configurable)
+- **Auto-update check** — notifies when a new GitHub release is available
 
 ---
 

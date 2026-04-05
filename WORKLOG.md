@@ -1,6 +1,39 @@
 
 # WORKLOG — GlassBar
-Last updated: 2026-03-24 (session 24 — Cercetare Windhawk/TranslucentTB + plan avansare proiect)
+Last updated: 2026-04-05 (ITER #19 — fix thread context pentru InitializeXamlDiagnosticsEx pe 25H2)
+
+---
+
+## SESSION 2026-04-05 — ITER #19: TAP injection thread fix
+
+### Context
+Analiză WindHawk `windows-11-taskbar-styler.wh.cpp` a identificat cauza rădăcină a eșecului pe 25H2:
+`InitializeXamlDiagnosticsEx` trebuie apelat de pe thread-ul XAML island-ului (`Shell_TrayWnd` UI thread).
+GlassBar îl apela din worker thread separat (`COINIT_APARTMENTTHREADED`).
+
+### Ce s-a lucrat
+- **Dead code eliminat:** `Core/main.cpp`, `Core/IpcBridge.*`, `Dashboard/CoreProcessManager.cs`, `Dashboard/IpcClient.cs`, 5x `startShowPlaceholder` fields
+- **Markdown sync complet:** README.md, Agents.md, BUILD.md, TESTING.md — toate reflectă starea reală
+- **ChatAi.md creat:** fișier cross-session cu diagnostic complet, analiza WindHawk, plan de fix
+- **PR #98 merged** în main (SHA `50e04cb8`) + Codex review rezolvat
+- **ITER #19 implementat:** `InjectGlassBarTAP()` mutat din `WorkerThread` în `XamlBridgeHookProc`
+
+### ITER #19 — detalii tehnice
+**Fișiere:** `Core/XamlBridge/dllmain.cpp`, `Core/XamlBridge/TAPInjector.cpp`
+- `g_tapScheduled` atomic flag adăugat
+- `XamlBridgeHookProc` apelează `InjectGlassBarTAP()` la prima declanșare (pe Shell_TrayWnd thread)
+- `WorkerThread` așteaptă `g_tapScheduled` max 2s, apoi continuă cu polling loop
+- Fallback: dacă hook nu s-a declanșat, worker thread încearcă injecția (scenariu anormal)
+
+### Referință WindHawk
+- `ramensoftware/windhawk-mods` → `windows-11-taskbar-styler.wh.cpp`
+- Detalii complete în `ChatAi.md` secțiunile 4-5
+
+### Dacă ITER #19 nu produce efect vizibil
+Next step: hook `CreateWindowExW` pentru detectare `DesktopWindowContentBridge` + `RunFromWindowThread`.
+Vezi `ChatAi.md` secțiunea 5 "Dacă ITER #19 nu rezolvă".
+
+---
 
 ## 0) Ground truth (docs to treat as canonical)
 - **Checkpoint 2026-04-04:** local truth has moved beyond the older "taskbar done" summary below.

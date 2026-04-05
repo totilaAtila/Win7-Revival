@@ -1,5 +1,10 @@
 //
-// TAPInjector.cpp — In-process XAML Diagnostics injection loop  [ITER #11]
+// TAPInjector.cpp — In-process XAML Diagnostics injection loop  [ITER #19]
+//
+// ITER #19: InjectGlassBarTAP() is now called from XamlBridgeHookProc
+// (Shell_TrayWnd UI thread) rather than WorkerThread.  This ensures
+// InitializeXamlDiagnosticsEx runs on the correct apartment thread,
+// which is required on Windows 25H2 (build ≥ 26200).
 //
 // Uses GetCurrentProcessId() — the DLL is already inside explorer.exe
 // (injected via WH_CALLWNDPROC hook from Renderer.cpp).
@@ -71,4 +76,9 @@ void InjectGlassBarTAP()
     } else {
         XBLog(L"InjectGlassBarTAP: no islands registered — leaving g_tapInited=false for retry");
     }
+}
+
+bool IsTapInited()
+{
+    return g_tapInited.load();
 }

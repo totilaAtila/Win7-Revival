@@ -321,11 +321,11 @@ latență < 250ms; se deschide/închide fără crash
 - Aceasta este o limitare known — restul meniului nu este afectat.
 
 ### Renderer pe 24H2 / 25H2+ (build ≥ 26000)
-- SWCA nu mai funcționează pe aceste build-uri; se folosește fallback LWA_ALPHA.
-- RGB color tint și Blur/Acrylic nu au efect vizual.
-- Transparența funcționează, dar iconițele Taskbar devin proporțional mai puțin vizibile
-  odată cu creșterea transparenței. Aceasta este o limitare a platformei Windows.
-- Pe 22H2/23H2, toate efectele funcționează complet.
+- SWCA nu mai funcționează pe aceste build-uri; fallback LWA_ALPHA asigură transparență de bază.
+- Calea activă pe 24H2/25H2+ este **experimentală**: `GlassBar.XamlBridge.dll` se injectează în `explorer.exe` via XAML diagnostics / TAP.
+- Investigația curentă poate localiza `TaskbarBackground` și `BackgroundFill` în visual tree, dar nu produce încă un efect vizibil confirmat.
+- RGB color tint și Blur/Acrylic nu au efect vizual stabil pe aceste build-uri — considerată limitare de platformă în investigare.
+- Pe 22H2/23H2, toate efectele funcționează complet (SWCA full control).
 
 ### DPI Scaling
 - Testat cu 100%, 125%, 150%.

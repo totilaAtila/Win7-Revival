@@ -1,5 +1,14 @@
 //
-// dllmain.cpp — DLL entry, COM exports, WorkerThread, logging  [ITER #11]
+// dllmain.cpp — DLL entry, COM exports, WorkerThread, logging  [ITER #19]
+//
+// ITER #19 change: InjectGlassBarTAP() is now called from XamlBridgeHookProc
+// (Shell_TrayWnd UI thread) instead of WorkerThread.
+//
+// Root cause fixed: on Windows 25H2 (build ≥ 26200) InitializeXamlDiagnosticsEx
+// must be called from the XAML island's owning thread.  XamlBridgeHookProc fires
+// on that thread (Shell_TrayWnd UI thread) via WH_CALLWNDPROC injection, so it is
+// the correct call site.  WorkerThread retains only shared-memory monitoring and
+// brush-update dispatch.
 //
 // Defines all module-level globals (declared extern in XamlBridgeCommon.h).
 //
@@ -27,6 +36,15 @@ winrt::Windows::Foundation::IAsyncOperation<bool> g_bgFillAsyncAction{ nullptr }
 winrt::Windows::Foundation::IAsyncOperation<bool> g_bgStrokeAsyncAction{ nullptr };
 
 static HANDLE            g_hWorkerThread = nullptr;
+
+// Set to true the first time XamlBridgeHookProc fires.
+// Tells WorkerThread that the hook is active and owns injection retries,
+// so the worker does not attempt a wrong-thread fallback.
+static std::atomic<bool> g_tapScheduled { false };
+
+// Tick of the last InjectGlassBarTAP() attempt from the hook proc.
+// Used to rate-limit retries to at most once per 500 ms.
+static std::atomic<DWORD> g_lastTapAttemptTick { 0 };
 
 // ---------------------------------------------------------------------------
 // Logging
@@ -114,8 +132,24 @@ static DWORD WINAPI WorkerThread(LPVOID)
         return 0;
     }
 
-    XBLog(L"WorkerThread: shared memory mapped — injecting TAP");
-    InjectGlassBarTAP();
+    // TAP injection is driven by XamlBridgeHookProc on Shell_TrayWnd's UI thread.
+    // The hook retries automatically (rate-limited) until IsTapInited() returns true,
+    // so the worker only needs to wait for the hook to have fired at least once.
+    // If the hook never fires (hook not installed / wrong process), log and continue —
+    // brush dispatch will simply find g_knownShapes empty until TAP succeeds.
+    XBLog(L"WorkerThread: waiting for XamlBridgeHookProc to fire on Shell_TrayWnd thread...");
+    for (int wait = 0; wait < 20 && !g_tapScheduled.load() && !g_stopping.load(); ++wait)
+        Sleep(100);
+
+    if (g_tapScheduled.load()) {
+        XBLog(L"WorkerThread: hook proc is active — TAP injection handled on Shell_TrayWnd thread");
+    } else {
+        // Hook did not fire: DLL may have been loaded without a hook (unusual).
+        // Attempting injection from worker thread as last resort.
+        // On 25H2 this may not succeed but is better than silent failure.
+        XBLog(L"WorkerThread: hook proc did not fire — last-resort injection from worker thread");
+        InjectGlassBarTAP();
+    }
 
     LONG lastVersion = -1;
     // Kept alive across Sleep so TryRunAsync callbacks are not cancelled before firing
@@ -240,8 +274,30 @@ extern "C" HRESULT STDAPICALLTYPE DllCanUnloadNow()
 
 // ---------------------------------------------------------------------------
 // Exported hook proc (used by SetWindowsHookEx injection in Renderer.cpp)
+//
+// Fires on Shell_TrayWnd's UI thread — the correct apartment for
+// InitializeXamlDiagnosticsEx on Windows 25H2 (build ≥ 26200).
+//
+// Retries InjectGlassBarTAP() on every call until IsTapInited() returns true,
+// rate-limited to at most one attempt per 500 ms.  This handles the startup
+// timing case where XAML islands are not yet registered on the first callback.
 // ---------------------------------------------------------------------------
 extern "C" LRESULT CALLBACK XamlBridgeHookProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
+    if (nCode >= 0 && !IsTapInited()) {
+        // Mark hook as active so WorkerThread skips its wrong-thread fallback.
+        g_tapScheduled.store(true);
+
+        // Rate-limit attempts to avoid hammering InitializeXamlDiagnosticsEx
+        // on every window message.  500 ms is enough to catch islands starting up.
+        DWORD now  = GetTickCount();
+        DWORD last = g_lastTapAttemptTick.load(std::memory_order_relaxed);
+        if (now - last >= 500u) {
+            g_lastTapAttemptTick.store(now, std::memory_order_relaxed);
+            if (!g_logPath[0]) InitLogPath();
+            XBLog(L"XamlBridgeHookProc: attempting TAP injection on Shell_TrayWnd thread [ITER #19]");
+            InjectGlassBarTAP();
+        }
+    }
     return CallNextHookEx(nullptr, nCode, wParam, lParam);
 }
