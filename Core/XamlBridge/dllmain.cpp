@@ -1,5 +1,14 @@
 //
-// dllmain.cpp — DLL entry, COM exports, WorkerThread, logging  [ITER #11]
+// dllmain.cpp — DLL entry, COM exports, WorkerThread, logging  [ITER #19]
+//
+// ITER #19 change: InjectGlassBarTAP() is now called from XamlBridgeHookProc
+// (Shell_TrayWnd UI thread) instead of WorkerThread.
+//
+// Root cause fixed: on Windows 25H2 (build ≥ 26200) InitializeXamlDiagnosticsEx
+// must be called from the XAML island's owning thread.  XamlBridgeHookProc fires
+// on that thread (Shell_TrayWnd UI thread) via WH_CALLWNDPROC injection, so it is
+// the correct call site.  WorkerThread retains only shared-memory monitoring and
+// brush-update dispatch.
 //
 // Defines all module-level globals (declared extern in XamlBridgeCommon.h).
 //
@@ -27,6 +36,10 @@ winrt::Windows::Foundation::IAsyncOperation<bool> g_bgFillAsyncAction{ nullptr }
 winrt::Windows::Foundation::IAsyncOperation<bool> g_bgStrokeAsyncAction{ nullptr };
 
 static HANDLE            g_hWorkerThread = nullptr;
+
+// Set to true the moment XamlBridgeHookProc fires for the first time.
+// WorkerThread checks this to avoid a redundant fallback injection.
+static std::atomic<bool> g_tapScheduled { false };
 
 // ---------------------------------------------------------------------------
 // Logging
@@ -114,8 +127,19 @@ static DWORD WINAPI WorkerThread(LPVOID)
         return 0;
     }
 
-    XBLog(L"WorkerThread: shared memory mapped — injecting TAP");
-    InjectGlassBarTAP();
+    // TAP injection is now driven from XamlBridgeHookProc (Shell_TrayWnd thread).
+    // Wait briefly to let the hook-proc injection complete before we start polling.
+    // If the hook somehow never fired, fall back here (should not happen normally).
+    XBLog(L"WorkerThread: waiting for hook-proc TAP injection to complete...");
+    for (int wait = 0; wait < 20 && !g_tapScheduled.load() && !g_stopping.load(); ++wait)
+        Sleep(100);
+
+    if (g_tapScheduled.load()) {
+        XBLog(L"WorkerThread: TAP injection scheduled from Shell_TrayWnd thread — OK");
+    } else {
+        XBLog(L"WorkerThread: hook proc did not fire — fallback injection from worker thread");
+        InjectGlassBarTAP();
+    }
 
     LONG lastVersion = -1;
     // Kept alive across Sleep so TryRunAsync callbacks are not cancelled before firing
@@ -240,8 +264,20 @@ extern "C" HRESULT STDAPICALLTYPE DllCanUnloadNow()
 
 // ---------------------------------------------------------------------------
 // Exported hook proc (used by SetWindowsHookEx injection in Renderer.cpp)
+//
+// Fires on Shell_TrayWnd's UI thread — the correct apartment for
+// InitializeXamlDiagnosticsEx on Windows 25H2 (build ≥ 26200).
+// On first call, schedules TAP injection synchronously on this thread.
+// Subsequent calls pass through immediately.
 // ---------------------------------------------------------------------------
 extern "C" LRESULT CALLBACK XamlBridgeHookProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
+    if (nCode >= 0 && !g_tapScheduled.exchange(true)) {
+        // First invocation — we are on Shell_TrayWnd's message thread.
+        // Ensure log path is ready before the first log call.
+        if (!g_logPath[0]) InitLogPath();
+        XBLog(L"XamlBridgeHookProc: first call on Shell_TrayWnd thread — injecting TAP [ITER #19]");
+        InjectGlassBarTAP();
+    }
     return CallNextHookEx(nullptr, nCode, wParam, lParam);
 }

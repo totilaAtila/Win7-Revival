@@ -2,7 +2,7 @@
 
 > **Scop:** Fișier de referință tehnic pentru sesiuni cross-platform / cross-chat.
 > Conține: diagnostic 25H2 taskbar, analiza WindHawk, planul de fix, starea cercetării.
-> **Ultima actualizare:** 2026-04-05
+> **Ultima actualizare:** 2026-04-05 — ITER #19 implementat
 
 ---
 
@@ -16,10 +16,11 @@
 | Global hotkey toggle | ✅ Funcțional | CoreRegisterHotkey / CoreUnregisterHotkey |
 | Auto-update check | ✅ Funcțional | UpdateChecker.cs → GitHub Releases API |
 | Config persistence | ✅ Funcțional | Aliniat PascalCase; fix-ul config-not-found din PR #98 |
-| XamlBridge TAP injection | ⚠️ Parțial | DLL se injectează, tree walk merge, efect vizibil lipsă |
+| XamlBridge TAP injection | 🔄 ITER #19 | Fix thread context: InjectGlassBarTAP mutat în XamlBridgeHookProc (Shell_TrayWnd thread) |
 
 **Branch de lucru activ:** `claude/xamlbridge-knowledge-refresh-TGQRn`
 **Ultimul merge în main:** PR #98 (squash, SHA `50e04cb8`) — checkpoint XamlBridge 25H2 + Codex P1 fix
+**ITER #19 commit:** `c974e35..` — fix thread context pentru InitializeXamlDiagnosticsEx pe 25H2
 
 ---
 
@@ -191,67 +192,56 @@ CompositionEffectBrush cu BackdropBrush source
 
 ---
 
-## 5. Planul de fix (ITER #19 propus)
+## 5. Fix implementat — ITER #19 ✅
 
-### Abordarea: muta `InjectGlassBarTAP()` pe thread-ul corect
+### Ce s-a schimbat
 
-**Modificare minimă — un singur fișier: `Core/XamlBridge/dllmain.cpp`**
+**Fișiere modificate:** `Core/XamlBridge/dllmain.cpp`, `Core/XamlBridge/TAPInjector.cpp`
 
-**Pasul 1:** Adaugă atomic flag `g_tapScheduled` și funcție helper `FindContentBridgeWnd`.
+```
+[ÎNAINTE — ITER #11-#18, NU funcționa pe 25H2]
+WH_CALLWNDPROC hook → passthrough pur
+Worker thread (COINIT_APARTMENTTHREADED, thread separat) → InjectGlassBarTAP() ← THREAD GREȘIT
 
-**Pasul 2:** Modifică `XamlBridgeHookProc` (actualmente passthrough) să apeleze
-`InjectGlassBarTAP()` la prima declanșare. Hook proc rulează deja pe thread-ul
-`Shell_TrayWnd` — același thread care găzduiește XAML islands pe 25H2.
+[DUPĂ — ITER #19 ✅]
+WH_CALLWNDPROC hook (Shell_TrayWnd UI thread) → prima apelare → InjectGlassBarTAP() ← THREAD CORECT
+Worker thread → wait g_tapScheduled (max 2s) → monitorizare shared memory + dispatch brushes
+```
 
-**Pasul 3:** Elimină apelul `InjectGlassBarTAP()` din `WorkerThread`.
-
+**Codul implementat:**
 ```cpp
-// ÎNAINTE (dllmain.cpp:244-247):
-extern "C" LRESULT CALLBACK XamlBridgeHookProc(int nCode, WPARAM wParam, LPARAM lParam)
-{
-    return CallNextHookEx(nullptr, nCode, wParam, lParam);  // passthrough pur
-}
-
-// DUPĂ:
+// dllmain.cpp — g_tapScheduled flag
 static std::atomic<bool> g_tapScheduled { false };
 
+// XamlBridgeHookProc — prima apelare pe Shell_TrayWnd thread
 extern "C" LRESULT CALLBACK XamlBridgeHookProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
     if (nCode >= 0 && !g_tapScheduled.exchange(true)) {
-        // Rulăm pe thread-ul Shell_TrayWnd — corect pentru XAML islands pe 25H2
-        XBLog(L"XamlBridgeHookProc: scheduling TAP injection on Shell_TrayWnd thread");
+        if (!g_logPath[0]) InitLogPath();
+        XBLog(L"XamlBridgeHookProc: first call on Shell_TrayWnd thread — injecting TAP [ITER #19]");
         InjectGlassBarTAP();
     }
     return CallNextHookEx(nullptr, nCode, wParam, lParam);
 }
+
+// WorkerThread — wait + fallback
+for (int wait = 0; wait < 20 && !g_tapScheduled.load() && !g_stopping.load(); ++wait)
+    Sleep(100);
+if (g_tapScheduled.load()) {
+    XBLog(L"WorkerThread: TAP injection scheduled from Shell_TrayWnd thread — OK");
+} else {
+    XBLog(L"WorkerThread: hook proc did not fire — fallback injection from worker thread");
+    InjectGlassBarTAP();
+}
 ```
 
-**Pasul 4 (opțional, WindHawk-aligned):** Găsește `DesktopWindowContentBridge` și
-rulează pe thread-ul acelei ferestre (mai precis decât `Shell_TrayWnd`):
+### Dacă ITER #19 nu rezolvă: Next step (WindHawk-aligned)
 
-```cpp
-// În WorkerThread sau hook proc, înainte de InjectGlassBarTAP:
-HWND hContentBridge = FindWindowEx(
-    FindWindowW(L"Shell_TrayWnd", nullptr), nullptr,
-    L"Windows.UI.Composition.DesktopWindowContentBridge", nullptr);
-// Dacă găsit, folosi SendMessage cu custom message pe thread-ul lui
-```
-
-### Riscuri
-
-| Risc | Probabilitate | Mitigare |
-|------|--------------|----------|
-| Hook proc apelat prea devreme (XAML nu e gata) | Medie | Retry cu `Sleep(500)` + re-check în worker thread |
-| `InjectGlassBarTAP` blochează hook proc prea mult | Scăzută | Muta în `PostMessage`/thread separat cu sync |
-| `Shell_TrayWnd` thread ≠ XAML island thread pe 25H2 | Medie | Fallback la `DesktopWindowContentBridge` thread |
-
-### Alternativă (mai robustă, mai complexă): Hookuri funcție
-
-Dacă muta în hook proc nu rezolvă, abordarea WindHawk completă:
-1. `LoadLibraryExW` hook → detectare `Windows.UI.Xaml.dll` load
-2. `CreateWindowExW` hook → detectare `DesktopWindowContentBridge` creation
-3. La detecție → `RunFromWindowThread` + `InjectGlassBarTAP`
-4. Necesită o librărie de hooking (MinHook / Detours) sau inline hook manual
+Dacă `Shell_TrayWnd` thread ≠ thread-ul XAML island pe 25H2, abordarea completă:
+1. Hook `LoadLibraryExW` → detectare `Windows.UI.Xaml.dll` load
+2. Hook `CreateWindowExW` → detectare `Windows.UI.Composition.DesktopWindowContentBridge` sub `Shell_TrayWnd`
+3. La detecție → `RunFromWindowThread(hContentBridge)` + `InjectGlassBarTAP`
+4. Necesită MinHook / Detours sau inline hook manual (fără dependință externă în GlassBar)
 
 ---
 
