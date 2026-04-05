@@ -167,11 +167,6 @@ namespace GlassBar.Dashboard
         public bool StartShowPictures { get => _config.StartShowPictures; set { _config.StartShowPictures = value; _ = SaveAsync(); } }
         public bool StartShowVideos { get => _config.StartShowVideos; set { _config.StartShowVideos = value; _ = SaveAsync(); } }
         public bool StartShowRecentFiles { get => _config.StartShowRecentFiles; set { _config.StartShowRecentFiles = value; _ = SaveAsync(); } }
-        public bool StartShowPlaceholder1 { get => _config.StartShowPlaceholder1; set { _config.StartShowPlaceholder1 = value; _ = SaveAsync(); } }
-        public bool StartShowPlaceholder2 { get => _config.StartShowPlaceholder2; set { _config.StartShowPlaceholder2 = value; _ = SaveAsync(); } }
-        public bool StartShowPlaceholder3 { get => _config.StartShowPlaceholder3; set { _config.StartShowPlaceholder3 = value; _ = SaveAsync(); } }
-        public bool StartShowPlaceholder4 { get => _config.StartShowPlaceholder4; set { _config.StartShowPlaceholder4 = value; _ = SaveAsync(); } }
-        public bool StartShowPlaceholder5 { get => _config.StartShowPlaceholder5; set { _config.StartShowPlaceholder5 = value; _ = SaveAsync(); } }
         public int  StartBorderColorR { get => _config.StartBorderColorR; set { _config.StartBorderColorR = value; _ = SaveAsync(); } }
         public int  StartBorderColorG { get => _config.StartBorderColorG; set { _config.StartBorderColorG = value; _ = SaveAsync(); } }
         public int  StartBorderColorB { get => _config.StartBorderColorB; set { _config.StartBorderColorB = value; _ = SaveAsync(); } }
