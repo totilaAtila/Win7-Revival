@@ -77,3 +77,8 @@ void InjectGlassBarTAP()
         XBLog(L"InjectGlassBarTAP: no islands registered — leaving g_tapInited=false for retry");
     }
 }
+
+bool IsTapInited()
+{
+    return g_tapInited.load();
+}
