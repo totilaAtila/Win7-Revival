@@ -37,7 +37,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Build with reduced parallelism
-cmake --build . --config Release -- /m:1
+cmake --build . --config Release
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Core build failed!" -ForegroundColor Red
     Write-Host "Try closing other applications and run again." -ForegroundColor Yellow
@@ -86,11 +86,40 @@ Pop-Location
 
 Write-Host "  [OK] Dashboard published with .NET runtime" -ForegroundColor Green
 
-# Step 4: Copy Core.dll
-Write-Host "`n[4/6] Copying native Core.dll..." -ForegroundColor Yellow
+# Step 4: Copy native DLLs explicitly from fresh Core build
+Write-Host "`n[4/6] Copying native DLLs..." -ForegroundColor Yellow
 $coreSource = ".\Core\build\bin\Release\GlassBar.Core.dll"
+$xamlBridgeSource = ".\Core\build\bin\Release\GlassBar.XamlBridge.dll"
+
+if (!(Test-Path $coreSource)) {
+    Write-Host "GlassBar.Core.dll not found after build!" -ForegroundColor Red
+    exit 1
+}
+
+if (!(Test-Path $xamlBridgeSource)) {
+    Write-Host "GlassBar.XamlBridge.dll not found after build!" -ForegroundColor Red
+    exit 1
+}
+
 Copy-Item $coreSource -Destination $publishPath -Force
-Write-Host "  [OK] Core.dll copied" -ForegroundColor Green
+Copy-Item $xamlBridgeSource -Destination $publishPath -Force
+
+Write-Host "  [OK] GlassBar.Core.dll copied" -ForegroundColor Green
+Write-Host "  [OK] GlassBar.XamlBridge.dll copied" -ForegroundColor Green
+
+# Ensure config.json exists in %LOCALAPPDATA%\GlassBar\ (prevents "Config not found" on first run)
+$configDir = "$env:LOCALAPPDATA\GlassBar"
+$configDst = "$configDir\config.json"
+$configSrc = "$PSScriptRoot\config.json"
+if (Test-Path $configDst) {
+    Write-Host "  [OK] config.json already present at AppData" -ForegroundColor Green
+} elseif (Test-Path $configSrc) {
+    if (-not (Test-Path $configDir)) { New-Item -ItemType Directory -Path $configDir | Out-Null }
+    Copy-Item $configSrc $configDst -Force
+    Write-Host "  [OK] Default config.json deployed to AppData" -ForegroundColor Green
+} else {
+    Write-Host "  [WARN] config.json not found in script dir - skipping" -ForegroundColor Yellow
+}
 
 # Step 5: Create comprehensive documentation
 Write-Host "`n[5/6] Creating user documentation..." -ForegroundColor Yellow

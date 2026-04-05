@@ -14,13 +14,22 @@ GlassBar este un utilitar de personalizare pentru Windows 11 care oferă:
 Proiectul rulează **extern, fără injection** — nicio modificare a fișierelor de sistem,
 niciun hook în procesele Explorer sau StartMenuExperienceHost.
 
+
+**Nota de adevÄƒr local (2026-04-04):**
+- obiectivul arhitectural rÄƒmÃ¢ne varianta externÄƒ, fÄƒrÄƒ injection
+- dar implementarea localÄƒ curentÄƒ pentru **Windows 11 24H2 / 25H2+** include o cale
+  **experimentalÄƒ XamlBridge / TAP Ã®n explorer.exe** pentru investigaÈ›ia taskbar-ului XAML
+- nu se modificÄƒ fiÈ™iere de sistem, dar proiectul nu mai este strict "fÄƒrÄƒ injection"
+  Ã®n sensul documentului original
+
 ---
 
 ## 2) Principii non-negociabile
 
-1. **Fără injection / fără patching**
-   - Niciun hook/injection în procesele Explorer/StartMenuExperienceHost.
-   - Nicio modificare internă a UI-ului nativ; doar strat vizual extern sau fereastră custom proprie.
+1. **Fără patching de sistem; injection doar ca excepție experimentală**
+   - Obiectivul de produs rămâne fără hook/injection în Explorer sau StartMenuExperienceHost.
+   - Excepția locală actuală: pe 24H2 / 25H2+ există o cale experimentală `GlassBar.XamlBridge.dll` / TAP în `explorer.exe`.
+   - Nicio modificare a fișierelor de sistem; preferința arhitecturală rămâne un strat vizual extern sau o fereastră custom proprie.
 
 2. **Fără impact pe funcționalitate**
    - Taskbar rămâne complet utilizabil (click, drag, context menus, system tray).
@@ -134,7 +143,7 @@ GB_API void Core_KeepStartMenuOpen(bool keep);
 - **Limbaj:** C++20, MSVC
 - **API-uri Win32:** `user32`, `gdi32`, `shell32`, `ole32`, `advapi32`, `dwmapi`
 - **Transparență (22H2/23H2):** `SetWindowCompositionAttribute` (SWCA) — `ACCENT_ENABLE_ACRYLICBLURBEHIND`
-- **Transparență (24H2/25H2+):** `SetLayeredWindowAttributes` (LWA_ALPHA) fallback
+- **Transparență (24H2/25H2+):** investigație experimentală `GlassBar.XamlBridge.dll` + XAML diagnostics / TAP în `explorer.exe`
 - **Start Menu painting:** GDI (`SelectObject`, `DrawTextW`, `BitBlt`, `DrawIconEx`)
 - **Hooks:** `WH_KEYBOARD_LL`, `WH_MOUSE_LL`
 - **Shell:** `SHGetKnownFolderPath`, `SHGetFileInfoW`, `IShellLinkW`, `ShellExecuteW`
@@ -154,10 +163,10 @@ GB_API void Core_KeepStartMenuOpen(bool keep);
 
 Config salvată în: `%LOCALAPPDATA%\GlassBar\config.json`
 
-**Chei principale:**
-- `taskbarEnabled`, `taskbarOpacity`, `taskbarR/G/B`, `taskbarBlur`
-- `startEnabled`, `startOpacity`, `startBgR/G/B`, `startTextR/G/B`, `startBorderR/G/B`, `startBlur`
-- `startupEnabled`
+**Chei principale (schema Dashboard / local truth):**
+- `TaskbarEnabled`, `TaskbarOpacity`, `TaskbarColorR/G/B`, `TaskbarBlur`, `BlurAmount`
+- `StartEnabled`, `StartOpacity`, `StartBgColorR/G/B`, `StartTextColorR/G/B`, `StartBorderColorR/G/B`, `StartBlur`
+- `CoreEnabled`, `IsFirstRun`, `HotkeyVk`, `HotkeyModifiers`
 - `rightColumnItems` — visibility per item (Documents, Pictures, Music, Downloads, Control Panel etc.)
 - `pinnedApps` — lista de aplicații pinned în Start Menu (separat în `pinned_apps.json`)
 
@@ -169,7 +178,7 @@ Config salvată în: `%LOCALAPPDATA%\GlassBar\config.json`
 |-----------|--------|
 | Taskbar overlay (toate edge-urile, multi-monitor, auto-hide) | ✅ Done |
 | Renderer 22H2/23H2 (SWCA — transparență + RGB + Blur) | ✅ Done |
-| Renderer 24H2/25H2+ (LWA_ALPHA fallback — transparență uniformă) | ✅ Done |
+| Renderer 24H2/25H2+ (`GlassBar.XamlBridge.dll` / TAP path) | ⚠️ Experimental |
 | Explorer restart recovery | ✅ Done |
 | Start Menu replacement (Win7 two-column layout) | ✅ Done |
 | All Programs tree (folder drill-down, hover submenus, keyboard nav) | ✅ Done |
@@ -201,9 +210,9 @@ Config salvată în: `%LOCALAPPDATA%\GlassBar\config.json`
 
 ## 9) Riscuri cunoscute
 
-- **Transparență pe 24H2/25H2+:** Microsoft a eliminat suportul SWCA pe `Shell_TrayWnd`.
-  Fallback-ul LWA_ALPHA funcționează (transparență uniformă), dar RGB color tint și Blur nu au efect.
-  Iconițele Taskbar devin și ele mai puțin vizibile odată cu creșterea transparenței — aceasta
-  este o limitare a platformei, nu un bug GlassBar.
+- **Taskbar pe 24H2/25H2+:** calea locală actuală este experimentală și folosește `GlassBar.XamlBridge.dll` + XAML diagnostics / TAP în `explorer.exe`.
+  Investigația curentă poate găsi `TaskbarBackground` și `BackgroundFill`, dar nu produce încă un efect vizibil stabil.
+- **Config/startup:** există o regresie separată în care `GlassBar.log` poate raporta `Config not found, using defaults`
+  chiar dacă `%LOCALAPPDATA%\GlassBar\config.json` există și conține valori persistate; startup-ul rămâne lent.
 - **Search box:** nefuncțional momentan (placeholder vizual); nu afectează restul meniului.
 - **DPI 200%+:** testat până la 150%; pot apărea artefacte vizuale la scaling foarte mare.

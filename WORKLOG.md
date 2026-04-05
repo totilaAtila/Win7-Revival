@@ -3,6 +3,13 @@
 Last updated: 2026-03-24 (session 24 — Cercetare Windhawk/TranslucentTB + plan avansare proiect)
 
 ## 0) Ground truth (docs to treat as canonical)
+- **Checkpoint 2026-04-04:** local truth has moved beyond the older "taskbar done" summary below.
+- **22H2 / 23H2:** taskbar path is still considered stable through the classic external overlay.
+- **24H2 / 25H2+:** taskbar rendering is currently **experimental** and goes through an **XamlBridge/TAP path inside explorer.exe** while the XAML taskbar is being investigated.
+- Current 25H2+ blocker: `WalkTaskbarBgTree(...)` can reliably reach `TaskbarBackground` and `BackgroundFill`, but brush application still does not produce a visible effect.
+- Separate blocker: `GlassBar.log` still reports `Config not found, using defaults` on startup even when `%LOCALAPPDATA%\GlassBar\config.json` exists with non-default values, and startup remains slow (~10-11 s to `Core Ready`).
+- Recent experiments narrowed the 25H2+ issue from handle resolution, to dispatcher scheduling, and then to direct `FrameworkElement + Fill/Stroke` assignment; none has produced visible taskbar output yet.
+
 - Product overview + current capabilities: README.md
 - Non-negotiables + architecture/roles: Agents.md
 - Manual test suites + milestones: TESTING.md

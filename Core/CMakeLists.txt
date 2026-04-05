@@ -84,20 +84,33 @@ install(TARGETS GlassBar.Core
 )
 
 # ── GlassBar.XamlBridge.dll ──────────────────────────────────────────────────
+# ITER #11: multi-file refactor (was single XamlBridge.cpp)
 add_library(GlassBar.XamlBridge SHARED
-    XamlBridge/XamlBridge.cpp
-    XamlBridge/XamlBridge.h
+    XamlBridge/dllmain.cpp
+    XamlBridge/TAPObject.h
+    XamlBridge/TAPObject.cpp
+    XamlBridge/VisualTreeWatcher.h
+    XamlBridge/VisualTreeWatcher.cpp
+    XamlBridge/TAPInjector.h
+    XamlBridge/TAPInjector.cpp
+    XamlBridge/XamlBridgeCommon.h
     XamlBridge/SharedBlurState.h
+    XamlBridge/XamlBridge.h
+    XamlBridge/XamlBridge.def
 )
 
 target_link_libraries(GlassBar.XamlBridge
     user32.lib
+    ole32.lib
+    oleaut32.lib
+    runtimeobject.lib
 )
 
 if(MSVC)
     target_compile_options(GlassBar.XamlBridge PRIVATE
         /W4
         /permissive-
+        /O1
     )
 
     set_property(TARGET GlassBar.XamlBridge PROPERTY
@@ -107,6 +120,7 @@ if(MSVC)
         UNICODE
         _UNICODE
         XAMLBRIDGE_EXPORTS
+        WINRT_NO_MODULE_LOCK    # DLL without WinMain — disable WinRT module lock
     )
 endif()
 
@@ -114,6 +128,7 @@ set_target_properties(GlassBar.XamlBridge PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+    LINK_FLAGS "/DEF:\"${CMAKE_CURRENT_SOURCE_DIR}/XamlBridge/XamlBridge.def\""
 )
 
 install(TARGETS GlassBar.XamlBridge

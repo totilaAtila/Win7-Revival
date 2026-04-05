@@ -244,7 +244,7 @@ namespace GlassBar.Dashboard
         public void SetStartMenuBorderColor(int r, int g, int b)
         {
             if (!_running) return;
-            uint rgb = ((uint)r << 16) | ((uint)g << 8) | (uint)b;
+            uint rgb = (uint)(r | (g << 8) | (b << 16));
             Debug.WriteLine($"[CoreManager] SetStartMenuBorderColor({r},{g},{b}) = 0x{rgb:X6}");
             CoreNative.CoreSetStartMenuBorderColor(rgb);
         }

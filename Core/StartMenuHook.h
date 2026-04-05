@@ -72,6 +72,7 @@ private:
     GetMenuBoundsCallback m_getMenuBoundsCallback;
     ForwardKeyCallback m_forwardKeyCallback;
     HWND m_startButtonHwnd = nullptr;
+    RECT m_startButtonFallbackRect = {};  // Used when Win32 HWND is unavailable (Win11 22H2+ WinUI 3 taskbar)
 
     // Hook procedures (must be static)
     static LRESULT CALLBACK KeyboardHookProc(int nCode, WPARAM wParam, LPARAM lParam);

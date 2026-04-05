@@ -64,6 +64,7 @@ namespace GlassBar.Dashboard
         private readonly string _configPath;
         private Config _config = new Config();
         private readonly DebounceTimer _saveDebounce;
+        private int _suppressAutoSaveCount;
 
         public ConfigManager()
         {
@@ -212,8 +213,18 @@ namespace GlassBar.Dashboard
 
         public Task SaveAsync()
         {
+            if (_suppressAutoSaveCount > 0)
+            {
+                return Task.CompletedTask;
+            }
             _saveDebounce.Trigger();
             return Task.CompletedTask;
+        }
+
+        public IDisposable SuppressAutoSave()
+        {
+            _suppressAutoSaveCount++;
+            return new AutoSaveScope(this);
         }
 
         private async Task SaveNowAsync()
@@ -227,6 +238,25 @@ namespace GlassBar.Dashboard
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Config save error: {ex.Message}");
+            }
+        }
+
+        private sealed class AutoSaveScope : IDisposable
+        {
+            private ConfigManager? _owner;
+
+            public AutoSaveScope(ConfigManager owner)
+            {
+                _owner = owner;
+            }
+
+            public void Dispose()
+            {
+                if (_owner != null)
+                {
+                    _owner._suppressAutoSaveCount = Math.Max(0, _owner._suppressAutoSaveCount - 1);
+                    _owner = null;
+                }
             }
         }
     }

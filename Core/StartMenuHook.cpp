@@ -80,53 +80,149 @@ void StartMenuHook::SetForwardKeyCallback(ForwardKeyCallback callback) {
     m_forwardKeyCallback = callback;
 }
 
-void StartMenuHook::FindStartButton() {
-    // Find taskbar
+// EnumChildWindows callback — finds the widest centered child of Shell_TrayWnd
+// (the WinUI 3 XAML island that hosts the taskbar icon group on Win11 22H2+).
+struct XamlIslandSearch {
+    RECT taskbarRect;
+    RECT bestRect;
+    int  bestWidth = 0;
+    int  screenW   = 0;
+};
+
+static BOOL CALLBACK FindCenteredIsland(HWND child, LPARAM lp)
+{
+    auto* s = reinterpret_cast<XamlIslandSearch*>(lp);
+    RECT rc;
+    if (!GetWindowRect(child, &rc)) return TRUE;
+
+    int w = rc.right - rc.left;
+    int h = rc.bottom - rc.top;
+    int taskH = s->taskbarRect.bottom - s->taskbarRect.top;
+
+    // Must span most of the taskbar height and be at least 100px wide
+    if (h < taskH - 8 || w < 100) return TRUE;
+
+    // Prefer the widest window that is roughly centered on screen
+    int midX = (rc.left + rc.right) / 2;
+    if (abs(midX - s->screenW / 2) < s->screenW / 3 && w > s->bestWidth) {
+        s->bestWidth = w;
+        s->bestRect  = rc;
+    }
+    return TRUE;
+}
+
+void StartMenuHook::FindStartButton()
+{
+    m_startButtonHwnd       = nullptr;
+    m_startButtonFallbackRect = {};
+
     HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
     if (!taskbar) {
         CF_LOG(Warning, "Could not find taskbar window");
         return;
     }
 
-    // Find Start button (it's a child of the taskbar)
-    // On Windows 11, the Start button is typically a "Start" button within the taskbar
+    // --- Try traditional Win32 child windows (Win10 / pre-22H2 Win11) ---
     HWND startButton = FindWindowExW(taskbar, nullptr, L"Start", nullptr);
-    if (!startButton) {
-        // Try alternate class names
+    if (!startButton)
         startButton = FindWindowExW(taskbar, nullptr, L"TrayButton", nullptr);
-    }
 
     if (startButton) {
-        m_startButtonHwnd = startButton;
-        CF_LOG(Info, "Found Start button: 0x" << std::hex << reinterpret_cast<uintptr_t>(startButton) << std::dec);
+        // Verify: button must be in the left quarter of the taskbar (avoids matching
+        // the notification-area TrayButton on the right side).
+        RECT tbRect, btnRect;
+        if (GetWindowRect(taskbar, &tbRect) && GetWindowRect(startButton, &btnRect)) {
+            int tbW   = tbRect.right - tbRect.left;
+            int btnX  = btnRect.left - tbRect.left;
+            if (btnX < tbW / 4) {
+                m_startButtonHwnd = startButton;
+                CF_LOG(Info, "Found Start button (Win32): 0x"
+                    << std::hex << reinterpret_cast<uintptr_t>(startButton) << std::dec);
+                return;
+            }
+            CF_LOG(Warning, "TrayButton found but not in left-quarter of taskbar (x=" << btnX << ") — skipping");
+        }
+    }
+
+    // --- Win11 22H2+: Start button is inside a WinUI 3 XAML island ---
+    // Read taskbar alignment: 0 = left-aligned, 1 = centered (Win11 default)
+    DWORD taskbarAl = 1;
+    HKEY  hKey      = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER,
+            L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+            0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD sz = sizeof(taskbarAl);
+        RegQueryValueExW(hKey, L"TaskbarAl", nullptr, nullptr,
+                         reinterpret_cast<LPBYTE>(&taskbarAl), &sz);
+        RegCloseKey(hKey);
+    }
+
+    RECT taskbarRect;
+    GetWindowRect(taskbar, &taskbarRect);
+    int taskbarH = taskbarRect.bottom - taskbarRect.top;  // typically 48 px
+
+    if (taskbarAl == 0) {
+        // Left-aligned: Start button is the first ~48 px at the left edge
+        m_startButtonFallbackRect = {
+            taskbarRect.left,
+            taskbarRect.top,
+            taskbarRect.left + taskbarH + 4,
+            taskbarRect.bottom
+        };
+        CF_LOG(Info, "Start button fallback: left-aligned, x=[" << m_startButtonFallbackRect.left
+                     << "," << m_startButtonFallbackRect.right << "]");
+        return;
+    }
+
+    // Centered: enumerate children of Shell_TrayWnd to find the icon group island
+    XamlIslandSearch search;
+    search.taskbarRect = taskbarRect;
+    search.screenW     = GetSystemMetrics(SM_CXSCREEN);
+    ZeroMemory(&search.bestRect, sizeof(search.bestRect));
+    EnumChildWindows(taskbar, FindCenteredIsland, reinterpret_cast<LPARAM>(&search));
+
+    if (search.bestWidth > 0) {
+        // Start button is the leftmost icon in the centered island (~48 px wide)
+        m_startButtonFallbackRect = {
+            search.bestRect.left,
+            search.bestRect.top,
+            search.bestRect.left + taskbarH + 4,
+            search.bestRect.bottom
+        };
+        CF_LOG(Info, "Start button fallback: centered island at x=["
+                     << m_startButtonFallbackRect.left << ","
+                     << m_startButtonFallbackRect.right << "]");
     } else {
-        CF_LOG(Warning, "Could not find Start button window");
+        // Last resort: estimate — assume 5-icon group centered on screen
+        int groupLeft = search.screenW / 2 - (5 * taskbarH) / 2;
+        m_startButtonFallbackRect = {
+            groupLeft,
+            taskbarRect.top,
+            groupLeft + taskbarH + 4,
+            taskbarRect.bottom
+        };
+        CF_LOG(Warning, "Start button fallback: estimated at x=["
+                        << m_startButtonFallbackRect.left << ","
+                        << m_startButtonFallbackRect.right << "]");
     }
 }
 
 bool StartMenuHook::IsClickOnStartButton(POINT pt) {
-    if (!m_startButtonHwnd) {
-        // If we don't have the Start button window, check if click is in bottom-left corner
-        // Windows 11 Start button is typically in the taskbar bottom-center, but we'll check bottom-left area
-        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-        int taskbarHeight = 48; // Approximate
-
-        // Check if click is in bottom taskbar area and left portion
-        if (pt.y >= screenHeight - taskbarHeight && pt.x < 200) {
+    // Primary: Win32 HWND (Win10 / pre-22H2)
+    if (m_startButtonHwnd) {
+        RECT startRect;
+        if (GetWindowRect(m_startButtonHwnd, &startRect) && PtInRect(&startRect, pt))
             return true;
-        }
-        return false;
     }
 
-    // Check if click is within Start button rect
-    RECT startRect;
-    if (GetWindowRect(m_startButtonHwnd, &startRect)) {
-        if (PtInRect(&startRect, pt)) {
-            return true;
-        }
+    // Secondary: position-based fallback (Win11 22H2+ WinUI 3 taskbar)
+    if (m_startButtonFallbackRect.right > m_startButtonFallbackRect.left) {
+        return !!PtInRect(&m_startButtonFallbackRect, pt);
     }
 
-    return false;
+    // Legacy last resort: bottom-left corner (Win10 left-aligned only)
+    int screenH = GetSystemMetrics(SM_CYSCREEN);
+    return pt.y >= screenH - 48 && pt.x < 200;
 }
 
 void StartMenuHook::ShowStartMenu(int x, int y) {
