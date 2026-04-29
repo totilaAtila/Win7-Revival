@@ -303,6 +303,11 @@ namespace GlassBar.Dashboard
                 CoreRunning = true;
                 ConnectionStatus = "✓ Core engine running";
 
+                // Brief pause: gives Explorer's XAML islands time to fully initialize
+                // before we apply effects. On Windows 25H2 this prevents XamlBridge
+                // from injecting before the taskbar XAML tree is ready.
+                await Task.Delay(500);
+
                 // Apply initial settings to Core
                 LogStartupSnapshot("InitializeAsync startup batch");
                 _core.SetTaskbarOpacity(TaskbarOpacity);

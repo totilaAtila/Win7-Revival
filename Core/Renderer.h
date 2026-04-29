@@ -102,12 +102,12 @@ private:
     void RestoreWindow(HWND hwnd);
 
     // ── XamlBridge (blur injection into explorer.exe) ──────────────────────────
-    HANDLE           m_hSharedMem    = nullptr;   // file mapping created by us (Core side)
-    SharedBlurState* m_pSharedState  = nullptr;   // mapped view of shared memory
-    HMODULE          m_hXamlBridge   = nullptr;   // GlassBar.XamlBridge.dll handle
-    HHOOK            m_hInjHook      = nullptr;   // WH_CALLWNDPROC hook for injection
-    bool             m_bridgeInited  = false;     // injection attempted flag
-    int              m_blurAmount    = 0;         // 0-100
+    HANDLE              m_hSharedMem   = nullptr;   // file mapping created by us (Core side)
+    SharedBlurState*    m_pSharedState = nullptr;   // mapped view of shared memory
+    HMODULE             m_hXamlBridge  = nullptr;   // GlassBar.XamlBridge.dll handle
+    std::vector<HHOOK>  m_hInjHooks;               // WH_CALLWNDPROC hooks — one per explorer thread
+    bool                m_bridgeInited = false;     // injection attempted flag
+    int                 m_blurAmount   = 0;         // 0-100
 
     void InitXamlBridge();
     void UpdateSharedState();

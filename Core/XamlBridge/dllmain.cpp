@@ -46,6 +46,11 @@ static std::atomic<bool> g_tapScheduled { false };
 // Used to rate-limit retries to at most once per 500 ms.
 static std::atomic<DWORD> g_lastTapAttemptTick { 0 };
 
+// Last SharedBlurState version that was successfully applied to all known shapes.
+// Set by XamlBridgeHookProc after a successful direct re-apply on the UI thread.
+// -1 means never applied.
+static std::atomic<LONG> g_lastAppliedVersion { -1 };
+
 // ---------------------------------------------------------------------------
 // Logging
 // ---------------------------------------------------------------------------
@@ -152,8 +157,7 @@ static DWORD WINAPI WorkerThread(LPVOID)
     }
 
     LONG lastVersion = -1;
-    // Kept alive across Sleep so TryRunAsync callbacks are not cancelled before firing
-    std::vector<winrt::Windows::Foundation::IAsyncOperation<bool>> s_pendingUpdateOps;
+    int  pingTick    = 0;
 
     while (!g_stopping.load()) {
         LONG shutdownReq = InterlockedCompareExchange(
@@ -166,58 +170,62 @@ static DWORD WINAPI WorkerThread(LPVOID)
         if (curVersion != lastVersion) {
             lastVersion = curVersion;
             BrushParams params = ReadBrushParams(g_pState);
-            XBLogFmt(L"WorkerThread: version=%d  enabled=%d  useBlur=%d  alpha=%d  R=%d G=%d B=%d",
-                curVersion, params.enabled ? 1 : 0, params.useBlur ? 1 : 0,
+            XBLogFmt(L"WorkerThread: version=%d  enabled=%d  alpha=%d  R=%d G=%d B=%d — "
+                     L"will re-apply via hookproc ping [ITER #21]",
+                curVersion, params.enabled ? 1 : 0,
                 params.alpha, params.r, params.g, params.b);
+        }
 
-            s_pendingUpdateOps.clear();
-            std::lock_guard<std::mutex> lk(g_shapesMtx);
-            XBLogFmt(L"WorkerThread: dispatching to %zu known shapes", g_knownShapes.size());
-            for (const auto& entry : g_knownShapes) {
-                try {
-                    auto disp = entry.element.Dispatcher();
-                    if (!disp) continue;
-                    auto op = disp.TryRunAsync(wuc::CoreDispatcherPriority::High,
-                        [handle = entry.handle, element = entry.element, prop = entry.prop, params]() noexcept {
-                            try { ApplyBrushParams(handle, element, prop, params); }
-                            catch (...) {}
-                        });
-                    if (op) s_pendingUpdateOps.push_back(op);
+        // ── Hookproc ping (shapes discovery + settings re-application) ──────
+        //
+        // TryRunAsync on XAML CoreDispatcher does not fire in Win32-hosted islands
+        // on 25H2.  Instead we drive all XAML-thread work from the hookproc:
+        //
+        //  • While shapes are missing: hookproc calls InjectGlassBarTAP (gets
+        //    a fresh tree replay that delivers BackgroundFill via OnVisualTreeChange).
+        //  • When settings change: hookproc applies the current brush directly to
+        //    all g_knownShapes (it runs on the XAML UI thread).
+        //
+        // SendNotifyMessageW queues a sent-class message cross-thread without
+        // blocking the sender, so WH_CALLWNDPROC fires in explorer's UI thread.
+        ++pingTick;
+        if (pingTick % 4 == 0) {
+            bool shouldPing = false;
+            {
+                std::lock_guard<std::mutex> lk(g_shapesMtx);
+                shouldPing = g_knownShapes.empty();
+            }
+            if (!shouldPing) {
+                // Also ping when settings changed but not yet applied
+                LONG curVer2 = InterlockedCompareExchange(
+                    const_cast<volatile LONG*>(&g_pState->version), 0, 0);
+                shouldPing = (curVer2 != g_lastAppliedVersion.load());
+            }
+            if (shouldPing) {
+                HWND hwndTray = FindWindowW(L"Shell_TrayWnd", nullptr);
+                if (hwndTray) {
+                    XBLogFmt(L"WorkerThread: pinging Shell_TrayWnd (pingTick=%d) [ITER #21]",
+                             pingTick);
+                    SendNotifyMessageW(hwndTray, WM_NULL, 0, 0);
                 }
-                catch (...) {}
             }
         }
 
         Sleep(150);
     }
 
-    // Restore original-ish color on shutdown (dark grey — default Win11 taskbar feel)
+    // Signal shutdown version so hookproc clears the brush on next fire.
+    // (The shutdown request also signals GlassBar.Core to call ShutdownXamlBridge
+    // which uninstalls the hook — so the hookproc may or may not fire one more time.)
+    g_lastAppliedVersion.store(-1);  // force re-apply on next hookproc call
     {
         std::lock_guard<std::mutex> lk(g_shapesMtx);
-        for (const auto& entry : g_knownShapes) {
-            try {
-                auto disp = entry.element.Dispatcher();
-                if (!disp) continue;
-                disp.RunAsync(wuc::CoreDispatcherPriority::High,
-                    [handle = entry.handle, element = entry.element, prop = entry.prop]() noexcept {
-                        try {
-                            BrushParams p{};
-                            p.enabled = false;
-                            p.useBlur = false;
-                            ApplyBrushParams(handle, element, prop, p);
-                        }
-                        catch (...) {}
-                    });
-            }
-            catch (...) {}
-        }
         g_knownShapes.clear();
     }
 
     g_visualTreeWatcher = nullptr;  // release before CoUninitialize
     g_visualTreeService3 = nullptr;
     g_xamlDiagnostics = nullptr;
-    g_walkAsyncAction = nullptr;
 
     UnmapViewOfFile(g_pState);
     g_pState = nullptr;
@@ -284,19 +292,72 @@ extern "C" HRESULT STDAPICALLTYPE DllCanUnloadNow()
 // ---------------------------------------------------------------------------
 extern "C" LRESULT CALLBACK XamlBridgeHookProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-    if (nCode >= 0 && !IsTapInited()) {
+    if (nCode >= 0) {
         // Mark hook as active so WorkerThread skips its wrong-thread fallback.
         g_tapScheduled.store(true);
 
-        // Rate-limit attempts to avoid hammering InitializeXamlDiagnosticsEx
-        // on every window message.  500 ms is enough to catch islands starting up.
+        // Rate-limit all hookproc work to ≤ 1 action per 500 ms.
         DWORD now  = GetTickCount();
         DWORD last = g_lastTapAttemptTick.load(std::memory_order_relaxed);
-        if (now - last >= 500u) {
-            g_lastTapAttemptTick.store(now, std::memory_order_relaxed);
-            if (!g_logPath[0]) InitLogPath();
-            XBLog(L"XamlBridgeHookProc: attempting TAP injection on Shell_TrayWnd thread [ITER #19]");
+        if (now - last < 500u)
+            return CallNextHookEx(nullptr, nCode, wParam, lParam);
+
+        g_lastTapAttemptTick.store(now, std::memory_order_relaxed);
+        if (!g_logPath[0]) InitLogPath();
+
+        bool shapesFound;
+        {
+            std::lock_guard<std::mutex> lk(g_shapesMtx);
+            shapesFound = !g_knownShapes.empty();
+        }
+
+        if (!shapesFound) {
+            // ── Path A: no shapes yet — reconnect to get a fresh tree replay ──
+            XBLog(L"XamlBridgeHookProc: retrying TAP injection + active discovery (no taskbar shapes yet) [ITER #22]");
             InjectGlassBarTAP();
+            if (XamlBridgeTryActiveTreeDiscovery())
+                XBLog(L"XamlBridgeHookProc: active discovery found taskbar shapes [ITER #22]");
+        }
+        else if (g_pState) {
+            // ── Path B: shapes found — re-apply current brush if version changed ──
+            // We are on the XAML UI thread (Shell_TrayWnd), so SetValue is legal here.
+            LONG curVer    = InterlockedCompareExchange(
+                const_cast<volatile LONG*>(&g_pState->version), 0, 0);
+            LONG lastApplied = g_lastAppliedVersion.load();
+
+            if (curVer != lastApplied) {
+                g_lastAppliedVersion.store(curVer);
+                BrushParams params = ReadBrushParams(g_pState);
+                XBLogFmt(L"XamlBridgeHookProc: re-applying brush version=%d "
+                         L"enabled=%d alpha=%d rgb=(%d,%d,%d) [ITER #21]",
+                    curVer, params.enabled ? 1 : 0,
+                    params.alpha, params.r, params.g, params.b);
+
+                auto fillProp   = wuxs::Shape::FillProperty();
+                auto strokeProp = wuxs::Shape::StrokeProperty();
+
+                std::lock_guard<std::mutex> lk(g_shapesMtx);
+                for (const auto& entry : g_knownShapes) {
+                    try {
+                        auto& targetProp = (entry.prop == BrushTargetProp::Stroke)
+                            ? strokeProp : fillProp;
+                        if (!params.enabled) {
+                            entry.element.ClearValue(targetProp);
+                        } else {
+                            wu::Color color{ params.alpha, params.r, params.g, params.b };
+                            wuxm::SolidColorBrush brush{};
+                            brush.Color(color);
+                            entry.element.SetValue(targetProp, brush);
+                        }
+                    }
+                    catch (const winrt::hresult_error& ex) {
+                        XBLogFmt(L"XamlBridgeHookProc: SetValue threw 0x%08X: %s",
+                            ex.code(), ex.message().c_str());
+                    }
+                    catch (...) {}
+                }
+                XBLog(L"XamlBridgeHookProc: re-apply complete");
+            }
         }
     }
     return CallNextHookEx(nullptr, nCode, wParam, lParam);

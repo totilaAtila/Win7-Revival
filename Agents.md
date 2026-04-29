@@ -13,10 +13,12 @@ GlassBar este un utilitar de personalizare pentru Windows 11 care oferă:
 
 Pe **22H2 / 23H2** proiectul rulează extern, fără injection — nicio modificare a fișierelor de sistem, niciun hook în procesele Explorer.
 
-**Nota de adevăr local (2026-04-05):**
+**Nota de adevăr local (2026-04-29 — ITER #22):**
 - pe **24H2 / 25H2+**, implementarea curentă include o cale **experimentală XamlBridge / TAP în `explorer.exe`** pentru investigația taskbar-ului XAML
 - nu se modifică fișiere de sistem, dar proiectul nu mai este strict "fără injection" în sensul documentului original pe aceste build-uri
-- calea experimentală poate găsi `TaskbarBackground` și `BackgroundFill` dar nu produce încă un efect vizibil confirmat
+- `WH_CALLWNDPROC` instalat pe **toate thread-urile explorer.exe** (confirmat: 9 thread-uri pe build 26200)
+- `AdviseVisualTreeChange` livrează doar elementele root/container; arborele complet (inclusiv `BackgroundFill`) necesită walk activ via `VisualTreeHelper`
+- Active Discovery implementat; handle-urile root sunt cached; walk-ul recursiv (`ActiveWalkElement`) nu a rulat încă cu succes pe handle-urile cached (sesiune prea scurtă / PostMessageW nu declanșează hook)
 
 ---
 
@@ -196,7 +198,7 @@ Config salvată în: `%LOCALAPPDATA%\GlassBar\config.json`
 |-----------|--------|
 | Taskbar overlay (toate edge-urile, multi-monitor, auto-hide) | ✅ Done |
 | Renderer 22H2/23H2 (SWCA — transparență + RGB + Blur) | ✅ Done |
-| Renderer 24H2/25H2+ (`GlassBar.XamlBridge.dll` / TAP path) | ⚠️ Experimental |
+| Renderer 24H2/25H2+ (`GlassBar.XamlBridge.dll` / TAP path) | ⚠️ In Progress — active discovery implementat, BackgroundFill confirmat, efect vizibil nerealizat încă |
 | Explorer restart recovery | ✅ Done |
 | Start Menu replacement (Win7 two-column layout) | ✅ Done |
 | All Programs tree (folder drill-down, hover submenus, keyboard nav) | ✅ Done |
@@ -228,8 +230,13 @@ Config salvată în: `%LOCALAPPDATA%\GlassBar\config.json`
 
 ## 9) Riscuri cunoscute
 
-- **Taskbar pe 24H2/25H2+:** calea locală actuală este experimentală și folosește `GlassBar.XamlBridge.dll` + XAML diagnostics / TAP în `explorer.exe`.
-  Investigația curentă poate găsi `TaskbarBackground` și `BackgroundFill`, dar nu produce încă un efect vizibil stabil.
+- **Taskbar pe 24H2/25H2+:** `AdviseVisualTreeChange` livrează doar 3-6 elemente root/container (nu livrează `TaskbarBackground` / `BackgroundFill`).
+  `BackgroundFill` confirmat în island-ul Connection1, la adâncime 9 niveluri de la root, via UWPSpy.
+  Active Discovery (walk recursiv via `VisualTreeHelper`) implementat și handle-urile root sunt cached; walk-ul nu a produs încă efect vizibil.
+  **Bug cunoscut nerezolvat:** `QueueActiveDiscoveryFromHookProc` folosește `PostMessageW` care NU declanșează `WH_CALLWNDPROC` — discovery-ul din `OnVisualTreeChange` nu se execută niciodată.
+  Fix necesar: înlocuire cu `SendNotifyMessageW` sau apel direct `XamlBridgeTryActiveTreeDiscovery()` din `OnVisualTreeChange`.
+- **Hook multi-thread:** 9 thread-uri `explorer.exe` sunt hook-ate (confirmat pe build 26200) — fix implementat în ITER #22.
+- **Re-toggle Core:** bug rezolvat în ITER #22 (`m_bridgeInited` nu era resetat la `ShutdownXamlBridge`); toggle off/on funcționează corect acum.
 - **Config/startup:** există o regresie separată în care `GlassBar.log` poate raporta `Config not found, using defaults`
   chiar dacă `%LOCALAPPDATA%\GlassBar\config.json` există și conține valori persistate; startup-ul rămâne lent.
 - **Search box:** nefuncțional momentan (placeholder vizual); nu afectează restul meniului.
