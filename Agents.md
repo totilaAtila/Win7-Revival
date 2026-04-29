@@ -13,7 +13,7 @@ GlassBar este un utilitar de personalizare pentru Windows 11 care oferă:
 
 Pe **22H2 / 23H2** proiectul rulează extern, fără injection — nicio modificare a fișierelor de sistem, niciun hook în procesele Explorer.
 
-**Nota de adevăr local (2026-04-05):**
+**Nota de adevăr local (2026-04-29):**
 - pe **24H2 / 25H2+**, implementarea curentă include o cale **experimentală XamlBridge / TAP în `explorer.exe`** pentru investigația taskbar-ului XAML
 - nu se modifică fișiere de sistem, dar proiectul nu mai este strict "fără injection" în sensul documentului original pe aceste build-uri
 - calea experimentală poate găsi `TaskbarBackground` și `BackgroundFill` dar nu produce încă un efect vizibil confirmat

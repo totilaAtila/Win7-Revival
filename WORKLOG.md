@@ -1,6 +1,48 @@
 
 # WORKLOG — GlassBar
-Last updated: 2026-04-05 (ITER #19 — fix thread context pentru InitializeXamlDiagnosticsEx pe 25H2)
+Last updated: 2026-04-29 (revizuire stare actuală + sincronizare documentație)
+
+---
+
+## SESSION 2026-04-29 — Revizuire stare proiect + actualizare documentație
+
+### Context
+Sesiune de documentație — niciun cod nou de la ITER #19 (2026-04-05).
+Branch activ: `claude/update-project-docs-TEhqU`.
+ITER #19 a fost implementat și merge-uit în main (PR #99, SHA `967ad2b`).
+
+### Ce s-a lucrat
+- Citire completă a stării proiectului (toate fișierele sursă, .md, git log)
+- Actualizare `WORKLOG.md` (această intrare)
+- Actualizare `ChatAi.md` (branch de lucru activ, data ultimei actualizări, SHA ITER #19)
+- Actualizare `Agents.md` (data notei de adevăr local)
+
+### Starea curentă a proiectului (2026-04-29)
+
+| Componentă | Status | Note |
+|-----------|--------|------|
+| Taskbar overlay 22H2/23H2 (SWCA) | ✅ Stabil | Full control: transparență + RGB + Blur |
+| Taskbar overlay 24H2/25H2+ | ⚠️ Experimental | ITER #19 aplicat (PR #99); efect vizibil neconfirmat pe 25H2 |
+| Start Menu replacement (Win7) | ✅ Complet | Toate funcțiile implementate |
+| Global hotkey toggle | ✅ Funcțional | Ctrl+Shift+G implicit, configurabil |
+| Auto-update check | ✅ Funcțional | GitHub Releases polling |
+| Config persistence | ✅ Funcțional | Regresia startup (~10-11s) deschisă, nerezolvată |
+| XamlBridge TAP injection | 🔄 ITER #19 aplicat | Efect vizibil neconfirmat; ITER #20 ca next step |
+
+### Blocaj curent: 24H2/25H2+
+ITER #19 (PR #99) a mutat `InjectGlassBarTAP()` pe thread-ul `Shell_TrayWnd` (UI thread),
+conform abordării WindHawk verificate funcționale pe 25H2.
+Efectul vizibil **nu a fost confirmat** — necesită test pe un sistem Windows 25H2+.
+
+Dacă ITER #19 nu produce efect vizibil, next step (ITER #20):
+- Hook `CreateWindowExW` pentru detectare `DesktopWindowContentBridge` ca child al `Shell_TrayWnd`
+- Folosire `RunFromWindowThread` cu fereastra XAML exactă (nu direct `Shell_TrayWnd`)
+- Detalii complete: `ChatAi.md` secțiunile 4, 5, 6
+
+### Regresia de startup
+`GlassBar.log` raportează `Config not found, using defaults` la pornire chiar când
+`%LOCALAPPDATA%\GlassBar\config.json` există cu valori persistate. Startup: ~10-11s până la
+`Core Ready`. Status: **deschis, nerezolvat**.
 
 ---
 

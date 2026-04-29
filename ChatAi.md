@@ -2,7 +2,7 @@
 
 > **Scop:** Fișier de referință tehnic pentru sesiuni cross-platform / cross-chat.
 > Conține: diagnostic 25H2 taskbar, analiza WindHawk, planul de fix, starea cercetării.
-> **Ultima actualizare:** 2026-04-05 — ITER #19 implementat
+> **Ultima actualizare:** 2026-04-29 — revizuire stare proiect + sincronizare documentație
 
 ---
 
@@ -18,9 +18,9 @@
 | Config persistence | ✅ Funcțional | Aliniat PascalCase; fix-ul config-not-found din PR #98 |
 | XamlBridge TAP injection | 🔄 ITER #19 | Fix thread context: InjectGlassBarTAP mutat în XamlBridgeHookProc (Shell_TrayWnd thread) |
 
-**Branch de lucru activ:** `claude/xamlbridge-knowledge-refresh-TGQRn`
-**Ultimul merge în main:** PR #98 (squash, SHA `50e04cb8`) — checkpoint XamlBridge 25H2 + Codex P1 fix
-**ITER #19 commit:** `c974e35..` — fix thread context pentru InitializeXamlDiagnosticsEx pe 25H2
+**Branch de lucru activ:** `claude/update-project-docs-TEhqU`
+**Ultimul merge în main:** PR #99 (squash, SHA `967ad2b`) — ITER #19: TAP injection pe Shell_TrayWnd thread + Codex P1 fix retry
+**ITER #19 commit:** `967ad2b` (PR #99) — InjectGlassBarTAP mutat în XamlBridgeHookProc (Shell_TrayWnd UI thread)
 
 ---
 
