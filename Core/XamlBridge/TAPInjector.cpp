@@ -21,10 +21,10 @@ static std::atomic<bool> g_tapInited { false };
 
 void InjectGlassBarTAP()
 {
-    if (g_tapInited.load()) return;
-    // NOTE: do NOT set g_tapInited here — only mark success after at least one
-    // island registers.  If we return early (XAML not loaded yet, pfn absent, or
-    // zero islands found), the flag stays false so the caller can retry later.
+    // NOTE: no early-return guard here. Each call re-scans all connection slots so
+    // that XAML islands that appear AFTER the first injection (e.g. the taskbar
+    // island on 25H2 which registers later than generic DesktopWindowXamlSource)
+    // are also picked up. The hook proc rate-limits calls to ≤ 1 per 500 ms.
 
     // LoadLibraryW is safe even if already loaded — just increments refcount
     HMODULE hXaml = LoadLibraryW(L"Windows.UI.Xaml.dll");
@@ -69,13 +69,12 @@ void InjectGlassBarTAP()
             if (++consecutiveFails >= 20) break;
         }
     }
-    XBLogFmt(L"InjectGlassBarTAP: done — %d island(s) registered", successCount);
-
-    if (successCount > 0) {
-        g_tapInited.store(true);  // lock only after confirmed success
-    } else {
-        XBLog(L"InjectGlassBarTAP: no islands registered — leaving g_tapInited=false for retry");
-    }
+    XBLogFmt(L"InjectGlassBarTAP: done — %d new island(s) registered this pass", successCount);
+    // g_tapInited is intentionally NOT set here. The hook proc in dllmain.cpp stops
+    // calling InjectGlassBarTAP only when g_knownShapes is non-empty (actual taskbar
+    // BackgroundFill elements found), not simply because a connection count > 0.
+    // This allows us to pick up the taskbar XAML island even when it registers later
+    // than other generic DesktopWindowXamlSource islands (common on Windows 25H2).
 }
 
 bool IsTapInited()

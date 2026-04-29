@@ -1,6 +1,7 @@
 #include "Renderer.h"
 #include "Diagnostics.h"
 #include <algorithm>
+#include <set>
 #include <dwmapi.h>
 #include <shlwapi.h>
 #pragma comment(lib, "dwmapi.lib")
@@ -312,9 +313,14 @@ void Renderer::ApplyTransparencyWithColor(HWND hwnd, int opacity, bool enabled,
     // No overlay window needed: color/opacity are encoded in the SolidColorBrush ARGB,
     // and blur is handled via AcrylicBrush. Icons are unaffected (only Fill changes).
     if (!isStartMenu && m_buildNumber >= 26200) {
-        if (!m_bridgeInited) InitXamlBridge();
-        UpdateSharedState();  // XamlBridge TAP reads shared state and refreshes shapes
-        CF_LOG(Info, "[TASKBAR] Win25H2+ delegated to XamlBridge TAP");
+        // Only inject XamlBridge when transparency is actually being enabled.
+        // Injecting on disable/restore calls is unnecessary and risks crashing Explorer
+        // during shutdown or early startup before XAML islands are initialized.
+        if (enabled && opacity > 0) {
+            if (!m_bridgeInited) InitXamlBridge();
+        }
+        if (m_bridgeInited) UpdateSharedState();  // XamlBridge TAP reads shared state
+        CF_LOG(Info, "[TASKBAR] Win25H2+ delegated to XamlBridge TAP (bridgeInited=" << m_bridgeInited << ")");
         return;
     }
 
@@ -562,7 +568,10 @@ void Renderer::SetTaskbarBlurAmount(int amount) {
 
 void Renderer::InitXamlBridge() {
     if (m_bridgeInited) return;
-    m_bridgeInited = true;  // mark early so we don't retry on failure
+    // NOTE: do NOT set m_bridgeInited here — only mark success after hook is installed.
+    // Setting it early causes silent failure: subsequent calls skip the bridge but it
+    // was never actually initialized. Instead each early-return below leaves it false
+    // so the next ApplyTransparency call can retry.
 
     CF_LOG(Info, "XamlBridge: initializing (build " << m_buildNumber << ")");
 
@@ -612,28 +621,54 @@ void Renderer::InitXamlBridge() {
         return;
     }
 
-    // ── 4. Install WH_CALLWNDPROC hook on explorer's UI thread ──────────
+    // ── 4. Install WH_CALLWNDPROC hooks on ALL explorer UI threads ──────
+    //
+    // On Windows 25H2, the taskbar XAML island containing BackgroundFill may be
+    // owned by a thread OTHER than Shell_TrayWnd's thread.  InitializeXamlDiagnosticsEx
+    // must be called from the island's owning thread, so we install one hook per
+    // unique explorer thread — each hook fires on its own thread when that thread
+    // receives a sent message.
     HWND hwndTray = FindWindowW(L"Shell_TrayWnd", nullptr);
     if (!hwndTray) {
         CF_LOG(Warning, "XamlBridge: Shell_TrayWnd not found — injection deferred");
         return;
     }
 
-    DWORD explorerTid = GetWindowThreadProcessId(hwndTray, nullptr);
+    DWORD explorerPid = 0;
+    GetWindowThreadProcessId(hwndTray, &explorerPid);
 
-    m_hInjHook = SetWindowsHookExW(
-        WH_CALLWNDPROC, hookProc, m_hXamlBridge, explorerTid);
+    struct EnumCtx {
+        DWORD     pid;
+        HOOKPROC  proc;
+        HMODULE   mod;
+        std::set<DWORD>    seen;
+        std::vector<HHOOK> hooks;
+    };
+    EnumCtx ctx{ explorerPid, hookProc, m_hXamlBridge, {}, {} };
 
-    if (!m_hInjHook) {
-        CF_LOG(Error, "XamlBridge: SetWindowsHookEx failed: " << GetLastError());
+    EnumWindows([](HWND hwnd, LPARAM lp) -> BOOL {
+        auto* c = reinterpret_cast<EnumCtx*>(lp);
+        DWORD pid = 0;
+        DWORD tid = GetWindowThreadProcessId(hwnd, &pid);
+        if (pid == c->pid && c->seen.insert(tid).second) {
+            HHOOK h = SetWindowsHookExW(WH_CALLWNDPROC, c->proc, c->mod, tid);
+            if (h) c->hooks.push_back(h);
+        }
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(&ctx));
+
+    m_hInjHooks = std::move(ctx.hooks);
+
+    if (m_hInjHooks.empty()) {
+        CF_LOG(Error, "XamlBridge: no hooks installed (SetWindowsHookEx failed for all explorer threads)");
         return;
     }
 
-    // ── 5. Deliver the hook by sending a harmless message to explorer ────
-    // This forces Windows to load XamlBridge.dll into explorer.exe immediately.
-    SendMessageTimeoutW(hwndTray, WM_NULL, 0, 0, SMTO_NORMAL, 500, nullptr);
+    // ── 5. Mark bridge as initialized — hooks installed successfully ──────
+    m_bridgeInited = true;
 
-    CF_LOG(Info, "XamlBridge: hook installed (tid=" << explorerTid << ")");
+    CF_LOG(Info, "XamlBridge: hook installed (" << m_hInjHooks.size()
+                 << " explorer thread(s)) — will activate on next sent message");
 }
 
 void Renderer::UpdateSharedState() {
@@ -671,10 +706,10 @@ void Renderer::ShutdownXamlBridge() {
         Sleep(300);
     }
 
-    if (m_hInjHook) {
-        UnhookWindowsHookEx(m_hInjHook);
-        m_hInjHook = nullptr;
+    for (HHOOK h : m_hInjHooks) {
+        if (h) UnhookWindowsHookEx(h);
     }
+    m_hInjHooks.clear();
 
     if (m_pSharedState) {
         UnmapViewOfFile(m_pSharedState);
@@ -692,6 +727,8 @@ void Renderer::ShutdownXamlBridge() {
     // and the hook being removed. Calling FreeLibrary on our side only removes
     // our reference; explorer's reference persists until explorer restarts.
     m_hXamlBridge = nullptr;
+
+    m_bridgeInited = false;
 
     CF_LOG(Info, "XamlBridge shutdown complete");
 }

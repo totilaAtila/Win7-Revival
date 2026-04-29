@@ -95,3 +95,4 @@ void XBLogFmt(const wchar_t* fmt, ...);
 // ---------------------------------------------------------------------------
 BrushParams ReadBrushParams(const SharedBlurState* s);
 void        ApplyBrushParams(InstanceHandle handle, const wux::FrameworkElement& element, BrushTargetProp prop, const BrushParams& p);
+bool        XamlBridgeTryActiveTreeDiscovery();
